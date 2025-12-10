@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="24dp"
+    android:layout_marginBottom="10dp"
+    app:cardBackgroundColor="?attr/colorSurfaceVariant"
+    app:cardElevation="4dp"
+    app:strokeWidth="0dp">
+
+<LinearLayout
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <TextView
+        android:id="@+id/markGradeDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Známka: A"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:id="@+id/markNameDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Názov: Midterm"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="16sp"
+        android:layout_marginBottom="6dp"/>
+
+    <TextView
+        android:id="@+id/markNoteStudentLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="?attr/colorOnSurface"
+        android:text="Poznámka pre študenta:"
+        android:textStyle="bold"
+        android:textSize="15sp"
+        android:layout_marginTop="8dp"/>
+    <TextView
+        android:id="@+id/markNoteStudentDetail"
+        android:layout_width="match_parent"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_height="wrap_content"
+        android:text="Well done, keep going!"
+        android:textSize="15sp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/markNoteTeacherLabel"
+        android:layout_width="match_parent"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_height="wrap_content"
+        android:text="Poznámka pre mňa:"
+        android:textStyle="bold"
+        android:textSize="15sp"
+        android:layout_marginTop="8dp"/>
+    <TextView
+        android:id="@+id/markNoteTeacherDetail"
+        android:layout_width="match_parent"
+        android:textColor="?attr/colorOnSurface"
+        android:layout_height="wrap_content"
+        android:text="Student needs help with algebra."
+        android:textSize="15sp"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/markTimestampDetail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="?attr/colorOnSurface"
+        android:text="Dátum: 07.09.2025"
+        android:textSize="15sp"
+        android:layout_marginBottom="12dp"/>
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/editMarkBtn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            style="@style/Widget.Material3.Button"
+            android:text="Upraviť"
+            android:layout_marginEnd="8dp"
+            app:backgroundTint="?attr/colorPrimary"
+            android:textColor="?attr/colorOnPrimary"/>
+
+        <Button
+            android:id="@+id/removeMarkBtn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            style="@style/Widget.Material3.Button"
+            android:text="Odstrániť"
+            app:backgroundTint="?attr/colorPrimary"
+            android:textColor="?attr/colorOnPrimary"/>
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/closeMarkDetailBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        style="@style/Widget.Material3.Button"
+        android:text="Zrušiť"
+        android:layout_marginTop="16dp"
+        app:backgroundTint="?attr/colorPrimary"
+        android:textColor="?attr/colorOnPrimary"/>
+</LinearLayout>
+</com.google.android.material.card.MaterialCardView>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Material 3 Dark Theme Colors (based on brown/gold palette) -->
+    <color name="md_theme_dark_primary" tools:ignore="MissingDefaultResource">#F4D078</color>
+    <color name="md_theme_dark_onPrimary" tools:ignore="MissingDefaultResource">#4A3800</color>
+    <color name="md_theme_dark_primaryContainer" tools:ignore="MissingDefaultResource">#695000</color>
+    <color name="md_theme_dark_onPrimaryContainer" tools:ignore="MissingDefaultResource">#FFEDB3</color>
+
+    <color name="md_theme_dark_secondary" tools:ignore="MissingDefaultResource">#D8C6A0</color>
+    <color name="md_theme_dark_onSecondary" tools:ignore="MissingDefaultResource">#3B2F15</color>
+    <color name="md_theme_dark_secondaryContainer" tools:ignore="MissingDefaultResource">#52452A</color>
+    <color name="md_theme_dark_onSecondaryContainer" tools:ignore="MissingDefaultResource">#F5E2BB</color>
+
+    <color name="md_theme_dark_tertiary" tools:ignore="MissingDefaultResource">#B3CDAA</color>
+    <color name="md_theme_dark_onTertiary" tools:ignore="MissingDefaultResource">#1F361C</color>
+    <color name="md_theme_dark_tertiaryContainer" tools:ignore="MissingDefaultResource">#354D31</color>
+    <color name="md_theme_dark_onTertiaryContainer" tools:ignore="MissingDefaultResource">#CFE9C5</color>
+
+    <color name="md_theme_dark_error" tools:ignore="MissingDefaultResource">#FFB4AB</color>
+    <color name="md_theme_dark_onError" tools:ignore="MissingDefaultResource">#690005</color>
+    <color name="md_theme_dark_errorContainer" tools:ignore="MissingDefaultResource">#93000A</color>
+    <color name="md_theme_dark_onErrorContainer" tools:ignore="MissingDefaultResource">#FFDAD6</color>
+
+    <color name="md_theme_dark_background" tools:ignore="MissingDefaultResource">#17130C</color>
+    <color name="md_theme_dark_onBackground" tools:ignore="MissingDefaultResource">#EAE1D9</color>
+
+    <color name="md_theme_dark_surface" tools:ignore="MissingDefaultResource">#17130C</color>
+    <color name="md_theme_dark_onSurface" tools:ignore="MissingDefaultResource">#EAE1D9</color>
+    <color name="md_theme_dark_surfaceVariant" tools:ignore="MissingDefaultResource">#3E3828</color>
+    <color name="md_theme_dark_onSurfaceVariant" tools:ignore="MissingDefaultResource">#D4CBB8</color>
+
+    <color name="md_theme_dark_outline" tools:ignore="MissingDefaultResource">#A39A87</color>
+    <color name="md_theme_dark_outlineVariant" tools:ignore="MissingDefaultResource">#3E3828</color>
+
+    <!-- Legacy colors for backward compatibility -->
+    <color name="purple_200">#F4D078</color>
+    <color name="purple_500">#695000</color>
+    <color name="purple_700">#4A3800</color>
+    <color name="teal_200">#F4D078</color>
+    <color name="teal_700">#695000</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Semantic colors -->
+    <color name="button_active">#F4D078</color>
+    <color name="button_active_text">#3D2E00</color>
+    <color name="button_inactive">#4A4032</color>
+    <color name="button_inactive_text">#E0D8C6</color>
+    <color name="text">#EAE1D9</color>
+    <color name="card_background">#3E3828</color>
+    <color name="card_text">#EAE1D9</color>
+    <color name="card_item">#2F2A1E</color>
+    <color name="bad_mark">#FFB4AB</color>
+    <color name="good_mark">#A8C89F</color>
+    <color name="background">#17130C</color>
+    <color name="menu">#8A6D1A</color>
+    <color name="buttons">#F4D078</color>
+    <color name="buttons_text">#3D2E00</color>
+</resources>

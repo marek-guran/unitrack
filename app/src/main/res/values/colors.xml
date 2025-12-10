@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 Light Theme Colors (based on brown/gold palette) -->
+    <color name="md_theme_light_primary">#7A5C10</color>
+    <color name="md_theme_light_onPrimary">#FFFFFF</color>
+    <color name="md_theme_light_primaryContainer">#FFE4A3</color>
+    <color name="md_theme_light_onPrimaryContainer">#2D1F00</color>
+
+    <color name="md_theme_light_secondary">#5D5039</color>
+    <color name="md_theme_light_onSecondary">#FFFFFF</color>
+    <color name="md_theme_light_secondaryContainer">#E5D8B8</color>
+    <color name="md_theme_light_onSecondaryContainer">#1C1300</color>
+
+    <color name="md_theme_light_tertiary">#3E5C38</color>
+    <color name="md_theme_light_onTertiary">#FFFFFF</color>
+    <color name="md_theme_light_tertiaryContainer">#C0E0B3</color>
+    <color name="md_theme_light_onTertiaryContainer">#051F00</color>
+
+    <color name="md_theme_light_error">#BA1A1A</color>
+    <color name="md_theme_light_onError">#FFFFFF</color>
+    <color name="md_theme_light_errorContainer">#FFDAD6</color>
+    <color name="md_theme_light_onErrorContainer">#410002</color>
+
+    <color name="md_theme_light_background">#FFF9F3</color>
+    <color name="md_theme_light_onBackground">#1F1B13</color>
+
+    <color name="md_theme_light_surface">#FFF9F3</color>
+    <color name="md_theme_light_onSurface">#1F1B13</color>
+    <color name="md_theme_light_surfaceVariant">#EAE2D1</color>
+    <color name="md_theme_light_onSurfaceVariant">#3E3828</color>
+
+    <color name="md_theme_light_outline">#6E6751</color>
+    <color name="md_theme_light_outlineVariant">#C4BBA9</color>
+
+    <!-- Legacy colors for backward compatibility -->
+    <color name="purple_200">#B4B4B4</color>
+    <color name="purple_500">#7A5C10</color>
+    <color name="purple_700">#5D4510</color>
+    <color name="teal_200">#7A5C10</color>
+    <color name="teal_700">#5D4510</color>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Semantic colors -->
+    <color name="button_active">#7A5C10</color>
+    <color name="button_active_text">#FFFFFF</color>
+    <color name="button_inactive">#C9B894</color>
+    <color name="button_inactive_text">#2D2416</color>
+    <color name="text">#1F1B13</color>
+    <color name="card_background">#FFE8B3</color>
+    <color name="card_text">#1F1B13</color>
+    <color name="card_item">#EAE2D1</color>
+    <color name="bad_mark">#BA1A1A</color>
+    <color name="good_mark">#2F5229</color>
+    <color name="background">#FFF9F3</color>
+    <color name="menu">#7A5C10</color>
+    <color name="buttons">#7A5C10</color>
+    <color name="buttons_text">#FFFFFF</color>
+</resources>

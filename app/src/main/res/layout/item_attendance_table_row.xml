@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="12dp"
+    android:background="?attr/selectableItemBackground">
+
+    <!-- Date column -->
+    <TextView
+        android:id="@+id/attendanceDate"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="2"
+        android:textSize="16sp"
+        android:textColor="?attr/colorOnSurface"
+        android:text="2024-09-01"
+        android:paddingEnd="12dp"
+        android:gravity="start" />
+
+    <!-- Note column -->
+    <TextView
+        android:id="@+id/attendanceNote"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="3"
+        android:textSize="16sp"
+        android:textColor="?attr/colorOnSurface"
+        android:text="Note: at doctor"
+        android:gravity="start" />
+
+    <!-- Present/absent checkmark -->
+    <ImageView
+        android:id="@+id/presentIcon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:contentDescription="Pritomny"
+        android:src="@drawable/baseline_check_circle_24"
+        app:tint="?attr/colorOnSurface" />
+</LinearLayout>
