@@ -25,27 +25,132 @@
             android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
             android:textColor="?attr/colorOnSurface"
             android:gravity="start"
-            android:layout_marginBottom="24dp"/>
+            android:layout_marginBottom="20dp"/>
 
-        <!-- Grade Input -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        <!-- Grade Selector Label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vyberte známku"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- Grade Selector Chips -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/gradeChipGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Známka (A-Fx)"
-            android:layout_marginBottom="16dp"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp">
+            android:layout_marginBottom="20dp"
+            app:singleSelection="true"
+            app:selectionRequired="false"
+            app:chipSpacingHorizontal="8dp"
+            app:chipSpacingVertical="8dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/inputGrade"
-                android:layout_width="match_parent"
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeA"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:inputType="text"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"/>
-        </com.google.android.material.textfield.TextInputLayout>
+                android:text="  A  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeB"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  B  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeC"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  C  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeD"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  D  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeE"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  E  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeFx"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  Fx  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <!-- Hidden field to store selected grade (for backward compat) -->
+        <EditText
+            android:id="@+id/inputGrade"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            android:importantForAccessibility="no" />
 
         <!-- Name Input -->
         <com.google.android.material.textfield.TextInputLayout
@@ -54,10 +159,10 @@
             android:layout_height="wrap_content"
             android:hint="Názov (napr. Skúška, Test...)"
             android:layout_marginBottom="16dp"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp">
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/inputName"
@@ -74,10 +179,10 @@
             android:layout_height="wrap_content"
             android:hint="Poznámka pre študenta (nepovinné)"
             android:layout_marginBottom="16dp"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp">
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/inputDesc"
@@ -94,10 +199,10 @@
             android:layout_height="wrap_content"
             android:hint="Poznámka pre učiteľa (nepovinné)"
             android:layout_marginBottom="16dp"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusBottomEnd="12dp">
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/inputNote"
@@ -115,11 +220,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            app:cardCornerRadius="12dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutline"
-            app:cardBackgroundColor="?attr/colorSurfaceVariant">
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="?attr/colorSecondaryContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -134,14 +238,14 @@
                     android:layout_height="wrap_content"
                     android:text="Dátum:"
                     android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:textColor="?attr/colorOnSecondaryContainer" />
 
                 <TextView
                     android:id="@+id/inputDate"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textColor="?attr/colorOnSecondaryContainer"
                     android:background="?attr/selectableItemBackground"
                     android:paddingStart="16dp"
                     android:paddingEnd="8dp"
@@ -171,7 +275,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Oznámkovať"
-                app:cornerRadius="12dp"
+                app:cornerRadius="16dp"
                 app:elevation="2dp"
                 app:icon="@android:drawable/ic_menu_save" />
         </LinearLayout>

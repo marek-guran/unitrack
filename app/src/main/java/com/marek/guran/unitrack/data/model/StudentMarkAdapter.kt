@@ -4,7 +4,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.marek.guran.unitrack.R
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -15,6 +17,7 @@ class StudentMarkAdapter(
 ) : RecyclerView.Adapter<StudentMarkAdapter.ViewHolder>() {
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val markGrade: TextView = view.findViewById(R.id.markGrade)
+        val gradeBadge: MaterialCardView = view.findViewById(R.id.gradeBadge)
         val markName: TextView = view.findViewById(R.id.markName)
         val markDesc: TextView = view.findViewById(R.id.markDesc)
         val markTimestamp: TextView = view.findViewById(R.id.markTimestamp)
@@ -29,7 +32,13 @@ class StudentMarkAdapter(
         holder.markGrade.text = mark.grade
         holder.markName.text = mark.name
         holder.markDesc.text = mark.desc
-        holder.markTimestamp.text = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(mark.timestamp))
+        holder.markTimestamp.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(mark.timestamp))
+
+        // Color-coded grade badge
+        val ctx = holder.itemView.context
+        val (bgColor, textColor) = MarkAdapter.getGradeColors(mark.grade)
+        holder.gradeBadge.setCardBackgroundColor(ContextCompat.getColor(ctx, bgColor))
+        holder.markGrade.setTextColor(ContextCompat.getColor(ctx, textColor))
     }
     override fun getItemCount() = marks.size
 }

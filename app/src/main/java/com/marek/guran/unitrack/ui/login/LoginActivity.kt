@@ -2,6 +2,7 @@ package com.marek.guran.unitrack.ui.login
 
 import android.app.Activity
 import android.content.Intent
+import android.view.animation.DecelerateInterpolator
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -15,6 +16,7 @@ import com.marek.guran.unitrack.R
 import com.marek.guran.unitrack.databinding.ActivityLoginBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.marek.guran.unitrack.MainActivity
+import com.marek.guran.unitrack.data.OfflineMode
 
 class LoginActivity : AppCompatActivity() {
 
@@ -23,6 +25,13 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Check if already in offline mode
+        if (OfflineMode.isOffline(this)) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
 
         firebaseAuth = FirebaseAuth.getInstance()
         // Check if user is already logged in
@@ -35,10 +44,21 @@ class LoginActivity : AppCompatActivity() {
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Animate entrance of login elements
+        animateEntrance()
+
         val username = binding.usernameLayout?.editText!!
         val password = binding.passwordLayout?.editText!!
         val login = binding.login
         val loading = binding.loading
+
+        // Offline mode button
+        binding.btnOfflineMode.setOnClickListener {
+            OfflineMode.setOffline(this, true)
+            Toast.makeText(this, getString(R.string.offline_mode_activated), Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
 
         // Enable the login button only if both fields are non-empty
         val textWatcher = object : TextWatcher {
@@ -103,6 +123,42 @@ class LoginActivity : AppCompatActivity() {
 
     private fun showLoginFailed(@StringRes errorString: Int) {
         Toast.makeText(applicationContext, errorString, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun animateEntrance() {
+        val views = listOf(
+            binding.logoCard,
+            binding.titleText,
+            binding.subtitleText,
+            binding.usernameLayout,
+            binding.passwordLayout,
+            binding.login,
+            binding.dividerText,
+            binding.btnOfflineMode
+        )
+
+        views.forEachIndexed { index, view ->
+            view.alpha = 0f
+            view.translationY = 60f
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(500)
+                .setStartDelay((index * 80).toLong())
+                .setInterpolator(DecelerateInterpolator(2f))
+                .start()
+        }
+
+        // Extra bounce animation for logo
+        binding.logoCard.scaleX = 0.8f
+        binding.logoCard.scaleY = 0.8f
+        binding.logoCard.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(600)
+            .setStartDelay(100)
+            .setInterpolator(android.view.animation.OvershootInterpolator(1.5f))
+            .start()
     }
 }
 

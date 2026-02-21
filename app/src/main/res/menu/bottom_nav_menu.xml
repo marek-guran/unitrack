@@ -7,6 +7,16 @@
         android:title="@string/title_home" />
 
     <item
+        android:id="@+id/navigation_students"
+        android:icon="@drawable/ic_people"
+        android:title="@string/title_students" />
+
+    <item
+        android:id="@+id/navigation_subjects"
+        android:icon="@drawable/ic_book"
+        android:title="@string/title_subjects" />
+
+    <item
         android:id="@+id/navigation_settings"
         android:icon="@drawable/settings"
         android:title="@string/title_settings" />

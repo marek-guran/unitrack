@@ -1,6 +1,7 @@
 package com.marek.guran.unitrack.data.model
 
 data class SubjectInfo(
+    val key: String = "",
     val name: String,
     val marks: List<String>,
     val average: String,

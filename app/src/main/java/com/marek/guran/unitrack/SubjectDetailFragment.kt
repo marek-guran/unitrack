@@ -19,15 +19,19 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.database.FirebaseDatabase
 import com.marek.guran.unitrack.data.model.*
 import com.marek.guran.unitrack.databinding.FragmentSubjectDetailBinding
 import com.marek.guran.unitrack.ui.home.AttendanceAdapter
+import com.marek.guran.unitrack.data.OfflineMode
+import com.marek.guran.unitrack.data.LocalDatabase
+import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -247,7 +251,11 @@ class SubjectDetailFragment : Fragment() {
     private val db =
         FirebaseDatabase.getInstance("https://unitrack-ku-default-rtdb.europe-west1.firebasedatabase.app").reference
 
+    private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
+    private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
+
     private var openedSubject: String? = null
+    private var openedSubjectKey: String? = null
 
     private val students = mutableListOf<StudentDetail>()
     private lateinit var studentAdapter: TeacherStudentAdapter
@@ -256,15 +264,23 @@ class SubjectDetailFragment : Fragment() {
 
     private val activeDialogs = mutableListOf<Dialog>()
 
+    companion object {
+        val CHIP_TO_GRADE = mapOf(
+            R.id.chipGradeA to "A",
+            R.id.chipGradeB to "B",
+            R.id.chipGradeC to "C",
+            R.id.chipGradeD to "D",
+            R.id.chipGradeE to "E",
+            R.id.chipGradeFx to "Fx"
+        )
+        val GRADE_TO_CHIP = CHIP_TO_GRADE.entries.associate { it.value to it.key }
+    }
+
     private lateinit var prefs: SharedPreferences
     private var selectedSchoolYear: String = ""
     private var selectedSemester: String = ""
 
-    private fun sanitizeSubjectKey(subject: String): String {
-        val norm = Normalizer.normalize(subject, Normalizer.Form.NFD)
-        val noDiacritics = norm.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
-        return noDiacritics.replace(" ", "_").lowercase(Locale.getDefault())
-    }
+
 
     // New DB model for student
     data class StudentDbModel(
@@ -277,6 +293,7 @@ class SubjectDetailFragment : Fragment() {
         super.onCreate(savedInstanceState)
         arguments?.let {
             openedSubject = it.getString("subjectName")
+            openedSubjectKey = it.getString("subjectKey")
         }
         prefs = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
         selectedSchoolYear = prefs.getString("school_year", "") ?: ""
@@ -330,28 +347,40 @@ class SubjectDetailFragment : Fragment() {
                             onAttendanceSaved = { presentMap: Map<String, Boolean> ->
                                 val today = LocalDate.now().toString()
                                 val now = LocalTime.now().toString()
-                                var completed = 0
-                                val total = presentMap.size
-                                val sanitizedSubject = sanitizeSubjectKey(openedSubject ?: "Unknown")
-                                for ((studentUid, isPresent) in presentMap) {
-                                    val entry = AttendanceEntry(
-                                        date = today,
-                                        time = now,
-                                        note = "",
-                                        absent = !isPresent
-                                    )
-                                    db.child("pritomnost")
-                                        .child(selectedSchoolYear)
-                                        .child(selectedSemester)
-                                        .child(sanitizedSubject)
-                                        .child(studentUid)
-                                        .child(today)
-                                        .setValue(entry) { _, _ ->
-                                            completed++
-                                            if (completed == total) {
-                                                refreshFragmentView()
+                                val sanitizedSubject = openedSubjectKey ?: ""
+                                if (isOffline) {
+                                    for ((studentUid, isPresent) in presentMap) {
+                                        val entryJson = JSONObject()
+                                        entryJson.put("date", today)
+                                        entryJson.put("time", now)
+                                        entryJson.put("note", "")
+                                        entryJson.put("absent", !isPresent)
+                                        localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitizedSubject, studentUid, today, entryJson)
+                                    }
+                                    refreshFragmentView()
+                                } else {
+                                    var completed = 0
+                                    val total = presentMap.size
+                                    for ((studentUid, isPresent) in presentMap) {
+                                        val entry = AttendanceEntry(
+                                            date = today,
+                                            time = now,
+                                            note = "",
+                                            absent = !isPresent
+                                        )
+                                        db.child("pritomnost")
+                                            .child(selectedSchoolYear)
+                                            .child(selectedSemester)
+                                            .child(sanitizedSubject)
+                                            .child(studentUid)
+                                            .child(today)
+                                            .setValue(entry) { _, _ ->
+                                                completed++
+                                                if (completed == total) {
+                                                    refreshFragmentView()
+                                                }
                                             }
-                                        }
+                                    }
                                 }
                             }
                         )
@@ -398,28 +427,40 @@ class SubjectDetailFragment : Fragment() {
                 onAttendanceSaved = { presentMap: Map<String, Boolean> ->
                     val today = LocalDate.now().toString()
                     val now = LocalTime.now().toString()
-                    var completed = 0
-                    val total = presentMap.size
-                    val sanitizedSubject = sanitizeSubjectKey(openedSubject ?: "Unknown")
-                    for ((studentUid, isPresent) in presentMap) {
-                        val entry = AttendanceEntry(
-                            date = today,
-                            time = now,
-                            note = "",
-                            absent = !isPresent
-                        )
-                        db.child("pritomnost")
-                            .child(selectedSchoolYear)
-                            .child(selectedSemester)
-                            .child(sanitizedSubject)
-                            .child(studentUid)
-                            .child(today)
-                            .setValue(entry) { _, _ ->
-                                completed++
-                                if (completed == total) {
-                                    refreshFragmentView()
+                    val sanitizedSubject = openedSubjectKey ?: ""
+                    if (isOffline) {
+                        for ((studentUid, isPresent) in presentMap) {
+                            val entryJson = JSONObject()
+                            entryJson.put("date", today)
+                            entryJson.put("time", now)
+                            entryJson.put("note", "")
+                            entryJson.put("absent", !isPresent)
+                            localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitizedSubject, studentUid, today, entryJson)
+                        }
+                        refreshFragmentView()
+                    } else {
+                        var completed = 0
+                        val total = presentMap.size
+                        for ((studentUid, isPresent) in presentMap) {
+                            val entry = AttendanceEntry(
+                                date = today,
+                                time = now,
+                                note = "",
+                                absent = !isPresent
+                            )
+                            db.child("pritomnost")
+                                .child(selectedSchoolYear)
+                                .child(selectedSemester)
+                                .child(sanitizedSubject)
+                                .child(studentUid)
+                                .child(today)
+                                .setValue(entry) { _, _ ->
+                                    completed++
+                                    if (completed == total) {
+                                        refreshFragmentView()
+                                    }
                                 }
-                            }
+                        }
                     }
                 }
             )
@@ -472,6 +513,14 @@ class SubjectDetailFragment : Fragment() {
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Replay staggered entrance animation when returning to this fragment
+        if (_binding != null) {
+            binding.studentsRecyclerView.scheduleLayoutAnimation()
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -482,7 +531,11 @@ class SubjectDetailFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun loadStudentsForSubject(subjectName: String) {
         students.clear()
-        val dbSubjectKey = sanitizeSubjectKey(subjectName)
+        val dbSubjectKey = openedSubjectKey ?: return
+        if (isOffline) {
+            loadStudentsForSubjectOffline(dbSubjectKey)
+            return
+        }
         // Use new DB students/year/studentUid
         db.child("students").child(selectedSchoolYear).get().addOnSuccessListener { studentsSnap ->
             for (studentSnap in studentsSnap.children) {
@@ -545,7 +598,73 @@ class SubjectDetailFragment : Fragment() {
         }
     }
 
+    @SuppressLint("NotifyDataSetChanged")
+    private fun loadStudentsForSubjectOffline(dbSubjectKey: String) {
+        val studentsMap = localDb.getStudents(selectedSchoolYear)
+        for ((studentUid, studentJson) in studentsMap) {
+            val subjectsObj = studentJson.optJSONObject("subjects")
+            val semSubjects = subjectsObj?.optJSONArray(selectedSemester)
+            val subjectList = mutableListOf<String>()
+            if (semSubjects != null) {
+                for (i in 0 until semSubjects.length()) {
+                    subjectList.add(semSubjects.optString(i))
+                }
+            }
+            if (!subjectList.contains(dbSubjectKey)) continue
+
+            val studentName = studentJson.optString("name", "")
+            val marksMap = localDb.getMarks(selectedSchoolYear, selectedSemester, dbSubjectKey, studentUid)
+            val marks = marksMap.map { (key, markJson) ->
+                MarkWithKey(
+                    key = key,
+                    mark = Mark(
+                        grade = markJson.optString("grade", ""),
+                        name = markJson.optString("name", ""),
+                        desc = markJson.optString("desc", ""),
+                        note = markJson.optString("note", ""),
+                        timestamp = markJson.optLong("timestamp", 0)
+                    )
+                )
+            }.sortedByDescending { it.mark.timestamp }
+
+            val attMap = localDb.getAttendance(selectedSchoolYear, selectedSemester, dbSubjectKey, studentUid)
+            val attendanceMap = attMap.map { (date, entryJson) ->
+                date to AttendanceEntry(
+                    date = entryJson.optString("date", date),
+                    time = entryJson.optString("time", ""),
+                    note = entryJson.optString("note", ""),
+                    absent = entryJson.optBoolean("absent", false)
+                )
+            }.toMap()
+
+            students.add(
+                StudentDetail(
+                    studentUid = studentUid,
+                    studentName = studentName,
+                    marks = marks,
+                    attendanceMap = attendanceMap,
+                    average = calculateAverage(marks.map { it.mark.grade }),
+                    suggestedMark = suggestMark(calculateAverage(marks.map { it.mark.grade }))
+                )
+            )
+        }
+        studentAdapter.notifyDataSetChanged()
+        binding.studentsRecyclerView.visibility =
+            if (isStudentsVisible) View.VISIBLE else View.GONE
+        updateStudentsButtonAppearance()
+        updateMarksButtonAppearance()
+        if (isStatsVisible) {
+            showSubjectMarksTable()
+        } else {
+            binding.subjectMarksContainer.visibility = View.GONE
+        }
+    }
+
     private fun showEnrollStudentsDialog() {
+        if (isOffline) {
+            showEnrollStudentsDialogOffline()
+            return
+        }
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.enroll_students_dialog, null)
         val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
@@ -559,7 +678,7 @@ class SubjectDetailFragment : Fragment() {
                 val studentObj = studentSnap.getValue(StudentDbModel::class.java)
                 val name = studentObj?.name ?: "(bez mena)"
                 val subjects = studentObj?.subjects?.get(selectedSemester) ?: emptyList()
-                val enrolled = subjects.contains(sanitizeSubjectKey(openedSubject ?: ""))
+                val enrolled = subjects.contains(openedSubjectKey ?: "")
                 items.add(EnrollStudentItem(uid, name, enrolled))
             }
             var filtered = items.toMutableList()
@@ -586,6 +705,7 @@ class SubjectDetailFragment : Fragment() {
             dialog.show()
             activeDialogs.add(dialog)
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
             dialog.window?.let { window ->
                 val margin = (10 * resources.displayMetrics.density).toInt()
                 window.setLayout(
@@ -596,7 +716,7 @@ class SubjectDetailFragment : Fragment() {
             }
 
             saveButton.setOnClickListener {
-                val subjectKey = sanitizeSubjectKey(openedSubject ?: "")
+                val subjectKey = openedSubjectKey ?: ""
                 var pending = items.size
                 for (item in items) {
                     val ref = db.child("students").child(selectedSchoolYear).child(item.uid).child("subjects").child(selectedSemester)
@@ -620,6 +740,80 @@ class SubjectDetailFragment : Fragment() {
                     }
                 }
             }
+        }
+    }
+
+    private fun showEnrollStudentsDialogOffline() {
+        val dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.enroll_students_dialog, null)
+        val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.enrollStudentsRecyclerView)
+        val saveButton = dialogView.findViewById<Button>(R.id.saveEnrollmentsButton)
+
+        val studentsMap = localDb.getStudents(selectedSchoolYear)
+        val items = mutableListOf<EnrollStudentItem>()
+        for ((uid, studentJson) in studentsMap) {
+            val name = studentJson.optString("name", "(bez mena)")
+            val subjectsObj = studentJson.optJSONObject("subjects")
+            val semSubjects = subjectsObj?.optJSONArray(selectedSemester)
+            val subjectList = mutableListOf<String>()
+            if (semSubjects != null) {
+                for (i in 0 until semSubjects.length()) subjectList.add(semSubjects.optString(i))
+            }
+            val enrolled = subjectList.contains(openedSubjectKey ?: "")
+            items.add(EnrollStudentItem(uid, name, enrolled))
+        }
+        var filtered = items.toMutableList()
+        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
+            filtered[pos].enrolled = checked
+        }
+
+        searchEditText.addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val query = s?.toString()?.lowercase() ?: ""
+                filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
+                recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
+                    filtered[pos].enrolled = checked
+                }
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        val dialog = Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.show()
+        activeDialogs.add(dialog)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
+        dialog.window?.let { window ->
+            val margin = (10 * resources.displayMetrics.density).toInt()
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            window.decorView.setPadding(margin, margin, margin, margin)
+        }
+
+        saveButton.setOnClickListener {
+            val subjectKey = openedSubjectKey ?: ""
+            for (item in items) {
+                val studentJson = localDb.getJson("students/$selectedSchoolYear/${item.uid}") ?: continue
+                val subjectsObj = studentJson.optJSONObject("subjects") ?: org.json.JSONObject()
+                val semSubjects = subjectsObj.optJSONArray(selectedSemester)
+                val currentList = mutableListOf<String>()
+                if (semSubjects != null) {
+                    for (i in 0 until semSubjects.length()) currentList.add(semSubjects.optString(i))
+                }
+                if (item.enrolled && !currentList.contains(subjectKey)) {
+                    currentList.add(subjectKey)
+                } else if (!item.enrolled && currentList.contains(subjectKey)) {
+                    currentList.remove(subjectKey)
+                }
+                localDb.updateStudentSubjects(selectedSchoolYear, item.uid, selectedSemester, currentList)
+            }
+            Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).show()
+            dialog.dismiss()
+            closeAllDialogs()
+            refreshFragmentView()
         }
     }
 
@@ -776,6 +970,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.setContentView(dialogView)
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         currentStudentDialog = dialog
         activeDialogs.add(dialog)
 
@@ -797,6 +992,7 @@ class SubjectDetailFragment : Fragment() {
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * resources.displayMetrics.density).toInt()
             window.setLayout(
@@ -816,7 +1012,13 @@ class SubjectDetailFragment : Fragment() {
         val titleView = dialogView.findViewById<TextView>(R.id.newMark)
         titleView.text = student.studentName
 
-        val gradeInput = dialogView.findViewById<EditText>(R.id.inputGrade)
+        // Grade chips instead of text input
+        val gradeChipGroup = dialogView.findViewById<ChipGroup>(R.id.gradeChipGroup)
+        var selectedGrade = ""
+        gradeChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            selectedGrade = if (checkedIds.isNotEmpty()) CHIP_TO_GRADE[checkedIds[0]] ?: "" else ""
+        }
+
         val nameInput = dialogView.findViewById<EditText>(R.id.inputName)
         val descInput = dialogView.findViewById<EditText>(R.id.inputDesc)
         val noteInput = dialogView.findViewById<EditText>(R.id.inputNote)
@@ -849,25 +1051,41 @@ class SubjectDetailFragment : Fragment() {
         dialog.setContentView(dialogView)
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         activeDialogs.add(dialog)
         val submitButton = dialogView.findViewById<MaterialButton>(R.id.submitButton)
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
 
         submitButton.setOnClickListener {
+            if (selectedGrade.isEmpty()) {
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val mark = Mark(
-                grade = gradeInput.text.toString().trim(),
+                grade = selectedGrade,
                 name = nameInput.text.toString().trim(),
                 desc = descInput.text.toString().trim(),
                 note = noteInput.text.toString().trim(),
                 timestamp = pickedDateMillis // use the selected date!
             )
-            db.child("hodnotenia")
-                .child(selectedSchoolYear)
-                .child(selectedSemester)
-                .child(sanitizeSubjectKey(subject))
-                .child(student.studentUid)
-                .push()
-                .setValue(mark) { _, _ -> refreshFragmentView() }
+            if (isOffline) {
+                val markJson = JSONObject()
+                markJson.put("grade", mark.grade)
+                markJson.put("name", mark.name)
+                markJson.put("desc", mark.desc)
+                markJson.put("note", mark.note)
+                markJson.put("timestamp", mark.timestamp)
+                localDb.addMark(selectedSchoolYear, selectedSemester, openedSubjectKey ?: "", student.studentUid, markJson)
+                refreshFragmentView()
+            } else {
+                db.child("hodnotenia")
+                    .child(selectedSchoolYear)
+                    .child(selectedSemester)
+                    .child(openedSubjectKey ?: "")
+                    .child(student.studentUid)
+                    .push()
+                    .setValue(mark) { _, _ -> refreshFragmentView() }
+            }
             dialog.dismiss()
         }
 
@@ -895,16 +1113,25 @@ class SubjectDetailFragment : Fragment() {
         val dialogView =
             LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_mark, null)
 
-        val gradeInput = dialogView.findViewById<EditText>(R.id.inputGrade)
+        // Grade chips instead of text input
+        val gradeChipGroup = dialogView.findViewById<ChipGroup>(R.id.gradeChipGroup)
+        var selectedGrade = markWithKey.mark.grade
+        // Pre-select the current grade chip
+        GRADE_TO_CHIP[markWithKey.mark.grade]?.let { chipId ->
+            dialogView.findViewById<Chip>(chipId)?.isChecked = true
+        }
+        gradeChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            selectedGrade = if (checkedIds.isNotEmpty()) CHIP_TO_GRADE[checkedIds[0]] ?: "" else ""
+        }
+
         val nameInput = dialogView.findViewById<EditText>(R.id.inputName)
         val descInput = dialogView.findViewById<EditText>(R.id.inputDesc)
         val noteInput = dialogView.findViewById<EditText>(R.id.inputNote)
         dialogView.findViewById<TextView>(R.id.inputDateLabel)
         val dateField = dialogView.findViewById<TextView>(R.id.inputDate)
-        val submitButton = dialogView.findViewById<Button>(R.id.submitButton)
-        val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
+        val submitButton = dialogView.findViewById<MaterialButton>(R.id.submitButton)
+        val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
 
-        gradeInput.setText(markWithKey.mark.grade)
         nameInput.setText(markWithKey.mark.name)
         descInput.setText(markWithKey.mark.desc)
         noteInput.setText(markWithKey.mark.note)
@@ -939,20 +1166,35 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
 
         submitButton.setOnClickListener {
+            if (selectedGrade.isEmpty()) {
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val updatedMark = markWithKey.mark.copy(
-                grade = gradeInput.text.toString().trim(),
+                grade = selectedGrade,
                 name = nameInput.text.toString().trim(),
                 desc = descInput.text.toString().trim(),
                 note = noteInput.text.toString().trim(),
                 timestamp = pickedTimestamp
             )
-            db.child("hodnotenia")
-                .child(selectedSchoolYear)
-                .child(selectedSemester)
-                .child(sanitizeSubjectKey(subject))
-                .child(student.studentUid)
-                .child(markWithKey.key)
-                .setValue(updatedMark) { _, _ -> onUpdated() }
+            if (isOffline) {
+                val markJson = JSONObject()
+                markJson.put("grade", updatedMark.grade)
+                markJson.put("name", updatedMark.name)
+                markJson.put("desc", updatedMark.desc)
+                markJson.put("note", updatedMark.note)
+                markJson.put("timestamp", updatedMark.timestamp)
+                localDb.updateMark(selectedSchoolYear, selectedSemester, openedSubjectKey ?: "", student.studentUid, markWithKey.key, markJson)
+                onUpdated()
+            } else {
+                db.child("hodnotenia")
+                    .child(selectedSchoolYear)
+                    .child(selectedSemester)
+                    .child(openedSubjectKey ?: "")
+                    .child(student.studentUid)
+                    .child(markWithKey.key)
+                    .setValue(updatedMark) { _, _ -> onUpdated() }
+            }
             dialog.dismiss()
         }
         cancelButton.setOnClickListener { dialog.dismiss() }
@@ -960,6 +1202,7 @@ class SubjectDetailFragment : Fragment() {
         activeDialogs.add(dialog)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * resources.displayMetrics.density).toInt()
             window.setLayout(
@@ -977,16 +1220,21 @@ class SubjectDetailFragment : Fragment() {
     ) {
         closeAllDialogs()
         val subject = openedSubject ?: return
-        db.child("hodnotenia")
-            .child(selectedSchoolYear)
-            .child(selectedSemester)
-            .child(sanitizeSubjectKey(subject))
-            .child(student.studentUid)
-            .child(markWithKey.key)
-            .removeValue { _, _ -> onUpdated() }
+        if (isOffline) {
+            localDb.removeMark(selectedSchoolYear, selectedSemester, openedSubjectKey ?: return, student.studentUid, markWithKey.key)
+            onUpdated()
+        } else {
+            db.child("hodnotenia")
+                .child(selectedSchoolYear)
+                .child(selectedSemester)
+                .child(openedSubjectKey ?: return)
+                .child(student.studentUid)
+                .child(markWithKey.key)
+                .removeValue { _, _ -> onUpdated() }
+        }
     }
 
-    // --- ATTENDANCE LOGIC: ALL "pritomnost" subject usage must use sanitizeSubjectKey ---
+    // --- ATTENDANCE LOGIC ---
 
     fun showAttendanceDetailDialog(student: StudentDetail, requireView: View) {
         closeAllDialogs()
@@ -1021,6 +1269,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.setContentView(dialogView)
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         activeDialogs.add(dialog)
 
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
@@ -1081,6 +1330,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.setContentView(dialogView)
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         activeDialogs.add(dialog)
 
         submitButton.setOnClickListener {
@@ -1154,21 +1404,32 @@ class SubjectDetailFragment : Fragment() {
     ) {
         val subject = openedSubject ?: return
         val entry = AttendanceEntry(date, time, note, absent)
-        val attendanceRef = db.child("pritomnost")
-            .child(selectedSchoolYear)
-            .child(selectedSemester)
-            .child(sanitizeSubjectKey(subject))
-            .child(student.studentUid)
-            .child(date)
-        attendanceRef.get().addOnSuccessListener { snapshot ->
-            if (snapshot.exists()) {
-                Snackbar.make(
-                    requireView(),
-                    "Prezenčka je už zapísaná pre dátum $date!",
-                    Snackbar.LENGTH_LONG
-                ).show()
+        val sanitized = openedSubjectKey ?: return
+        if (isOffline) {
+            if (localDb.exists("pritomnost/$selectedSchoolYear/$selectedSemester/$sanitized/${student.studentUid}/$date")) {
+                Snackbar.make(requireView(), "Prezenčka je už zapísaná pre dátum $date!", Snackbar.LENGTH_LONG).show()
             } else {
-                attendanceRef.setValue(entry) { _, _ -> refreshFragmentView() }
+                val entryJson = JSONObject()
+                entryJson.put("date", date)
+                entryJson.put("time", time)
+                entryJson.put("note", note)
+                entryJson.put("absent", absent)
+                localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, date, entryJson)
+                refreshFragmentView()
+            }
+        } else {
+            val attendanceRef = db.child("pritomnost")
+                .child(selectedSchoolYear)
+                .child(selectedSemester)
+                .child(sanitized)
+                .child(student.studentUid)
+                .child(date)
+            attendanceRef.get().addOnSuccessListener { snapshot ->
+                if (snapshot.exists()) {
+                    Snackbar.make(requireView(), "Prezenčka je už zapísaná pre dátum $date!", Snackbar.LENGTH_LONG).show()
+                } else {
+                    attendanceRef.setValue(entry) { _, _ -> refreshFragmentView() }
+                }
             }
         }
     }
@@ -1180,18 +1441,34 @@ class SubjectDetailFragment : Fragment() {
         view: View
     ) {
         val subject = openedSubject ?: return
-        val ref = db.child("pritomnost")
-            .child(selectedSchoolYear)
-            .child(selectedSemester)
-            .child(sanitizeSubjectKey(subject))
-            .child(student.studentUid)
-            .child(date)
-        ref.removeValue { _, _ ->
+        val sanitized = openedSubjectKey ?: return
+        if (isOffline) {
+            localDb.removeAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, date)
             refreshFragmentView()
             Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
                 .setAction("Undo") {
-                    ref.setValue(entry) { _, _ -> refreshFragmentView() }
+                    val entryJson = JSONObject()
+                    entryJson.put("date", entry.date)
+                    entryJson.put("time", entry.time)
+                    entryJson.put("note", entry.note)
+                    entryJson.put("absent", entry.absent)
+                    localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, date, entryJson)
+                    refreshFragmentView()
                 }.show()
+        } else {
+            val ref = db.child("pritomnost")
+                .child(selectedSchoolYear)
+                .child(selectedSemester)
+                .child(sanitized)
+                .child(student.studentUid)
+                .child(date)
+            ref.removeValue { _, _ ->
+                refreshFragmentView()
+                Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
+                    .setAction("Undo") {
+                        ref.setValue(entry) { _, _ -> refreshFragmentView() }
+                    }.show()
+            }
         }
     }
 
@@ -1201,24 +1478,9 @@ class SubjectDetailFragment : Fragment() {
         var pickedTime = entry.time
         val context = rootView.context
         val subject = openedSubject ?: return
-        val attendanceRef = db.child("pritomnost")
-            .child(selectedSchoolYear)
-            .child(selectedSemester)
-            .child(sanitizeSubjectKey(subject))
-            .child(student.studentUid)
-            .child(entry.date)
 
-        attendanceRef.get().addOnSuccessListener { snapshot ->
-            var isAbsent = entry.absent
-            var note = entry.note
-            var time = entry.time
-            snapshot.getValue(AttendanceEntry::class.java)?.let { latest ->
-                isAbsent = latest.absent
-                note = latest.note
-                time = latest.time
-                pickedDate = latest.date
-            }
-
+        val showDialog = { isAbsent: Boolean, note: String, time: String, date: String ->
+            pickedDate = date
             val dialogView =
                 LayoutInflater.from(context).inflate(R.layout.dialog_edit_attendance, null)
             val titleView = dialogView.findViewById<TextView>(R.id.newAttendance)
@@ -1236,9 +1498,9 @@ class SubjectDetailFragment : Fragment() {
             absentCheckbox.isChecked = isAbsent
 
             dateField.setOnClickListener {
-                showDatePicker(context) { date ->
-                    pickedDate = date
-                    dateField.text = date
+                showDatePicker(context) { d ->
+                    pickedDate = d
+                    dateField.text = d
                 }
             }
             timeField.setOnClickListener {
@@ -1252,6 +1514,7 @@ class SubjectDetailFragment : Fragment() {
             dialog.setContentView(dialogView)
             dialog.setCancelable(true)
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
             activeDialogs.add(dialog)
 
             submitButton.setOnClickListener {
@@ -1283,6 +1546,31 @@ class SubjectDetailFragment : Fragment() {
                 window.decorView.setPadding(margin, margin, margin, margin)
             }
         }
+
+        if (isOffline) {
+            // Use local data directly
+            showDialog(entry.absent, entry.note, entry.time, entry.date)
+        } else {
+            val attendanceRef = db.child("pritomnost")
+                .child(selectedSchoolYear)
+                .child(selectedSemester)
+                .child(openedSubjectKey ?: return)
+                .child(student.studentUid)
+                .child(entry.date)
+
+            attendanceRef.get().addOnSuccessListener { snapshot ->
+                var isAbsent = entry.absent
+                var note = entry.note
+                var time = entry.time
+                snapshot.getValue(AttendanceEntry::class.java)?.let { latest ->
+                    isAbsent = latest.absent
+                    note = latest.note
+                    time = latest.time
+                    pickedDate = latest.date
+                }
+                showDialog(isAbsent, note, time, pickedDate)
+            }
+        }
     }
 
     fun editAttendance(
@@ -1294,17 +1582,31 @@ class SubjectDetailFragment : Fragment() {
         absent: Boolean
     ) {
         val subject = openedSubject ?: return
-        val ref = db.child("pritomnost")
-            .child(selectedSchoolYear)
-            .child(selectedSemester)
-            .child(sanitizeSubjectKey(subject))
-            .child(student.studentUid)
+        val sanitized = openedSubjectKey ?: return
         val newEntry = AttendanceEntry(newDate, time, note, absent)
-        if (originalDate == newDate) {
-            ref.child(originalDate).setValue(newEntry) { _, _ -> refreshFragmentView() }
+        if (isOffline) {
+            val entryJson = JSONObject()
+            entryJson.put("date", newDate)
+            entryJson.put("time", time)
+            entryJson.put("note", note)
+            entryJson.put("absent", absent)
+            if (originalDate != newDate) {
+                localDb.removeAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, originalDate)
+            }
+            localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, newDate, entryJson)
+            refreshFragmentView()
         } else {
-            ref.child(originalDate).removeValue { _, _ ->
-                ref.child(newDate).setValue(newEntry) { _, _ -> refreshFragmentView() }
+            val ref = db.child("pritomnost")
+                .child(selectedSchoolYear)
+                .child(selectedSemester)
+                .child(sanitized)
+                .child(student.studentUid)
+            if (originalDate == newDate) {
+                ref.child(originalDate).setValue(newEntry) { _, _ -> refreshFragmentView() }
+            } else {
+                ref.child(originalDate).removeValue { _, _ ->
+                    ref.child(newDate).setValue(newEntry) { _, _ -> refreshFragmentView() }
+                }
             }
         }
     }
@@ -1381,6 +1683,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.setContentView(dialogView)
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         activeDialogs.add(dialog)
 
         saveButton.setOnClickListener {
@@ -1525,6 +1828,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.show()
         activeDialogs.add(dialog)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * requireContext().resources.displayMetrics.density).toInt()
             window.setLayout(
@@ -1606,6 +1910,7 @@ class SubjectDetailFragment : Fragment() {
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * requireContext().resources.displayMetrics.density).toInt()
             window.setLayout(

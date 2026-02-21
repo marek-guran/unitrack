@@ -12,6 +12,32 @@
     <string name="invalid_password">Heslo musí byť dlhšie ako 5 znakov</string>
     <string name="invalid_username">Nesprávny e-mail.</string>
     <string name="login_failed">Nepodarilo sa prihlásiť.</string>
+    <string name="offline_mode">Lokálny režim</string>
+    <string name="offline_mode_activated">Lokálny režim aktivovaný. Pre online režim resetujte aplikáciu.</string>
+    <string name="or_divider">alebo</string>
+    <string name="reset_app">Resetovať aplikáciu</string>
+    <string name="reset_app_confirm">Naozaj chcete resetovať aplikáciu? Tým sa vymažú všetky lokálne dáta a prepnete sa na online režim.</string>
+    <string name="export_database">Exportovať databázu</string>
+    <string name="import_database">Importovať databázu</string>
+    <string name="export_success">Databáza bola úspešne exportovaná.</string>
+    <string name="export_failed">Chyba pri exporte databázy.</string>
+    <string name="import_success">Databáza bola úspešne importovaná.</string>
+    <string name="import_failed">Chyba pri importe databázy.</string>
+    <string name="offline_admin">Lokálny správca</string>
+    <string name="add_student">Pridať študenta</string>
+    <string name="student_name_hint">Meno študenta</string>
+    <string name="student_email_hint">E-mail študenta</string>
+    <string name="title_students">Študenti</string>
+    <string name="title_subjects">Predmety</string>
+    <string name="add_student_title">Pridať študenta</string>
+    <string name="student_name">Meno študenta</string>
+    <string name="no_students">Žiadni študenti</string>
+    <string name="no_subjects">Žiadne predmety</string>
+    <string name="add_subject_title">Pridať predmet</string>
+    <string name="subject_name">Názov predmetu</string>
+    <string name="delete_student_confirm">Naozaj chcete odstrániť tohto študenta?</string>
+    <string name="delete_subject_confirm">Naozaj chcete odstrániť tento predmet?</string>
+    <string name="enrollment">Zápis predmetov</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

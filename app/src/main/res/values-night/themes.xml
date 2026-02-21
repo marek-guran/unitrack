@@ -46,6 +46,9 @@
         
         <!-- Enable edge-to-edge -->
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- Smooth window animations -->
+        <item name="android:windowAnimationStyle">@style/UniTrack.WindowAnimation</item>
         
         <!-- Material 3 motion and animations -->
         <item name="motionDurationLong1">700</item>
@@ -56,5 +59,11 @@
         <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
+
+        <!-- Bottom Navigation styling -->
+        <item name="bottomNavigationStyle">@style/Widget.UniTrack.BottomNav</item>
+
+        <!-- MaterialCardView default styling -->
+        <item name="materialCardViewStyle">@style/Widget.UniTrack.CardView</item>
     </style>
 </resources>

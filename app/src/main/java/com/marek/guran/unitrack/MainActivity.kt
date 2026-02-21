@@ -1,16 +1,22 @@
 package com.marek.guran.unitrack
 
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.graphics.ColorUtils
 import androidx.navigation.fragment.NavHostFragment
 import com.marek.guran.unitrack.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
@@ -18,6 +24,8 @@ import com.marek.guran.unitrack.ui.login.LoginActivity
 import androidx.core.view.get
 import androidx.core.view.size
 import androidx.core.view.WindowCompat
+import com.google.android.material.color.MaterialColors
+import com.marek.guran.unitrack.data.OfflineMode
 
 class MainActivity : AppCompatActivity() {
 
@@ -43,14 +51,20 @@ class MainActivity : AppCompatActivity() {
         
         supportActionBar?.hide()
 
-        // Start periodic internet check
-        startPeriodicInternetCheck()
+        val isOffline = OfflineMode.isOffline(this)
 
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        if (currentUser == null) {
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
-            return
+        // Start periodic internet check only in online mode
+        if (!isOffline) {
+            startPeriodicInternetCheck()
+        }
+
+        if (!isOffline) {
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            if (currentUser == null) {
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+                return
+            }
         }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -59,6 +73,10 @@ class MainActivity : AppCompatActivity() {
         val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main) as NavHostFragment
         val navController = navHostFragment.navController
         val navView: BottomNavigationView = binding.navView
+
+        // Show Students and Subjects tabs only in offline mode
+        navView.menu.findItem(R.id.navigation_students).isVisible = isOffline
+        navView.menu.findItem(R.id.navigation_subjects).isVisible = isOffline
 
         navView.setOnItemSelectedListener { item ->
             when (item.itemId) {
@@ -71,6 +89,14 @@ class MainActivity : AppCompatActivity() {
                     navController.navigate(R.id.navigation_dashboard)
                     true
                 }
+                R.id.navigation_students -> {
+                    navController.navigate(R.id.navigation_students)
+                    true
+                }
+                R.id.navigation_subjects -> {
+                    navController.navigate(R.id.navigation_subjects)
+                    true
+                }
                 R.id.navigation_settings -> {
                     navController.navigate(R.id.navigation_settings)
                     true
@@ -80,6 +106,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
+            // Subtle scale animation on bottom nav when switching tabs
+            navView.animate()
+                .scaleX(0.98f)
+                .scaleY(0.98f)
+                .setDuration(100)
+                .withEndAction {
+                    navView.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(200)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                }
+                .start()
+
             when (destination.id) {
                 R.id.navigation_home -> {
                     navView.menu.setGroupCheckable(0, true, true)
@@ -89,16 +130,54 @@ class MainActivity : AppCompatActivity() {
                     navView.menu.setGroupCheckable(0, true, true)
                     navView.menu.findItem(R.id.navigation_settings).isChecked = true
                 }
+                R.id.navigation_students -> {
+                    navView.menu.setGroupCheckable(0, true, true)
+                    navView.menu.findItem(R.id.navigation_students).isChecked = true
+                }
+                R.id.navigation_subjects -> {
+                    navView.menu.setGroupCheckable(0, true, true)
+                    navView.menu.findItem(R.id.navigation_subjects).isChecked = true
+                }
                 R.id.subjectDetailFragment -> {
-                    navView.menu.setGroupCheckable(0, false, true)
-                    for (i in 0 until navView.menu.size) {
-                        navView.menu[i].isChecked = false
-                    }
+                    // Keep Home selected since subject detail is a sub-destination of Home
+                    navView.menu.setGroupCheckable(0, true, true)
+                    navView.menu.findItem(R.id.navigation_home).isChecked = true
                 }
                 else -> {
                     navView.menu.setGroupCheckable(0, true, true)
                 }
             }
+        }
+
+        // Set up frosted glass blur effect on bottom nav
+        val blurView = binding.blurView
+        val blurTarget = binding.blurTarget
+        val windowBackground = window.decorView.background
+
+        blurView.setupWith(blurTarget)
+            .setFrameClearDrawable(windowBackground)
+            .setBlurRadius(20f)
+
+        // Derive nav overlay color from theme's primary color, darkened for distinction
+        applyDarkenedPrimaryNavBackground(blurView)
+
+        // Animate bottom nav entrance
+        blurView.translationY = 100f
+        blurView.alpha = 0f
+        blurView.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(500)
+            .setStartDelay(300)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-apply nav styling when returning (e.g. after dark mode toggle in settings)
+        if (::binding.isInitialized) {
+            applyDarkenedPrimaryNavBackground(binding.blurView)
         }
     }
 
@@ -151,5 +230,49 @@ class MainActivity : AppCompatActivity() {
                 // Don't set dialogDismissedManually here; only on user cancel!
             }
             .show()
+    }
+
+    /**
+     * Derives a darkened shade of the theme's primary color and applies it as
+     * a semi-transparent rounded background on the bottom nav BlurView overlay.
+     * This ensures the nav is always visually distinct from card backgrounds
+     * while respecting dynamic/wallpaper colors.
+     */
+    private fun applyDarkenedPrimaryNavBackground(blurView: eightbitlab.com.blurview.BlurView) {
+        // Resolve colorPrimary from the current theme (respects dynamic colors)
+        val primaryColor = MaterialColors.getColor(blurView, android.R.attr.colorPrimary, Color.GRAY)
+
+        // Darken the primary color by blending it with black (30% darker)
+        val darkenedColor = ColorUtils.blendARGB(primaryColor, Color.BLACK, 0.30f)
+
+        // Apply semi-transparency (alpha ~70% = 0xB3) for frosted glass effect
+        val overlayColor = ColorUtils.setAlphaComponent(darkenedColor, 0xB3)
+
+        // Create a rounded shape drawable programmatically
+        val navBackground = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 24f * resources.displayMetrics.density // 24dp in pixels
+            setColor(overlayColor)
+        }
+
+        blurView.background = navBackground
+
+        // Set contrasting icon/text colors for the dark nav overlay
+        val navView: BottomNavigationView = binding.navView
+        val unselectedColor = ColorUtils.setAlphaComponent(Color.WHITE, 0xB3)
+        val pillColor = MaterialColors.getColor(blurView, com.google.android.material.R.attr.colorPrimaryContainer, Color.WHITE)
+
+        navView.itemIconTintList = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(darkenedColor, unselectedColor)
+        )
+
+        // In dark mode, white text for readability; in light mode, text uses pill color
+        val isDarkMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val selectedTextColor = if (isDarkMode) Color.WHITE else pillColor
+        navView.itemTextColor = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+            intArrayOf(selectedTextColor, unselectedColor)
+        )
     }
 }

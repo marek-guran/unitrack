@@ -4,112 +4,272 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="24dp"
+    app:cardCornerRadius="28dp"
     android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurfaceVariant"
-    app:cardElevation="4dp"
+    app:cardBackgroundColor="?attr/colorSurface"
+    app:cardElevation="3dp"
     app:strokeWidth="0dp">
 
-<LinearLayout
-    android:orientation="vertical"
-    android:padding="20dp"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content">
-
-    <TextView
-        android:id="@+id/editMarkTitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Upraviť Známku"
-        android:textColor="?attr/colorOnSurface"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
-
-    <EditText
-        android:id="@+id/inputGrade"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Známka"
-        android:textColor="?attr/colorOnSurface"
-        android:inputType="text"
-        android:layout_marginBottom="8dp"/>
-
-    <EditText
-        android:id="@+id/inputName"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Názov"
-        android:textColor="?attr/colorOnSurface"
-        android:inputType="text"
-        android:layout_marginBottom="8dp"/>
-
-    <EditText
-        android:id="@+id/inputDesc"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Poznámka pre študenta"
-        android:inputType="text"
-        android:textColor="?attr/colorOnSurface"
-        android:layout_marginBottom="8dp"/>
-
-    <EditText
-        android:id="@+id/inputNote"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Poznámka pre mňa"
-        android:textColor="?attr/colorOnSurface"
-        android:inputType="text"
-        android:layout_marginBottom="8dp"/>
-
-    <TextView
-        android:id="@+id/inputDateLabel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Dátum udelenia"
-        android:textColor="?attr/colorOnSurface"
-        android:textStyle="bold"
-        android:layout_marginTop="8dp"/>
-    <TextView
-        android:id="@+id/inputDate"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Vyberte Dátum"
-        android:textColor="?attr/colorOnSurface"
-        android:background="?attr/selectableItemBackground"
-        android:textSize="16sp"
-        android:padding="8dp"
-        android:layout_marginBottom="8dp"/>
-
     <LinearLayout
-        android:orientation="horizontal"
+        android:orientation="vertical"
+        android:padding="24dp"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center">
+        android:layout_height="wrap_content">
 
-        <Button
-            android:id="@+id/submitButton"
-            android:layout_width="0dp"
-            android:layout_weight="1"
+        <TextView
+            android:id="@+id/editMarkTitle"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Uložiť"
-            android:textSize="18sp"
-            style="@style/Widget.Material3.Button"
-            android:layout_marginEnd="8dp"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="?attr/colorOnPrimary"/>
+            android:text="Upraviť Známku"
+            android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="20dp"/>
 
-        <Button
-            android:id="@+id/cancelButton"
-            android:layout_width="0dp"
-            android:layout_weight="1"
+        <!-- Grade Selector Label -->
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Zrušiť"
-            android:textSize="18sp"
-            style="@style/Widget.Material3.Button"
-            android:layout_marginEnd="8dp"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="?attr/colorOnPrimary"/>
+            android:text="Vyberte známku"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginBottom="10dp"/>
+
+        <!-- Grade Selector Chips -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/gradeChipGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            app:singleSelection="true"
+            app:selectionRequired="false"
+            app:chipSpacingHorizontal="8dp"
+            app:chipSpacingVertical="8dp">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeA"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  A  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeB"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  B  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeC"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  C  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeD"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  D  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeE"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  E  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipGradeFx"
+                style="@style/Widget.Material3.Chip.Suggestion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  Fx  "
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:checkable="true"
+                app:chipCornerRadius="24dp"
+                app:chipMinHeight="48dp"
+                app:chipStrokeWidth="1.5dp"
+                app:chipStrokeColor="@color/grade_chip_stroke"
+                app:chipBackgroundColor="@color/grade_chip_bg"
+                android:textColor="@color/grade_chip_text" />
+        </com.google.android.material.chip.ChipGroup>
+
+        <!-- Hidden field for backward compat -->
+        <EditText
+            android:id="@+id/inputGrade"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            android:importantForAccessibility="no" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Názov"
+            android:layout_marginBottom="12dp"
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Poznámka pre študenta"
+            android:layout_marginBottom="12dp"
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Poznámka pre mňa"
+            android:layout_marginBottom="12dp"
+            app:boxCornerRadiusTopStart="16dp"
+            app:boxCornerRadiusTopEnd="16dp"
+            app:boxCornerRadiusBottomStart="16dp"
+            app:boxCornerRadiusBottomEnd="16dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/inputNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"/>
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="?attr/colorSecondaryContainer">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="start|center_vertical">
+
+                <TextView
+                    android:id="@+id/inputDateLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dátum:"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:textColor="?attr/colorOnSecondaryContainer" />
+
+                <TextView
+                    android:id="@+id/inputDate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:hint="Vyberte Dátum"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:textColor="?attr/colorOnSecondaryContainer"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="8dp"
+                    android:clickable="true"
+                    android:focusable="true"/>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/cancelButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Zrušiť"
+                android:layout_marginEnd="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/submitButton"
+                style="@style/Widget.Material3.Button.ElevatedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Uložiť"
+                app:cornerRadius="16dp"
+                app:elevation="2dp"
+                app:icon="@android:drawable/ic_menu_save" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
 </com.google.android.material.card.MaterialCardView>

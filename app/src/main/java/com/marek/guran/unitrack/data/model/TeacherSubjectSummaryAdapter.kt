@@ -9,7 +9,7 @@ import com.marek.guran.unitrack.R
 
 class TeacherSubjectSummaryAdapter(
     private val subjects: List<TeacherSubjectSummary>,
-    private val onSubjectClick: (String) -> Unit
+    private val onSubjectClick: (String, String) -> Unit
 ) : RecyclerView.Adapter<TeacherSubjectSummaryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -31,7 +31,7 @@ class TeacherSubjectSummaryAdapter(
         holder.averageMark.text = "Priemer: ${subject.averageMark}"
 
         holder.itemView.setOnClickListener {
-            onSubjectClick(subject.subjectName)
+            onSubjectClick(subject.subjectName, subject.subjectKey)
         }
     }
 

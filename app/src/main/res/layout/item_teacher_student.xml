@@ -5,10 +5,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
-    app:cardCornerRadius="20dp"
+    app:cardCornerRadius="24dp"
     app:cardElevation="2dp"
     app:strokeWidth="0dp"
-    app:cardBackgroundColor="?attr/colorSurfaceVariant">
+    app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -22,7 +22,7 @@
             android:layout_height="wrap_content"
             android:text="Meno Študenta"
             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textColor="?attr/colorOnSurface"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
@@ -73,7 +73,7 @@
                 style="@style/Widget.Material3.Button.ElevatedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:cornerRadius="12dp"
+                app:cornerRadius="20dp"
                 android:text="Zápis do prezenčky"
                 android:layout_marginEnd="8dp" />
 
@@ -82,7 +82,7 @@
                 style="@style/Widget.Material3.Button.ElevatedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:cornerRadius="12dp"
+                app:cornerRadius="20dp"
                 android:text="História" />
         </LinearLayout>
 
@@ -103,7 +103,7 @@
                 android:layout_height="wrap_content"
                 android:text="Známky"
                 android:layout_marginEnd="8dp"
-                app:cornerRadius="12dp"
+                app:cornerRadius="20dp"
                 app:elevation="1dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -112,7 +112,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Oznámkovať"
-                app:cornerRadius="12dp"
+                app:cornerRadius="20dp"
                 app:elevation="1dp" />
         </LinearLayout>
 

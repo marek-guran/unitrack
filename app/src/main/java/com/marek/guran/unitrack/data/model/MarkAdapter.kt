@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.card.MaterialCardView
 import com.marek.guran.unitrack.R
 import java.text.SimpleDateFormat
 import java.util.*
@@ -19,6 +20,7 @@ class MarkAdapter(
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val markGrade: TextView = view.findViewById(R.id.markGrade)
+        val gradeBadge: MaterialCardView = view.findViewById(R.id.gradeBadge)
         val markName: TextView = view.findViewById(R.id.markName)
         val markDesc: TextView = view.findViewById(R.id.markDesc)
         val markNote: TextView = view.findViewById(R.id.markNote)
@@ -40,16 +42,11 @@ class MarkAdapter(
         holder.markGrade.text = mark.grade
         holder.markName.text = mark.name
 
-        // Bad mark color for Fx
-        if (mark.grade.equals("Fx", ignoreCase = true)) {
-            holder.markGrade.setTextColor(
-                ContextCompat.getColor(holder.itemView.context, R.color.bad_mark)
-            )
-        } else {
-            holder.markGrade.setTextColor(
-                ContextCompat.getColor(holder.itemView.context, R.color.good_mark)
-            )
-        }
+        // Color-coded grade badge
+        val ctx = holder.itemView.context
+        val (bgColor, textColor) = getGradeColors(mark.grade)
+        holder.gradeBadge.setCardBackgroundColor(ContextCompat.getColor(ctx, bgColor))
+        holder.markGrade.setTextColor(ContextCompat.getColor(ctx, textColor))
 
         // Description visibility
         if (mark.desc.isNullOrEmpty()) {
@@ -70,5 +67,17 @@ class MarkAdapter(
         holder.markTimestamp.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(mark.timestamp))
         holder.editMarkBtn.setOnClickListener { onEdit(markWithKey) }
         holder.removeMarkBtn.setOnClickListener { onRemove(markWithKey) }
+    }
+
+    companion object {
+        fun getGradeColors(grade: String): Pair<Int, Int> = when (grade.uppercase()) {
+            "A" -> R.color.grade_a_bg to R.color.grade_a_text
+            "B" -> R.color.grade_b_bg to R.color.grade_b_text
+            "C" -> R.color.grade_c_bg to R.color.grade_c_text
+            "D" -> R.color.grade_d_bg to R.color.grade_d_text
+            "E" -> R.color.grade_e_bg to R.color.grade_e_text
+            "FX" -> R.color.grade_fx_bg to R.color.grade_fx_text
+            else -> R.color.grade_fx_bg to R.color.grade_fx_text
+        }
     }
 }
