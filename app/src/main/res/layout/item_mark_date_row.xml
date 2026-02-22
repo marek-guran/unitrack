@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
-    android:padding="8dp">
+    android:padding="12dp"
+    android:gravity="center_vertical">
 
     <TextView
         android:id="@+id/markNameDate"
@@ -12,9 +13,9 @@
         android:layout_height="wrap_content"
         android:layout_weight="2"
         android:text="Midterm"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="16sp"
-        android:gravity="center"/>
+        android:gravity="center" />
 
     <TextView
         android:id="@+id/markGradeDate"
@@ -22,17 +23,17 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:text="A"
+        android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="16sp"
-        android:gravity="center"/>
+        android:gravity="center" />
 
     <TextView
         android:id="@+id/markDate"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="2"
-        android:textColor="?attr/colorOnSurface"
         android:text="07.09.2025"
-        android:textSize="16sp"
-        android:gravity="center"/>
+        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:gravity="center" />
 </LinearLayout>

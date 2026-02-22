@@ -1,83 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
     android:clipToPadding="false"
-    android:fitsSystemWindows="true"
     tools:context=".ui.settings.SettingsFragment">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingTop="16dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="72dp"
         android:paddingBottom="100dp">
 
-        <!-- Dark Mode Card -->
+        <!-- Title -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nastavenia"
+            android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="28dp" />
+
+        <!-- Appearance group -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vzhľad"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
 
-            <LinearLayout
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switchDarkMode"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="24dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Vzhľad"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp" />
-
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchDarkMode"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Tmavý režim"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:paddingStart="0dp"
-                    android:paddingEnd="0dp" />
-            </LinearLayout>
+                android:text="Tmavý režim"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:padding="20dp" />
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Admin add user section -->
+        <!-- Admin: Add user section -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/layoutAddUser"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="24dp"
             android:visibility="gone"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Pridať / Upraviť používateľa"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                     android:textStyle="bold"
-                    android:layout_marginBottom="16dp"/>
+                    android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
@@ -85,16 +89,15 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:hint="Meno používateľa"
-                    app:boxCornerRadiusTopStart="16dp"
-                    app:boxCornerRadiusTopEnd="16dp"
-                    app:boxCornerRadiusBottomStart="16dp"
-                    app:boxCornerRadiusBottomEnd="16dp">
-
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editNewUserName"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textPersonName"/>
+                        android:inputType="textPersonName" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -103,16 +106,15 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:hint="E-mail používateľa"
-                    app:boxCornerRadiusTopStart="16dp"
-                    app:boxCornerRadiusTopEnd="16dp"
-                    app:boxCornerRadiusBottomStart="16dp"
-                    app:boxCornerRadiusBottomEnd="16dp">
-
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editNewUserEmail"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textEmailAddress"/>
+                        android:inputType="textEmailAddress" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <LinearLayout
@@ -121,7 +123,6 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:layout_marginBottom="16dp">
-
                     <TextView
                         android:id="@+id/textUserRole"
                         android:layout_width="0dp"
@@ -129,7 +130,6 @@
                         android:layout_weight="1"
                         android:text="Študent"
                         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
-
                     <com.google.android.material.switchmaterial.SwitchMaterial
                         android:id="@+id/switchIsTeacher"
                         android:layout_width="wrap_content"
@@ -142,10 +142,9 @@
                     android:id="@+id/btnAddUser"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="Pridať"
-                    android:textSize="16sp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
 
                 <TextView
                     android:id="@+id/textAddUserStatus"
@@ -153,36 +152,37 @@
                     android:layout_height="wrap_content"
                     android:text=""
                     android:textAlignment="center"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:layout_marginTop="12dp"/>
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:layout_marginTop="8dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Admin subject section -->
+        <!-- Admin: Subject section -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/layoutAddSubject"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="24dp"
             android:visibility="gone"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Administrácia Predmetov"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                     android:textStyle="bold"
-                    android:layout_marginBottom="16dp"/>
+                    android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
@@ -190,16 +190,15 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:hint="Názov predmetu"
-                    app:boxCornerRadiusTopStart="16dp"
-                    app:boxCornerRadiusTopEnd="16dp"
-                    app:boxCornerRadiusBottomStart="16dp"
-                    app:boxCornerRadiusBottomEnd="16dp">
-
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editSubjectName"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textCapWords"/>
+                        android:inputType="textCapWords" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -208,40 +207,35 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
                     android:hint="E-mail učiteľa"
-                    app:boxCornerRadiusTopStart="16dp"
-                    app:boxCornerRadiusTopEnd="16dp"
-                    app:boxCornerRadiusBottomStart="16dp"
-                    app:boxCornerRadiusBottomEnd="16dp">
-
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editSubjectTeacherEmail"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textEmailAddress"/>
+                        android:inputType="textEmailAddress" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAddSubject"
-                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="Pridať / Uložiť"
-                    android:textSize="16sp"
                     android:layout_marginBottom="8dp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnRemoveSubject"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="Odstrániť predmet"
-                    android:textSize="16sp"
                     android:layout_marginBottom="8dp"
-                    app:cornerRadius="20dp"
+                    app:cornerRadius="12dp"
                     app:strokeColor="?attr/colorError"
-                    android:textColor="?attr/colorError"
-                    app:iconTint="?attr/colorError" />
+                    android:textColor="?attr/colorError" />
 
                 <TextView
                     android:id="@+id/textAddSubjectStatus"
@@ -249,51 +243,52 @@
                     android:layout_height="wrap_content"
                     android:text=""
                     android:textAlignment="center"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:layout_marginTop="8dp"/>
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:layout_marginTop="4dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerSubjects"
                     android:layout_width="match_parent"
                     android:layout_height="200dp"
                     android:layout_marginTop="12dp"
-                    android:visibility="gone"/>
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Account Actions Card -->
+        <!-- Account group -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Účet"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Účet"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp" />
+                android:padding="20dp">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnResetPassword"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="Obnoviť heslo"
-                    android:textSize="16sp"
                     android:layout_marginBottom="8dp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
 
                 <TextView
                     android:id="@+id/text_reset_status"
@@ -302,65 +297,64 @@
                     android:text=""
                     android:visibility="gone"
                     android:textAlignment="center"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:layout_marginBottom="8dp"/>
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:layout_marginBottom="8dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnLogout"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="Odhlásiť sa"
-                    android:textSize="16sp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Export/Import Card (visible in offline mode) -->
+        <!-- Export/Import (offline mode) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/layoutExportImport"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="24dp"
             android:visibility="gone"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="2dp"
-            app:strokeWidth="0dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Záloha databázy"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                     android:textStyle="bold"
-                    android:layout_marginBottom="16dp"/>
+                    android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnExportDatabase"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="@string/export_database"
-                    android:textSize="16sp"
                     android:layout_marginBottom="8dp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnImportDatabase"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="56dp"
+                    android:layout_height="52dp"
                     android:text="@string/import_database"
-                    android:textSize="16sp"
-                    app:cornerRadius="20dp" />
+                    app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
     </LinearLayout>
 </ScrollView>

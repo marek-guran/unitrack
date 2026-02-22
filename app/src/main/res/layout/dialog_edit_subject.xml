@@ -1,85 +1,90 @@
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="28dp"
-    android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-    app:cardElevation="4dp"
-    app:strokeWidth="0dp">
+    android:padding="24dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:cardBackgroundColor="?attr/colorSurface">
 
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp">
+        android:padding="20dp">
 
-    <EditText
-        android:id="@+id/editSubjectName"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="?attr/colorOnSurface"
-        android:textStyle="bold"
-        android:textSize="24sp"
-        android:hint="Názov predmetu"
-        android:layout_marginBottom="12dp"/>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="?attr/colorOnSurface"
-        android:textSize="18sp"
-        android:text="Učiteľ:"/>
-
-    <Spinner
-        android:id="@+id/spinnerTeachers"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="18sp"
-        android:layout_marginBottom="16dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
-        <com.google.android.material.button.MaterialButton
-            style="@style/Widget.Material3.Button"
-            android:textSize="18sp"
-            android:id="@+id/btnDelete"
-            android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
-            android:text="Odstrániť"
-            android:backgroundTint="?attr/colorError"
-            android:textColor="?attr/colorOnError"/>
-        <com.google.android.material.button.MaterialButton
-            style="@style/Widget.Material3.Button"
-            android:textSize="18sp"
-            android:id="@+id/btnSave"
-            android:layout_width="wrap_content"
+            android:text="Upraviť predmet"
+            android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="16dp" />
+
+        <EditText
+            android:id="@+id/editSubjectName"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
-            android:text="Uložiť"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="?attr/colorOnPrimary"/>
+            android:textColor="?attr/colorOnSurface"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:hint="Názov predmetu"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="Učiteľ:"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinnerTeachers"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDelete"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Odstrániť"
+                android:textColor="?attr/colorError"
+                app:strokeColor="?attr/colorError"
+                app:cornerRadius="12dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancel"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="Zrušiť"
+                app:cornerRadius="12dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSave"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Uložiť"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
     </LinearLayout>
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
-        <com.google.android.material.button.MaterialButton
-            style="@style/Widget.Material3.Button"
-            android:textSize="18sp"
-            android:id="@+id/btnCancel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="6dp"
-            android:text="Zrušiť"
-            app:backgroundTint="?attr/colorPrimary"
-            android:textColor="?attr/colorOnPrimary"/>
-    </LinearLayout>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

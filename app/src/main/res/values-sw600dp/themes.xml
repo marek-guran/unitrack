@@ -1,0 +1,7 @@
+<resources>
+    <!-- Tablet dialog theme: constrain width so dialogs don't stretch full screen -->
+    <style name="Theme.UniTrack.AlertDialog" parent="ThemeOverlay.Material3.Dialog.Alert">
+        <item name="android:windowMinWidthMajor">45%</item>
+        <item name="android:windowMinWidthMinor">65%</item>
+    </style>
+</resources>

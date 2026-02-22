@@ -1,0 +1,82 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="120dp"
+    android:viewportWidth="200"
+    android:viewportHeight="120">
+
+    <!-- Person 1 (back, left) body -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:alpha="0.5"
+        android:pathData="M60,100 Q60,72 60,68 Q60,58 72,55 Q84,58 84,68 Q84,72 84,100 Z" />
+
+    <!-- Person 1 head -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:alpha="0.5"
+        android:pathData="M72,42 A10,10 0 1,1 72.01,42 Z" />
+
+    <!-- Person 2 (back, right) body -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:alpha="0.5"
+        android:pathData="M116,100 Q116,72 116,68 Q116,58 128,55 Q140,58 140,68 Q140,72 140,100 Z" />
+
+    <!-- Person 2 head -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:alpha="0.5"
+        android:pathData="M128,42 A10,10 0 1,1 128.01,42 Z" />
+
+    <!-- Person 3 (front, center) body -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M85,105 Q85,75 85,70 Q85,58 100,54 Q115,58 115,70 Q115,75 115,105 Z" />
+
+    <!-- Person 3 head -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M100,40 A12,12 0 1,1 100.01,40 Z" />
+
+    <!-- Graduation cap top -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M100,16 L82,24 L100,32 L118,24 Z" />
+
+    <!-- Graduation cap band -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M88,25 L88,32 Q88,36 100,38 Q112,36 112,32 L112,25 L100,30 Z" />
+
+    <!-- Graduation cap tassel -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:strokeColor="@color/hero_accent"
+        android:strokeWidth="1.5"
+        android:pathData="M118,24 L122,30 L122,36" />
+
+    <!-- Tassel end -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M122,36 A2,2 0 1,1 122.01,36 Z" />
+
+    <!-- Decorative dot top-left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M25,20 A4,4 0 1,1 25.01,20 Z" />
+
+    <!-- Decorative dot top-right -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M175,18 A5,5 0 1,1 175.01,18 Z" />
+
+    <!-- Decorative dot bottom-left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M32,90 A3.5,3.5 0 1,1 32.01,90 Z" />
+
+    <!-- Decorative dot bottom-right -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M170,85 A3,3 0 1,1 170.01,85 Z" />
+</vector>

@@ -4,10 +4,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="24dp"
-    android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-    app:cardElevation="2dp">
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurface">
 
     <LinearLayout
         android:orientation="vertical"
@@ -20,7 +22,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="6dp">
+            android:layout_marginBottom="4dp">
 
             <TextView
                 android:id="@+id/markGrade"
@@ -28,10 +30,9 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="Známka"
-                android:textStyle="bold"
-                android:textSize="18sp"
-                android:gravity="start"
-                android:textColor="?attr/colorOnSurface" />
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                android:textColor="?attr/colorOnSurface"
+                android:gravity="start" />
 
             <TextView
                 android:id="@+id/markName"
@@ -39,9 +40,9 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="2"
                 android:text="Názov"
-                android:textSize="16sp"
-                android:gravity="end"
-                android:textColor="?attr/colorOnSurface" />
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:gravity="end" />
         </LinearLayout>
 
         <TextView
@@ -49,11 +50,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Popis"
-            android:textSize="15sp"
-            android:textStyle="italic"
-            android:textColor="?attr/colorOnSurface"
-            android:layout_marginTop="0dp"
-            android:layout_marginBottom="2dp"
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginTop="2dp"
             android:visibility="gone" />
 
     </LinearLayout>

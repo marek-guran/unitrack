@@ -1,47 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="28dp"
-    android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-    app:cardElevation="4dp"
-    app:strokeWidth="0dp">
+    android:padding="24dp">
 
-<LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:padding="16dp"
-    android:orientation="vertical">
-
-    <EditText
-        android:id="@+id/searchStudentEditText"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Hľadať študenta..."
-        android:textColor="?attr/colorOnSurface"
-        android:inputType="text"
-        android:drawableStart="@android:drawable/ic_menu_search"
-        android:padding="8dp"/>
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:cardBackgroundColor="?attr/colorSurface">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/enrollStudentsRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="350dp"
-        android:scrollbars="vertical"
-        android:layout_marginTop="8dp"/>
-
-    <Button
-        android:id="@+id/saveEnrollmentsButton"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Uložiť zápis"
-        android:textSize="18sp"
-        style="@style/Widget.Material3.Button"
-        android:layout_marginTop="10dp"
-        app:backgroundTint="?attr/colorPrimary"
-        android:textColor="?attr/colorOnPrimary"/>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+        android:padding="20dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Zapísať študentov"
+            android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="16dp" />
+
+        <EditText
+            android:id="@+id/searchStudentEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Hľadať študenta..."
+            android:textColor="?attr/colorOnSurface"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:inputType="text"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:padding="12dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/enrollStudentsRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="350dp"
+            android:scrollbars="vertical"
+            android:layout_marginTop="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/saveEnrollmentsButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Uložiť zápis"
+            android:layout_marginTop="16dp"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

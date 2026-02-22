@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center">
+
+<com.google.android.material.card.MaterialCardView
+    android:layout_width="480dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center_horizontal"
+    android:layout_margin="24dp"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView android:id="@+id/markGradeDetail" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Známka: A" android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall" android:textColor="?attr/colorPrimary" android:textStyle="bold" android:layout_marginBottom="8dp" />
+
+        <TextView android:id="@+id/markNameDetail" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Názov: Midterm" android:textAppearance="@style/TextAppearance.Material3.BodyLarge" android:textColor="?attr/colorOnSurface" android:layout_marginBottom="12dp" />
+
+        <TextView android:id="@+id/markNoteStudentLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Poznámka pre študenta:" android:textAppearance="@style/TextAppearance.Material3.LabelMedium" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="2dp" />
+        <TextView android:id="@+id/markNoteStudentDetail" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurface" android:layout_marginBottom="12dp" />
+
+        <TextView android:id="@+id/markNoteTeacherLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Poznámka pre mňa:" android:textAppearance="@style/TextAppearance.Material3.LabelMedium" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="2dp" />
+        <TextView android:id="@+id/markNoteTeacherDetail" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurface" android:layout_marginBottom="12dp" />
+
+        <TextView android:id="@+id/markTimestampDetail" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Dátum: 07.09.2025" android:textAppearance="@style/TextAppearance.Material3.BodySmall" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="20dp" />
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center">
+            <com.google.android.material.button.MaterialButton android:id="@+id/editMarkBtn" style="@style/Widget.Material3.Button.TonalButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="Upraviť" android:layout_marginEnd="8dp" app:cornerRadius="12dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/removeMarkBtn" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp" android:text="Odstrániť" app:cornerRadius="12dp" app:strokeColor="?attr/colorError" android:textColor="?attr/colorError" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton android:id="@+id/closeMarkDetailBtn" style="@style/Widget.Material3.Button.TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Zavrieť" android:layout_marginTop="8dp" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>

@@ -1,0 +1,75 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="120dp"
+    android:viewportWidth="200"
+    android:viewportHeight="120">
+
+    <!-- Book 1 (bottom, widest) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M55,100 L145,100 Q150,100 150,95 L150,85 Q150,80 145,80 L55,80 Q50,80 50,85 L50,95 Q50,100 55,100 Z" />
+
+    <!-- Book 1 spine -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M50,85 L50,95 Q50,100 55,100 L55,80 Q50,80 50,85 Z" />
+
+    <!-- Book 2 (middle) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:alpha="0.85"
+        android:pathData="M60,80 L140,80 Q144,80 144,76 L144,67 Q144,63 140,63 L60,63 Q56,63 56,67 L56,76 Q56,80 60,80 Z" />
+
+    <!-- Book 2 spine -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:alpha="0.85"
+        android:pathData="M56,67 L56,76 Q56,80 60,80 L60,63 Q56,63 56,67 Z" />
+
+    <!-- Book 3 (top, smallest) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:alpha="0.7"
+        android:pathData="M65,63 L135,63 Q138,63 138,59 L138,51 Q138,47 135,47 L65,47 Q62,47 62,51 L62,59 Q62,63 65,63 Z" />
+
+    <!-- Book 3 spine -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:alpha="0.7"
+        android:pathData="M62,51 L62,59 Q62,63 65,63 L65,47 Q62,47 62,51 Z" />
+
+    <!-- Pencil body -->
+    <path
+        android:fillColor="@color/md_theme_light_tertiary"
+        android:pathData="M155,85 L160,85 L170,35 L165,30 L155,85 Z" />
+
+    <!-- Pencil tip -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M165,30 L167.5,20 L170,35 Z" />
+
+    <!-- Pencil eraser -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M154,90 Q153,95 157,96 Q161,95 160,90 L155,85 Z" />
+
+    <!-- Sparkle star left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M30,35 L32,28 L34,35 L41,37 L34,39 L32,46 L30,39 L23,37 Z" />
+
+    <!-- Sparkle star right -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M178,55 L179.5,50 L181,55 L186,56.5 L181,58 L179.5,63 L178,58 L173,56.5 Z" />
+
+    <!-- Decorative dot top -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M100,20 A4,4 0 1,1 100.01,20 Z" />
+
+    <!-- Decorative dot bottom-right -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M180,95 A3,3 0 1,1 180.01,95 Z" />
+</vector>

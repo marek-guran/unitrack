@@ -1,94 +1,100 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardCornerRadius="28dp"
-    android:layout_marginBottom="10dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-    app:cardElevation="4dp"
-    app:strokeWidth="0dp">
+    android:padding="24dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:cardBackgroundColor="?attr/colorSurface">
 
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp">
+        android:padding="20dp">
+
         <TextView
             android:id="@+id/newAttendance"
-            android:textColor="?attr/colorOnSurface"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text=""
-            android:textStyle="bold"
-            android:textSize="24sp"
-            android:gravity="center"/>
+            android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="16dp" />
+
         <CheckBox
             android:id="@+id/absentCheckbox"
-            android:textColor="?attr/colorOnSurface"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Absencia (študent neprišiel na hodinu)"
-            android:layout_marginTop="12dp"/>
-    <TextView
-        android:id="@+id/inputDate"
-        android:textColor="?attr/colorOnSurface"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Vybrať dátum"
-        android:padding="12dp"
-        android:background="?android:attr/editTextBackground"
-        android:focusable="false" />
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textColor="?attr/colorOnSurface"
+            android:layout_marginBottom="12dp" />
 
-    <TextView
-        android:id="@+id/inputTime"
-        android:textColor="?attr/colorOnSurface"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Vybrať čas"
-        android:padding="12dp"
-        android:background="?android:attr/editTextBackground"
-        android:focusable="false"
-        android:layout_marginTop="8dp" />
+        <TextView
+            android:id="@+id/inputDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Vybrať dátum"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:padding="12dp"
+            android:background="?android:attr/editTextBackground"
+            android:focusable="false" />
 
-    <EditText
-        android:id="@+id/inputNote"
-        android:textColor="?attr/colorOnSurface"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Poznámka (nepovinné)"
-        android:inputType="text"
-        android:layout_marginTop="8dp"/>
+        <TextView
+            android:id="@+id/inputTime"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Vybrať čas"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:padding="12dp"
+            android:background="?android:attr/editTextBackground"
+            android:focusable="false"
+            android:layout_marginTop="8dp" />
 
-        <!-- Action buttons row -->
+        <EditText
+            android:id="@+id/inputNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Poznámka (nepovinné)"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:textColor="?attr/colorOnSurface"
+            android:inputType="text"
+            android:layout_marginTop="8dp" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="end"
-            android:layout_marginTop="12dp">
+            android:layout_marginTop="20dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cancelButton"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Zrušiť"
-                android:textSize="18sp"
-                style="@style/Widget.Material3.Button"
                 android:layout_marginEnd="8dp"
-                app:backgroundTint="?attr/colorPrimary"
-                android:textColor="?attr/colorOnPrimary"/>
+                app:cornerRadius="12dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/submitButton"
+                style="@style/Widget.Material3.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Upraviť"
-                android:textSize="18sp"
-                style="@style/Widget.Material3.Button"
-                app:backgroundTint="?attr/colorPrimary"
-                android:textColor="?attr/colorOnPrimary"/>
+                app:cornerRadius="12dp" />
         </LinearLayout>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+    </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

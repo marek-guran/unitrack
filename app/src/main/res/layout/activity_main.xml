@@ -5,47 +5,34 @@
     android:id="@+id/container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
-    <eightbitlab.com.blurview.BlurTarget
-        android:id="@+id/blurTarget"
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/nav_host_fragment_activity_main"
+        android:name="androidx.navigation.fragment.NavHostFragment"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        app:defaultNavHost="true"
+        app:navGraph="@navigation/mobile_navigation"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent" />
 
-        <androidx.fragment.app.FragmentContainerView
-            android:id="@+id/nav_host_fragment_activity_main"
-            android:name="androidx.navigation.fragment.NavHostFragment"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:defaultNavHost="true"
-            app:navGraph="@navigation/mobile_navigation" />
-
-    </eightbitlab.com.blurview.BlurTarget>
-
-    <eightbitlab.com.blurview.BlurView
-        android:id="@+id/blurView"
-        android:layout_width="0dp"
+    <!-- Custom pill-shaped navigation bar (adapts width to content) -->
+    <com.marek.guran.unitrack.ui.PillNavigationBar
+        android:id="@+id/pillNavBar"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="12dp"
-        android:outlineProvider="background"
-        android:clipToOutline="true"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="4dp"
+        app:layout_constraintWidth_max="0dp"
+        app:layout_constraintWidth_percent="0.85"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/nav_view"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:menu="@menu/bottom_nav_menu"
-            app:labelVisibilityMode="labeled" />
-
-    </eightbitlab.com.blurview.BlurView>
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

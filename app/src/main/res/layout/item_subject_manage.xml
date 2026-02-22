@@ -5,10 +5,11 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="8dp"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="2dp"
-    app:strokeWidth="0dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurface">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -24,7 +25,7 @@
             android:layout_weight="1"
             android:text="Subject Name"
             android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-            android:textStyle="bold" />
+            android:textColor="?attr/colorOnSurface" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnEditSubject"
@@ -33,8 +34,8 @@
             android:layout_height="wrap_content"
             android:text="Upraviť"
             android:textSize="12sp"
-            android:layout_marginEnd="4dp"
-            app:cornerRadius="20dp" />
+            android:layout_marginEnd="8dp"
+            app:cornerRadius="12dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDeleteSubject"
@@ -45,6 +46,6 @@
             android:textSize="12sp"
             android:textColor="?attr/colorError"
             app:strokeColor="?attr/colorError"
-            app:cornerRadius="20dp" />
+            app:cornerRadius="12dp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

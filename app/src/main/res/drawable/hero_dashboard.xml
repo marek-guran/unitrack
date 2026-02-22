@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="120dp"
+    android:viewportWidth="200"
+    android:viewportHeight="120">
+
+    <!-- Bar 1 (short) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M40,95 L40,70 Q40,64 46,64 L54,64 Q60,64 60,70 L60,95 Q60,100 55,100 L45,100 Q40,100 40,95 Z" />
+
+    <!-- Bar 2 (tall) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M70,95 L70,45 Q70,39 76,39 L84,39 Q90,39 90,45 L90,95 Q90,100 85,100 L75,100 Q70,100 70,95 Z" />
+
+    <!-- Bar 3 (medium) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M100,95 L100,55 Q100,49 106,49 L114,49 Q120,49 120,55 L120,95 Q120,100 115,100 L105,100 Q100,100 100,95 Z" />
+
+    <!-- Bar 4 (tallest) -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M130,95 L130,32 Q130,26 136,26 L144,26 Q150,26 150,32 L150,95 Q150,100 145,100 L135,100 Q130,100 130,95 Z" />
+
+    <!-- Curved trend line -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@color/md_theme_light_primary"
+        android:strokeWidth="3"
+        android:pathData="M35,62 Q55,55 65,37 Q80,15 110,42 Q130,60 155,20" />
+
+    <!-- Sparkle star top-left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M28,30 L30,24 L32,30 L38,32 L32,34 L30,40 L28,34 L22,32 Z" />
+
+    <!-- Sparkle star top-right -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M168,15 L170,10 L172,15 L177,17 L172,19 L170,24 L168,19 L163,17 Z" />
+
+    <!-- Small accent dot -->
+    <path
+        android:fillColor="@color/md_theme_light_tertiary"
+        android:pathData="M175,70 A4,4 0 1,1 175.01,70 Z" />
+</vector>

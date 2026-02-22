@@ -1,0 +1,56 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="120dp"
+    android:viewportWidth="200"
+    android:viewportHeight="120">
+
+    <!-- Large gear outer ring with rounded teeth -->
+    <path
+        android:fillColor="@color/md_theme_light_tertiary"
+        android:pathData="M100,15 L106,15 L109,22 L116,19 L120,24 L115,30 L121,35 L126,32 L129,38 L123,42 L125,50 L132,50 L132,56 L125,56 L123,64 L129,68 L126,74 L121,71 L115,76 L120,82 L116,87 L109,84 L106,91 L100,91 L94,91 L91,84 L84,87 L80,82 L85,76 L79,71 L74,74 L71,68 L77,64 L75,56 L68,56 L68,50 L75,50 L77,42 L71,38 L74,32 L79,35 L85,30 L80,24 L84,19 L91,22 L94,15 Z" />
+
+    <!-- Gear center hole -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,40 A13,13 0 1,1 100.01,40 Z" />
+
+    <!-- Gear inner ring -->
+    <path
+        android:fillColor="@color/md_theme_light_tertiary"
+        android:pathData="M100,45 A8,8 0 1,1 100.01,45 Z" />
+
+    <!-- Toggle switch body -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M148,48 L172,48 Q180,48 180,56 Q180,64 172,64 L148,64 Q140,64 140,56 Q140,48 148,48 Z" />
+
+    <!-- Toggle switch knob -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M170,56 A6,6 0 1,1 170.01,56 Z" />
+
+    <!-- Small toggle body -->
+    <path
+        android:fillColor="@color/md_theme_light_primary"
+        android:pathData="M148,78 L166,78 Q172,78 172,84 Q172,90 166,90 L148,90 Q142,90 142,84 Q142,78 148,78 Z" />
+
+    <!-- Small toggle knob (off position) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M150,84 A4.5,4.5 0 1,1 150.01,84 Z" />
+
+    <!-- Decorative dot top-left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M30,28 A5,5 0 1,1 30.01,28 Z" />
+
+    <!-- Decorative dot bottom-left -->
+    <path
+        android:fillColor="@color/hero_accent"
+        android:pathData="M38,95 A4,4 0 1,1 38.01,95 Z" />
+
+    <!-- Decorative dot top-right -->
+    <path
+        android:fillColor="@color/md_theme_light_secondary"
+        android:pathData="M175,25 A3.5,3.5 0 1,1 175.01,25 Z" />
+</vector>

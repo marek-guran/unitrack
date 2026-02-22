@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme with Material 3 -->
-    <style name="Theme.UniTrack" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.UniTrack" parent="Theme.Material3.Light.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/md_theme_light_primary</item>
         <item name="colorOnPrimary">@color/md_theme_light_onPrimary</item>
@@ -60,12 +60,15 @@
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.UniTrack.MediumComponent</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.UniTrack.LargeComponent</item>
 
-        <!-- Bottom Navigation styling -->
-        <item name="bottomNavigationStyle">@style/Widget.UniTrack.BottomNav</item>
-
         <!-- MaterialCardView default styling -->
         <item name="materialCardViewStyle">@style/Widget.UniTrack.CardView</item>
+
+        <!-- Constrain dialog width on tablets -->
+        <item name="alertDialogTheme">@style/Theme.UniTrack.AlertDialog</item>
     </style>
+
+    <!-- Default dialog style (phones: normal sizing) -->
+    <style name="Theme.UniTrack.AlertDialog" parent="ThemeOverlay.Material3.Dialog.Alert" />
 
     <!-- Shape appearances with modern rounded corners -->
     <style name="ShapeAppearance.UniTrack.SmallComponent" parent="ShapeAppearance.Material3.Corner.Medium">
@@ -80,27 +83,29 @@
         <item name="cornerSize">28dp</item>
     </style>
 
-    <!-- Modern bottom navigation with pill indicator -->
+    <!-- Liquid glass bottom navigation -->
     <style name="Widget.UniTrack.BottomNav" parent="Widget.Material3.BottomNavigationView">
         <item name="backgroundTint">@android:color/transparent</item>
         <item name="itemActiveIndicatorStyle">@style/Widget.UniTrack.BottomNav.ActiveIndicator</item>
         <item name="itemIconTint">@color/bottom_nav_color</item>
         <item name="itemTextColor">@color/bottom_nav_color</item>
         <item name="labelVisibilityMode">labeled</item>
-        <item name="itemRippleColor">?attr/colorPrimaryContainer</item>
+        <item name="itemRippleColor">@android:color/transparent</item>
         <item name="android:elevation">0dp</item>
     </style>
 
     <style name="Widget.UniTrack.BottomNav.ActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
         <item name="android:color">?attr/colorPrimaryContainer</item>
+        <item name="android:alpha">0.5</item>
         <item name="shapeAppearance">@style/ShapeAppearance.UniTrack.SmallComponent</item>
     </style>
 
-    <!-- Modern card style - no outlines, subtle elevation -->
+    <!-- Clean card style with subtle outline -->
     <style name="Widget.UniTrack.CardView" parent="Widget.Material3.CardView.Filled">
-        <item name="cardCornerRadius">24dp</item>
+        <item name="cardCornerRadius">16dp</item>
         <item name="cardElevation">0dp</item>
-        <item name="strokeWidth">0dp</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
         <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
     </style>
 

@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme with Material 3 (Dark) -->
-    <style name="Theme.UniTrack" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.UniTrack" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/md_theme_dark_primary</item>
         <item name="colorOnPrimary">@color/md_theme_dark_onPrimary</item>
@@ -60,10 +60,10 @@
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.Material3.Corner.ExtraLarge</item>
 
-        <!-- Bottom Navigation styling -->
-        <item name="bottomNavigationStyle">@style/Widget.UniTrack.BottomNav</item>
-
         <!-- MaterialCardView default styling -->
         <item name="materialCardViewStyle">@style/Widget.UniTrack.CardView</item>
+
+        <!-- Constrain dialog width on tablets -->
+        <item name="alertDialogTheme">@style/Theme.UniTrack.AlertDialog</item>
     </style>
 </resources>

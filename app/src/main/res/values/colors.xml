@@ -1,80 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 Light Theme Colors (modern indigo/warm palette) -->
-    <color name="md_theme_light_primary">#4A3D8F</color>
+    <!-- Material 3 Light Theme Colors — "old newspaper" palette:
+         warm paper backgrounds, navy/slate-blue accents -->
+    <color name="md_theme_light_primary">#2C5F8A</color>
     <color name="md_theme_light_onPrimary">#FFFFFF</color>
-    <color name="md_theme_light_primaryContainer">#E8DEFF</color>
-    <color name="md_theme_light_onPrimaryContainer">#1A0E47</color>
+    <color name="md_theme_light_primaryContainer">#C8DFF0</color>
+    <color name="md_theme_light_onPrimaryContainer">#0A1D2E</color>
 
-    <color name="md_theme_light_secondary">#5F5C71</color>
+    <color name="md_theme_light_secondary">#5C6D7E</color>
     <color name="md_theme_light_onSecondary">#FFFFFF</color>
-    <color name="md_theme_light_secondaryContainer">#E6DFF9</color>
-    <color name="md_theme_light_onSecondaryContainer">#1C192B</color>
+    <color name="md_theme_light_secondaryContainer">#D8E4EF</color>
+    <color name="md_theme_light_onSecondaryContainer">#1A2730</color>
 
-    <color name="md_theme_light_tertiary">#E8875C</color>
+    <color name="md_theme_light_tertiary">#7A6540</color>
     <color name="md_theme_light_onTertiary">#FFFFFF</color>
-    <color name="md_theme_light_tertiaryContainer">#FFDBCB</color>
-    <color name="md_theme_light_onTertiaryContainer">#3A0B00</color>
+    <color name="md_theme_light_tertiaryContainer">#F0DFC0</color>
+    <color name="md_theme_light_onTertiaryContainer">#2B1E06</color>
 
     <color name="md_theme_light_error">#BA1A1A</color>
     <color name="md_theme_light_onError">#FFFFFF</color>
     <color name="md_theme_light_errorContainer">#FFDAD6</color>
     <color name="md_theme_light_onErrorContainer">#410002</color>
 
-    <color name="md_theme_light_background">#FFFBFF</color>
-    <color name="md_theme_light_onBackground">#1C1B1F</color>
+    <color name="md_theme_light_background">#F5F0E8</color>
+    <color name="md_theme_light_onBackground">#1C1B18</color>
 
-    <color name="md_theme_light_surface">#FFFBFF</color>
-    <color name="md_theme_light_onSurface">#1C1B1F</color>
-    <color name="md_theme_light_surfaceVariant">#F1EDF7</color>
-    <color name="md_theme_light_onSurfaceVariant">#49454E</color>
+    <color name="md_theme_light_surface">#F5F0E8</color>
+    <color name="md_theme_light_onSurface">#1C1B18</color>
+    <color name="md_theme_light_surfaceVariant">#E8E0D4</color>
+    <color name="md_theme_light_onSurfaceVariant">#4A4640</color>
 
-    <color name="md_theme_light_outline">#7A757F</color>
-    <color name="md_theme_light_outlineVariant">#CCC4D0</color>
+    <color name="md_theme_light_outline">#7C7870</color>
+    <color name="md_theme_light_outlineVariant">#CEC8BE</color>
 
     <!-- Surface container tones for depth layering -->
-    <color name="md_theme_light_surfaceContainerLowest">#FFFFFF</color>
-    <color name="md_theme_light_surfaceContainerLow">#F8F2FA</color>
-    <color name="md_theme_light_surfaceContainer">#F2ECF4</color>
-    <color name="md_theme_light_surfaceContainerHigh">#ECE6EE</color>
+    <color name="md_theme_light_surfaceContainerLowest">#FFFDF5</color>
+    <color name="md_theme_light_surfaceContainerLow">#F8F3EB</color>
+    <color name="md_theme_light_surfaceContainer">#F0EBDF</color>
+    <color name="md_theme_light_surfaceContainerHigh">#E8E3D8</color>
 
     <!-- Legacy colors for backward compatibility -->
-    <color name="purple_200">#B4B4B4</color>
-    <color name="purple_500">#4A3D8F</color>
-    <color name="purple_700">#3A2F75</color>
-    <color name="teal_200">#4A3D8F</color>
-    <color name="teal_700">#3A2F75</color>
+    <color name="purple_200">#A0C4E0</color>
+    <color name="purple_500">#2C5F8A</color>
+    <color name="purple_700">#1A3D5C</color>
+    <color name="teal_200">#2C5F8A</color>
+    <color name="teal_700">#1A3D5C</color>
     <color name="black">#000000</color>
     <color name="white">#FFFFFFFF</color>
 
     <!-- Semantic colors -->
-    <color name="button_active">#4A3D8F</color>
+    <color name="button_active">#2C5F8A</color>
     <color name="button_active_text">#FFFFFF</color>
-    <color name="button_inactive">#CCC4D0</color>
-    <color name="button_inactive_text">#49454E</color>
-    <color name="text">#1C1B1F</color>
-    <color name="card_background">#E8DEFF</color>
-    <color name="card_text">#1C1B1F</color>
-    <color name="card_item">#F1EDF7</color>
+    <color name="button_inactive">#CEC8BE</color>
+    <color name="button_inactive_text">#4A4640</color>
+    <color name="text">#1C1B18</color>
+    <color name="card_background">#C8DFF0</color>
+    <color name="card_text">#1C1B18</color>
+    <color name="card_item">#E8E0D4</color>
     <color name="bad_mark">#BA1A1A</color>
     <color name="good_mark">#2F6B2A</color>
-    <color name="background">#FFFBFF</color>
-    <color name="menu">#4A3D8F</color>
-    <color name="buttons">#4A3D8F</color>
+    <color name="background">#F5F0E8</color>
+    <color name="menu">#2C5F8A</color>
+    <color name="buttons">#2C5F8A</color>
     <color name="buttons_text">#FFFFFF</color>
 
     <!-- Theme-aware surface container aliases (auto-switch light/dark) -->
-    <color name="surfaceContainerLowest">#FFFFFF</color>
-    <color name="surfaceContainerLow">#F8F2FA</color>
-    <color name="surfaceContainer">#F2ECF4</color>
-    <color name="surfaceContainerHigh">#ECE6EE</color>
-    <color name="primaryContainer">#E8DEFF</color>
-    <color name="surface">#FFFBFF</color>
+    <color name="surfaceContainerLowest">#FFFDF5</color>
+    <color name="surfaceContainerLow">#F8F3EB</color>
+    <color name="surfaceContainer">#F0EBDF</color>
+    <color name="surfaceContainerHigh">#E8E3D8</color>
+    <color name="primaryContainer">#C8DFF0</color>
+    <color name="surface">#F5F0E8</color>
 
     <!-- Gradient and accent colors -->
-    <color name="gradient_start">#4A3D8F</color>
-    <color name="gradient_end">#7B6BC4</color>
-    <color name="card_elevated_bg">#F8F2FA</color>
+    <color name="hero_accent">#D4A84B</color>
+    <color name="gradient_start">#2C5F8A</color>
+    <color name="gradient_end">#5C6D7E</color>
+    <color name="card_elevated_bg">#F8F3EB</color>
 
     <!-- Grade-specific colors (light mode) -->
     <color name="grade_a_bg">#C8F7C5</color>

@@ -1,45 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="24dp"
-    app:cardCornerRadius="28dp"
-    app:cardElevation="3dp"
-    app:strokeWidth="0dp"
-    app:cardBackgroundColor="?attr/colorSurface">
+    android:padding="24dp">
 
-    <LinearLayout
-        android:orientation="vertical"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="34dp"
-        android:paddingEnd="34dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="24dp">
+        app:cardCornerRadius="20dp"
+        app:cardElevation="0dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:cardBackgroundColor="?attr/colorSurface">
 
-        <!-- Title -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
         <TextView
             android:id="@+id/dialogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
             android:textColor="?attr/colorOnSurface"
-            android:gravity="start"
-            android:layout_marginBottom="12dp"/>
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
 
-        <!-- Message -->
         <TextView
             android:id="@+id/dialogMessage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
             android:textColor="?attr/colorOnSurfaceVariant"
-            android:gravity="start"
-            android:layout_marginBottom="24dp"/>
+            android:lineSpacingExtra="2dp"
+            android:layout_marginBottom="24dp" />
 
-        <!-- Action buttons row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -56,12 +54,11 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/confirmButton"
-                style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="OK"
-                app:cornerRadius="16dp" />
+                app:cornerRadius="12dp" />
         </LinearLayout>
-
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

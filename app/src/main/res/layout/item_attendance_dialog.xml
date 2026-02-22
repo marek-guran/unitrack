@@ -5,89 +5,50 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="8dp"
-    app:cardCornerRadius="20dp"
-    app:cardElevation="2dp"
-    app:strokeWidth="0dp"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurface">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp">
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
 
-        <!-- Attendance Info -->
         <LinearLayout
             android:id="@+id/infoLayout"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/actionsLayout">
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/attendanceDate"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:text="2024-09-01"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textColor="?attr/colorOnSurface" />
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_today"
-                    android:contentDescription="Date icon"
-                    app:tint="?attr/colorPrimary"
-                    android:layout_marginEnd="8dp" />
-
-                <TextView
-                    android:id="@+id/attendanceDate"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="2024-09-01"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/attendanceTime"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_recent_history"
-                    android:contentDescription="Time icon"
-                    app:tint="?attr/colorPrimary"
-                    android:layout_marginEnd="8dp" />
-
-                <TextView
-                    android:id="@+id/attendanceTime"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="09:00"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
-            </LinearLayout>
+                android:text="09:00"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginTop="4dp" />
 
             <LinearLayout
                 android:id="@+id/noteLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="4dp"
                 android:orientation="horizontal"
                 android:gravity="start|center_vertical">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@android:drawable/ic_menu_info_details"
-                    android:contentDescription="Note icon"
-                    app:tint="?attr/colorPrimary"
-                    android:layout_marginEnd="8dp" />
 
                 <TextView
                     android:id="@+id/attendanceNote"
@@ -100,35 +61,31 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Actions -->
         <LinearLayout
             android:id="@+id/actionsLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginStart="16dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:layout_marginStart="12dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/editAttendanceBtn"
-                style="@style/Widget.Material3.Button.TextButton.Icon"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Upraviť"
-                app:icon="@android:drawable/ic_menu_edit"
-                app:iconSize="18dp" />
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                app:cornerRadius="12dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deleteAttendanceBtn"
-                style="@style/Widget.Material3.Button.TextButton.Icon"
+                style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Odstrániť"
                 android:textColor="?attr/colorError"
-                app:icon="@android:drawable/ic_menu_delete"
-                app:iconSize="18dp"
-                app:iconTint="?attr/colorError" />
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                app:cornerRadius="12dp" />
         </LinearLayout>
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
