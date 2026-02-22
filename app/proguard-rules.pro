@@ -20,6 +20,6 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 # Keep all model classes and their constructors (adjust your package!)
--keepclassmembers class com.marek.guran.unitrack.** { <init>(...); }
+-keepclassmembers class com.marekguran.unitrack.** { <init>(...); }
 -keep class com.your.package.models.** { *; }
 -keepclassmembers class * { public <init>(); }

@@ -24,7 +24,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Pill nav at TOP — declared AFTER fragment so it draws on top -->
-    <com.marek.guran.unitrack.ui.PillNavigationBar
+    <com.marekguran.unitrack.ui.PillNavigationBar
         android:id="@+id/pillNavBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

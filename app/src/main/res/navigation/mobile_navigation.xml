@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/navigation_home"
-        android:name="com.marek.guran.unitrack.ui.home.HomeFragment"
+        android:name="com.marekguran.unitrack.ui.home.HomeFragment"
         android:label="@string/title_home"
         tools:layout="@layout/fragment_home">
         
@@ -22,7 +22,7 @@
 
     <fragment
         android:id="@+id/navigation_dashboard"
-        android:name="com.marek.guran.unitrack.ui.dashboard.DashboardFragment"
+        android:name="com.marekguran.unitrack.ui.dashboard.DashboardFragment"
         android:label="@string/title_dashboard"
         tools:layout="@layout/fragment_dashboard"
         app:enterAnim="@anim/fade_in"
@@ -32,7 +32,7 @@
 
     <fragment
         android:id="@+id/navigation_settings"
-        android:name="com.marek.guran.unitrack.ui.settings.SettingsFragment"
+        android:name="com.marekguran.unitrack.ui.settings.SettingsFragment"
         android:label="@string/title_settings"
         tools:layout="@layout/fragment_settings"
         app:enterAnim="@anim/fade_in"
@@ -42,7 +42,7 @@
 
     <fragment
         android:id="@+id/navigation_students"
-        android:name="com.marek.guran.unitrack.ui.students.StudentsManageFragment"
+        android:name="com.marekguran.unitrack.ui.students.StudentsManageFragment"
         android:label="@string/title_students"
         tools:layout="@layout/fragment_students_manage"
         app:enterAnim="@anim/fade_in"
@@ -52,7 +52,7 @@
 
     <fragment
         android:id="@+id/navigation_subjects"
-        android:name="com.marek.guran.unitrack.ui.subjects.SubjectsManageFragment"
+        android:name="com.marekguran.unitrack.ui.subjects.SubjectsManageFragment"
         android:label="@string/title_subjects"
         tools:layout="@layout/fragment_subjects_manage"
         app:enterAnim="@anim/fade_in"
@@ -62,7 +62,7 @@
 
     <fragment
         android:id="@+id/subjectDetailFragment"
-        android:name="com.marek.guran.unitrack.SubjectDetailFragment"
+        android:name="com.marekguran.unitrack.SubjectDetailFragment"
         android:label="Subject Detail"
         tools:layout="@layout/fragment_subject_detail">
         <argument

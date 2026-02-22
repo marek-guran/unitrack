@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.marek.guran.unitrack"
+    namespace = "com.marekguran.unitrack"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.marek.guran.unitrack"
+        applicationId = "com.marekguran.unitrack"
         minSdk = 31
         targetSdk = 36
         versionCode = 20

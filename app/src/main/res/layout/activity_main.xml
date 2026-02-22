@@ -22,7 +22,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Custom pill-shaped navigation bar (adapts width to content) -->
-    <com.marek.guran.unitrack.ui.PillNavigationBar
+    <com.marekguran.unitrack.ui.PillNavigationBar
         android:id="@+id/pillNavBar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
