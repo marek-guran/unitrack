@@ -41,7 +41,7 @@ class HomeFragment : Fragment() {
             R.id.chipGradeE to "E",
             R.id.chipGradeFx to "Fx"
         )
-        val GRADE_TO_CHIP = CHIP_TO_GRADE.entries.associate { it.value to it.key }
+        val GRADE_TO_CHIP = CHIP_TO_GRADE.entries.associate { it.value to it.key } + ("FX" to R.id.chipGradeFx)
     }
 
     private val db by lazy {
@@ -1313,7 +1313,7 @@ class HomeFragment : Fragment() {
 
     private fun calculateAverage(marks: List<String>): String {
         val gradeMap = mapOf(
-            "A" to 1.0, "B" to 2.0, "C" to 3.0, "D" to 4.0, "E" to 5.0, "Fx" to 6.0, "F" to 6.0
+            "A" to 1.0, "B" to 2.0, "C" to 3.0, "D" to 4.0, "E" to 5.0, "FX" to 6.0, "Fx" to 6.0, "F" to 6.0
         )
         val nums = marks.mapNotNull { gradeMap[it] }
         return if (nums.isNotEmpty()) {
@@ -1340,7 +1340,7 @@ class HomeFragment : Fragment() {
             "C" -> 3
             "D" -> 4
             "E" -> 5
-            "Fx", "F" -> 6
+            "FX", "Fx", "F" -> 6
             else -> null
         }
     }

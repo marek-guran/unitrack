@@ -79,15 +79,25 @@ class SubjectDetailFragment : Fragment() {
             cancellationSignal: CancellationSignal,
             writeResultCallback: WriteResultCallback
         ) {
-            val colWidths = listOf(120f, 80f, 200f, 80f)
-            val tableWidth = colWidths.sum()
             val columns = listOf("Meno Študenta", "Prítomnosť", "Známky", "Priemer")
             val lineHeight = 18f
+            val paint = Paint().apply { textSize = 14f }
+
+            // Dynamic column widths based on student name lengths
+            val marginLeft = 40f
+            val pageWidth = 595f
+            val availableWidth = pageWidth - (2 * marginLeft)
+            val attendanceWidth = 80f
+            val averageWidth = 80f
+            val maxNameTextWidth = students.maxOfOrNull { paint.measureText(it.studentName) } ?: 100f
+            val nameWidth = (maxNameTextWidth + 15f).coerceIn(120f, 200f)
+            val gradesWidth = (availableWidth - nameWidth - attendanceWidth - averageWidth).coerceAtLeast(100f)
+            val colWidths = listOf(nameWidth, attendanceWidth, gradesWidth, averageWidth)
+            val tableWidth = colWidths.sum()
 
             var pageNum = 0
             var y = marginTop
             var page = pdfDocument!!.startPage(pageNum)
-            val paint = Paint().apply { textSize = 14f }
             var canvas = page.canvas
 
             // --- Title
@@ -102,13 +112,14 @@ class SubjectDetailFragment : Fragment() {
 
             // --- Table Rows
             for (student in students) {
-                val marksStr = student.marks.joinToString(", ") { it.mark.grade }
+                val marksStr = student.marks.joinToString(", ") { it.mark.grade.replace("FX", "Fx") }
+                val nameLines = wrapText(student.studentName, paint, colWidths[0] - 10f, " ")
                 val marksLines = wrapText(marksStr, paint, colWidths[2] - 10f)
-                val maxLines = marksLines.size
+                val maxLines = maxOf(nameLines.size, marksLines.size)
                 val attCount = student.attendanceMap.values.count { !it.absent }
                 val attTotal = student.attendanceMap.size
                 val attPercent = if (attTotal > 0) (attCount * 100 / attTotal) else 0
-                val average = student.average
+                val average = student.average.replace("FX", "Fx")
                 val attendanceText =
                     if (attTotal > 0) "$attCount/$attTotal (${attPercent}%)" else "-"
 
@@ -127,16 +138,17 @@ class SubjectDetailFragment : Fragment() {
 
                 for (line in 0 until maxLines) {
                     var x = 40f
-                    // Student Name
-                    val studentName = if (line == 0) student.studentName else ""
-                    canvas.drawText(studentName, x + 5f, y + 14f + line * lineHeight, paint)
+                    // Student Name (wrapped)
+                    val nameLine = if (line < nameLines.size) nameLines[line] else ""
+                    canvas.drawText(nameLine, x + 5f, y + 14f + line * lineHeight, paint)
                     x += colWidths[0]
                     // Attendance
                     val attendance = if (line == 0) attendanceText else ""
                     canvas.drawText(attendance, x + 5f, y + 14f + line * lineHeight, paint)
                     x += colWidths[1]
                     // Marks (wrapped)
-                    canvas.drawText(marksLines[line], x + 5f, y + 14f + line * lineHeight, paint)
+                    val markLine = if (line < marksLines.size) marksLines[line] else ""
+                    canvas.drawText(markLine, x + 5f, y + 14f + line * lineHeight, paint)
                     x += colWidths[2]
                     // Average
                     val avg = if (line == 0) average else ""
@@ -226,12 +238,12 @@ class SubjectDetailFragment : Fragment() {
         }
 
         // --- Helper function to wrap text ---
-        private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
-            val words = text.split(", ")
+        private fun wrapText(text: String, paint: Paint, maxWidth: Float, separator: String = ", "): List<String> {
+            val words = text.split(separator)
             val lines = mutableListOf<String>()
             var currentLine = ""
             for (word in words) {
-                val testLine = if (currentLine.isEmpty()) word else "$currentLine, $word"
+                val testLine = if (currentLine.isEmpty()) word else "$currentLine$separator$word"
                 val width = paint.measureText(testLine)
                 if (width > maxWidth && currentLine.isNotEmpty()) {
                     lines.add(currentLine)
@@ -273,7 +285,7 @@ class SubjectDetailFragment : Fragment() {
             R.id.chipGradeE to "E",
             R.id.chipGradeFx to "Fx"
         )
-        val GRADE_TO_CHIP = CHIP_TO_GRADE.entries.associate { it.value to it.key }
+        val GRADE_TO_CHIP = CHIP_TO_GRADE.entries.associate { it.value to it.key } + ("FX" to R.id.chipGradeFx)
     }
 
     private lateinit var prefs: SharedPreferences
@@ -1705,7 +1717,7 @@ class SubjectDetailFragment : Fragment() {
             val margin = (10 * context.resources.displayMetrics.density).toInt()
             window.setLayout(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
             window.decorView.setPadding(margin, margin, margin, margin)
         }
@@ -1718,6 +1730,7 @@ class SubjectDetailFragment : Fragment() {
             "C" to 3.0,
             "D" to 4.0,
             "E" to 5.0,
+            "FX" to 6.0,
             "Fx" to 6.0,
             "F" to 6.0
         )
