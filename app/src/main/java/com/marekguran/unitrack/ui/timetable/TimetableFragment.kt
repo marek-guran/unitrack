@@ -2,6 +2,7 @@ package com.marekguran.unitrack.ui.timetable
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -13,7 +14,6 @@ import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.card.MaterialCardView
@@ -148,14 +148,25 @@ class TimetableFragment : Fragment() {
 
     // ── Offline loading ─────────────────────────────────────────────────
 
+    private fun getCurrentSemester(): String {
+        val prefs = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+        return prefs.getString("semester", null) ?: run {
+            val month = LocalDate.now().monthValue
+            if (month in 1..6) "letny" else "zimny"
+        }
+    }
+
     private fun loadOfflineTimetable() {
         binding.btnAddDayOff.visibility = View.VISIBLE
         binding.btnViewDaysOff.visibility = View.VISIBLE
         allEntries.clear()
         daysOffMap.clear()
 
+        val currentSemester = getCurrentSemester()
         val subjects = localDb.getSubjects()
         for ((subjectKey, subjectJson) in subjects) {
+            val subjectSemester = subjectJson.optString("semester", "both")
+            if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
             val subjectName = subjectJson.optString("name", subjectKey)
             val entries = localDb.getTimetableEntries(subjectKey)
             for ((entryKey, entryJson) in entries) {
@@ -199,12 +210,15 @@ class TimetableFragment : Fragment() {
     }
 
     private fun loadTeacherTimetable() {
+        val currentSemester = getCurrentSemester()
         // Teachers see subjects they teach (matched by email)
         db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!isAdded) return
                 for (subjectSnap in snapshot.children) {
                     val subjectKey = subjectSnap.key ?: continue
+                    val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                    if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                     val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: subjectKey
                     val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
 
@@ -248,9 +262,12 @@ class TimetableFragment : Fragment() {
                 db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         if (!isAdded) return
+                        val currentSemester = getCurrentSemester()
                         for (subjectSnap in snapshot.children) {
                             val subjectKey = subjectSnap.key ?: continue
                             if (subjectKey !in enrolledSubjectKeys) continue
+                            val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                            if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: subjectKey
                             val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
 
@@ -352,21 +369,27 @@ class TimetableFragment : Fragment() {
             else -> null // use current real-week parity
         }
 
+        val isTodayFilter = currentFilter == "today"
+
         for (day in daysToShow) {
-            val dayColumn = createDayColumn(day, day == todayDayKey, today, filteredEntries, filterParity)
+            val dayColumn = createDayColumn(day, day == todayDayKey, today, filteredEntries, filterParity, isTodayFilter)
             grid.addView(dayColumn)
         }
     }
 
-    private fun createDayColumn(day: String, isToday: Boolean, today: LocalDate, filteredEntries: List<TimetableEntry>, filterParity: String?): LinearLayout {
+    private fun createDayColumn(day: String, isToday: Boolean, today: LocalDate, filteredEntries: List<TimetableEntry>, filterParity: String?, fullWidth: Boolean): LinearLayout {
         val context = requireContext()
         val density = resources.displayMetrics.density
-        val columnWidth = (160 * density).toInt()
 
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(columnWidth, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = (4 * density).toInt()
+            layoutParams = if (fullWidth) {
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            } else {
+                val columnWidth = (160 * density).toInt()
+                LinearLayout.LayoutParams(columnWidth, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    marginEnd = (4 * density).toInt()
+                }
             }
         }
 
@@ -785,6 +808,8 @@ class TimetableFragment : Fragment() {
         val editDateTo = dialogView.findViewById<TextInputEditText>(R.id.editDayOffDateTo)
         val editTimeTo = dialogView.findViewById<TextInputEditText>(R.id.editDayOffTimeTo)
         val editNote = dialogView.findViewById<TextInputEditText>(R.id.editDayOffNote)
+        val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveDayOff)
+        val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelDayOff)
 
         // Date pickers — DD.MM.YYYY format
         val dateClickListener = { editText: TextInputEditText ->
@@ -810,21 +835,27 @@ class TimetableFragment : Fragment() {
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
         editTimeTo.setOnClickListener(timeClickListener(editTimeTo))
 
-        AlertDialog.Builder(requireContext())
-            .setTitle(getString(R.string.timetable_add_day_off))
-            .setView(dialogView)
-            .setPositiveButton("Pridať") { _, _ ->
-                val date = editDate.text?.toString()?.trim() ?: ""
-                val timeFrom = editTimeFrom.text?.toString()?.trim() ?: ""
-                val dateTo = editDateTo.text?.toString()?.trim() ?: ""
-                val timeTo = editTimeTo.text?.toString()?.trim() ?: ""
-                val note = editNote.text?.toString()?.trim() ?: ""
-                if (date.isNotBlank()) {
-                    saveDayOff(date, dateTo, timeFrom, timeTo, note)
-                }
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+
+        btnSave.setOnClickListener {
+            val date = editDate.text?.toString()?.trim() ?: ""
+            val timeFrom = editTimeFrom.text?.toString()?.trim() ?: ""
+            val dateTo = editDateTo.text?.toString()?.trim() ?: ""
+            val timeTo = editTimeTo.text?.toString()?.trim() ?: ""
+            val note = editNote.text?.toString()?.trim() ?: ""
+            if (date.isNotBlank()) {
+                saveDayOff(date, dateTo, timeFrom, timeTo, note)
+                dialog.dismiss()
             }
-            .setNegativeButton("Zrušiť", null)
-            .show()
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
     }
 
     private fun saveDayOff(date: String, dateTo: String, timeFrom: String, timeTo: String, note: String) {
@@ -966,11 +997,17 @@ class TimetableFragment : Fragment() {
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.dialog_add_day_off, null)
 
+        val dialogTitle = dialogView.findViewById<TextView>(R.id.dialogTitle)
         val editDate = dialogView.findViewById<TextInputEditText>(R.id.editDayOffDate)
         val editTimeFrom = dialogView.findViewById<TextInputEditText>(R.id.editDayOffTimeFrom)
         val editDateTo = dialogView.findViewById<TextInputEditText>(R.id.editDayOffDateTo)
         val editTimeTo = dialogView.findViewById<TextInputEditText>(R.id.editDayOffTimeTo)
         val editNote = dialogView.findViewById<TextInputEditText>(R.id.editDayOffNote)
+        val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveDayOff)
+        val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelDayOff)
+
+        dialogTitle.text = getString(R.string.timetable_day_off_label)
+        btnSave.text = "Uložiť"
 
         // Pre-fill
         editDate.setText(dayOff.date)
@@ -1002,21 +1039,27 @@ class TimetableFragment : Fragment() {
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
         editTimeTo.setOnClickListener(timeClickListener(editTimeTo))
 
-        AlertDialog.Builder(requireContext())
-            .setTitle(getString(R.string.timetable_day_off_label))
-            .setView(dialogView)
-            .setPositiveButton("Uložiť") { _, _ ->
-                val date = editDate.text?.toString()?.trim() ?: ""
-                val timeFrom = editTimeFrom.text?.toString()?.trim() ?: ""
-                val dateTo = editDateTo.text?.toString()?.trim() ?: ""
-                val timeTo = editTimeTo.text?.toString()?.trim() ?: ""
-                val note = editNote.text?.toString()?.trim() ?: ""
-                if (date.isNotBlank()) {
-                    updateDayOff(dayOff, ownerUid, date, dateTo, timeFrom, timeTo, note)
-                }
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+
+        btnSave.setOnClickListener {
+            val date = editDate.text?.toString()?.trim() ?: ""
+            val timeFrom = editTimeFrom.text?.toString()?.trim() ?: ""
+            val dateTo = editDateTo.text?.toString()?.trim() ?: ""
+            val timeTo = editTimeTo.text?.toString()?.trim() ?: ""
+            val note = editNote.text?.toString()?.trim() ?: ""
+            if (date.isNotBlank()) {
+                updateDayOff(dayOff, ownerUid, date, dateTo, timeFrom, timeTo, note)
+                dialog.dismiss()
             }
-            .setNegativeButton("Zrušiť", null)
-            .show()
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
     }
 
     private fun updateDayOff(dayOff: DayOff, ownerUid: String, date: String, dateTo: String, timeFrom: String, timeTo: String, note: String) {

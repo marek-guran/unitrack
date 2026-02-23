@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -28,6 +29,7 @@ import java.time.temporal.IsoFields
 class NextClassAlarmReceiver : BroadcastReceiver() {
 
     private data class ScheduleSlot(val name: String, val startTime: LocalTime, val endTime: LocalTime, val classroom: String)
+    private data class TimelineEvent(val title: String, val text: String, val startTime: LocalTime, val endTime: LocalTime, val isBreak: Boolean, val durationMins: Int)
 
     companion object {
         const val CHANNEL_ID = "next_class_channel"
@@ -170,6 +172,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val todayKey = today.dayOfWeek.toKey()
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
+        val currentSemester = getCurrentSemester(context)
 
         val daysOff = localDb.getDaysOff("offline_admin")
         val daysOffList = daysOff.values.toList()
@@ -178,6 +181,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
         val subjects = localDb.getSubjects()
         for ((subjectKey, subjectJson) in subjects) {
+            val subjectSemester = subjectJson.optString("semester", "both")
+            if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
             val subjectName = subjectJson.optString("name", subjectKey)
             val entries = localDb.getTimetableEntries(subjectKey)
             for ((_, entryJson) in entries) {
@@ -225,8 +230,11 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         val todaySlots = mutableListOf<ScheduleSlot>()
+                        val currentSemester = getCurrentSemester(context)
 
                         for (subjectSnap in snapshot.children) {
+                            val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                            if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: continue
                             for (entrySnap in subjectSnap.child("timetable").children) {
                                 val day = entrySnap.child("day").getValue(String::class.java) ?: continue
@@ -255,15 +263,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Build a progress-bar Live Update notification (Google-style).
-     *
-     * Layout:
-     *   Title  = current subject name / "Prestávka" / "Voľno" / first subject name
-     *   Progress bar fills through the day
-     *   Content = only the next closest subject ("Ďalej: X o HH:mm")
-     *
-     * Never shows all subjects at once.
-     * Dismisses after the last class ends.
+     * Build an Android 16-compatible segmented Live Update notification.
      */
     private fun showScheduleNotification(context: Context, now: LocalTime, schedule: List<ScheduleSlot>) {
         if (schedule.isEmpty()) {
@@ -271,87 +271,159 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        val firstStart = schedule.first().startTime
         val lastEnd = schedule.last().endTime
-        if (now.isAfter(lastEnd)) {
+
+        if (!now.isBefore(lastEnd)) {
             dismissNextClassNotification(context)
             return
         }
 
-        val firstStart = schedule.first().startTime
-        val totalMinutes = java.time.Duration.between(firstStart, lastEnd).toMinutes().toInt().coerceAtLeast(1)
-
-        // Before first class — title is first subject, content shows time
-        if (now.isBefore(firstStart)) {
-            val next = schedule.first()
-            val title = next.name
-            val contentText = context.getString(R.string.notification_next, next.name, formatTime(next.startTime)) + roomSuffix(context, next.classroom)
-            showProgressNotification(context, title, contentText, 0, totalMinutes)
-            return
-        }
-
-        val elapsed = java.time.Duration.between(firstStart, now).toMinutes().toInt().coerceIn(0, totalMinutes)
-
-        // Determine what's happening now
-        var currentSlot: ScheduleSlot? = null
-        var nextSlot: ScheduleSlot? = null
-        var inBreak = false
-
+        val timeline = mutableListOf<TimelineEvent>()
         for (i in schedule.indices) {
             val slot = schedule[i]
-            if (!now.isBefore(slot.startTime) && now.isBefore(slot.endTime)) {
-                currentSlot = slot
-                nextSlot = if (i + 1 < schedule.size) schedule[i + 1] else null
-                break
-            }
-            if (now.isAfter(slot.endTime) || now == slot.endTime) {
-                if (i + 1 < schedule.size && now.isBefore(schedule[i + 1].startTime)) {
-                    inBreak = true
-                    nextSlot = schedule[i + 1]
-                    break
-                }
-            }
-        }
+            val nextSlot = if (i + 1 < schedule.size) schedule[i + 1] else null
 
-        val title: String
-        val contentText: String
-
-        if (currentSlot != null) {
-            // During a class — title = subject name
-            title = currentSlot.name + roomSuffix(context, currentSlot.classroom)
-            contentText = if (nextSlot != null) {
-                context.getString(R.string.notification_next, nextSlot.name, formatTime(nextSlot.startTime))
+            val slotMins = java.time.Duration.between(slot.startTime, slot.endTime).toMinutes().toInt()
+            val roomStr = if (slot.classroom.isNotBlank()) " (${slot.classroom})" else ""
+            val classTitle = slot.name + roomStr
+            val classText = if (nextSlot != null) {
+                "Ďalej: ${nextSlot.name} • Koniec ${formatTime(slot.endTime)}"
             } else {
-                context.getString(R.string.notification_last_class_today)
+                "Posledná hodina • Koniec ${formatTime(slot.endTime)}"
             }
-        } else if (inBreak && nextSlot != null) {
-            // During a break — title = "Prestávka" or "Voľno"
-            val prevEnd = schedule.lastOrNull { !it.endTime.isAfter(now) }?.endTime ?: now
-            val gap = java.time.Duration.between(prevEnd, nextSlot.startTime).toMinutes()
-            title = if (gap > 30) context.getString(R.string.notification_free_time) else context.getString(R.string.notification_break)
-            contentText = context.getString(R.string.notification_next, nextSlot.name, formatTime(nextSlot.startTime)) + roomSuffix(context, nextSlot.classroom)
-        } else {
-            dismissNextClassNotification(context)
-            return
+
+            timeline.add(TimelineEvent(classTitle, classText, slot.startTime, slot.endTime, false, slotMins))
+
+            // Add Break segment if there is a gap between classes
+            if (nextSlot != null && slot.endTime.isBefore(nextSlot.startTime)) {
+                val gapMins = java.time.Duration.between(slot.endTime, nextSlot.startTime).toMinutes().toInt()
+                val breakTitle = if (gapMins > 30) "Voľno" else "Prestávka"
+                val breakText = "Ďalej: ${nextSlot.name} • Štart ${formatTime(nextSlot.startTime)}"
+                timeline.add(TimelineEvent(breakTitle, breakText, slot.endTime, nextSlot.startTime, true, gapMins))
+            }
         }
 
-        showProgressNotification(context, title, contentText, elapsed, totalMinutes)
+        var currentTitle = ""
+        var currentText = ""
+        var isCurrentlyBreak = false
+
+        if (now.isBefore(firstStart)) {
+            val firstClass = schedule.first()
+            currentTitle = "Vyučovanie začína čoskoro"
+            val roomStr = if (firstClass.classroom.isNotBlank()) " (${firstClass.classroom})" else ""
+            currentText = "${firstClass.name}$roomStr • Štart ${formatTime(firstClass.startTime)}"
+            isCurrentlyBreak = true
+        } else {
+            val activeEvent = timeline.firstOrNull { !now.isBefore(it.startTime) && now.isBefore(it.endTime) }
+            if (activeEvent != null) {
+                currentTitle = activeEvent.title
+                currentText = activeEvent.text
+                isCurrentlyBreak = activeEvent.isBreak
+            } else {
+                currentTitle = timeline.last().title
+                currentText = timeline.last().text
+            }
+        }
+
+        val elapsedMins = if (now.isBefore(firstStart)) {
+            0
+        } else {
+            java.time.Duration.between(firstStart, now).toMinutes().toInt().coerceIn(0, timeline.sumOf { it.durationMins })
+        }
+
+        showProgressNotification(context, currentTitle, currentText, elapsedMins, timeline, isCurrentlyBreak)
     }
 
     private fun formatTime(time: LocalTime): String {
         return time.format(DateTimeFormatter.ofPattern("H:mm"))
     }
 
-    private fun roomSuffix(context: Context, classroom: String): String {
-        return if (classroom.isNotBlank()) " " + context.getString(R.string.notification_next_class_room, classroom) else ""
-    }
-
-    private fun showProgressNotification(context: Context, title: String, contentText: String, progress: Int, max: Int) {
+    private fun showProgressNotification(
+        context: Context,
+        title: String,
+        contentText: String,
+        elapsedMins: Int,
+        timeline: List<TimelineEvent>,
+        isCurrentlyBreak: Boolean
+    ) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val contentIntent = Intent(context, MainActivity::class.java)
         val pendingContentIntent = PendingIntent.getActivity(
             context, 0, contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+        val totalMins = timeline.sumOf { it.durationMins }
+
+        // Detekcia tmavého režimu
+        val isDarkMode = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+        // Jemnejšie farby pre tmavý režim (Material Design Dark Theme)
+        // Oranžová pre hodiny, Zelená pre prestávky
+        val colorClass = if (isDarkMode) android.graphics.Color.parseColor("#FDBA74") else android.graphics.Color.parseColor("#F9AB00")
+        val colorBreak = if (isDarkMode) android.graphics.Color.parseColor("#81C995") else android.graphics.Color.parseColor("#34A853")
+
+        val baseColor = if (isCurrentlyBreak) colorBreak else colorClass
+
+        // Natívne API 36 (Android 16) - Segmentovaný ProgressStyle
+        if (Build.VERSION.SDK_INT >= 36) {
+            try {
+                val nativeBuilder = android.app.Notification.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_timetable)
+                    .setContentTitle(title)
+                    .setContentText(contentText)
+                    .setOngoing(true)
+                    .setContentIntent(pendingContentIntent)
+                    .setCategory(android.app.Notification.CATEGORY_PROGRESS)
+                    .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                    .setWhen(System.currentTimeMillis())
+                    .setShowWhen(true)
+                    .setColor(baseColor)
+
+                // Využitie reflexie pre ProgressStyle, aby kód bezpečne prešiel kompiláciou aj na starších SDK
+                val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                val progressStyleObj = progressStyleClass.getDeclaredConstructor().newInstance()
+
+                val segmentClass = Class.forName("android.app.Notification\$ProgressStyle\$Segment")
+                val segmentConstructor = segmentClass.getDeclaredConstructor(Int::class.javaPrimitiveType)
+                val setColorMethod = segmentClass.getMethod("setColor", Int::class.javaPrimitiveType)
+
+                val segmentsList = java.util.ArrayList<Any>()
+                for (event in timeline) {
+                    if (event.durationMins <= 0) continue
+                    val segmentObj = segmentConstructor.newInstance(event.durationMins)
+                    // Nastavujeme farebnú segmentáciu s ohľadom na tmavý režim
+                    val segColor = if (event.isBreak) colorBreak else colorClass
+                    setColorMethod.invoke(segmentObj, segColor)
+                    segmentsList.add(segmentObj)
+                }
+
+                progressStyleClass.getMethod("setProgressSegments", java.util.List::class.java)
+                    .invoke(progressStyleObj, segmentsList)
+
+                progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                    .invoke(progressStyleObj, elapsedMins)
+
+                val setStyleMethod = android.app.Notification.Builder::class.java.getMethod("setStyle", android.app.Notification.Style::class.java)
+                setStyleMethod.invoke(nativeBuilder, progressStyleObj)
+
+                val extras = Bundle()
+                extras.putBoolean("android.requestPromotedOngoing", true)
+                nativeBuilder.setExtras(extras)
+
+                nm.notify(NOTIFICATION_ID, nativeBuilder.build())
+                return
+            } catch (e: Exception) {
+                // Pokiaľ by nová platforma niečo nepodporovala, kód padne do fallbacku nižšie
+                e.printStackTrace()
+            }
+        }
+
+        // Fallback pre Android 15 a staršie (obyčajný nesegmentovaný progress bar)
+        val extras = Bundle().apply {
+            putBoolean("android.requestPromotedOngoing", true)
+        }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timetable)
@@ -360,21 +432,14 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             .setOngoing(true)
             .setContentIntent(pendingContentIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setProgress(max, progress, false)
+            .setProgress(totalMins, elapsedMins, false)
+            .setColor(baseColor)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .addExtras(extras)
 
-        // Request promoted ongoing (Live Update) on Android 16+
-        if (Build.VERSION.SDK_INT >= 36) {
-            try {
-                val notification = builder.build()
-                notification.extras.putBoolean("android.requestPromotedOngoing", true)
-                notification.flags = notification.flags or android.app.Notification.FLAG_ONGOING_EVENT
-                nm.notify(NOTIFICATION_ID, notification)
-                return
-            } catch (_: Exception) { }
-        }
         nm.notify(NOTIFICATION_ID, builder.build())
     }
 
@@ -457,7 +522,10 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(subjectsSnap: DataSnapshot) {
                         val cancelledSubjects = mutableListOf<String>()
+                        val currentSemester = getCurrentSemester(context)
                         for (subjectSnap in subjectsSnap.children) {
+                            val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                            if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: continue
                             for (entrySnap in subjectSnap.child("timetable").children) {
                                 val day = entrySnap.child("day").getValue(String::class.java) ?: continue
@@ -638,6 +706,14 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
     // ── Utilities ───────────────────────────────────────────────────────
 
+    private fun getCurrentSemester(context: Context): String {
+        val prefs = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+        return prefs.getString("semester", null) ?: run {
+            val month = LocalDate.now().monthValue
+            if (month in 1..6) "letny" else "zimny"
+        }
+    }
+
     private val skDateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
     private fun DayOfWeek.toKey(): String = when (this) {
@@ -668,10 +744,6 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    /**
-     * Check if a given entry (on a specific date, with start/end time) is off
-     * based on a list of day-off JSON objects (which may have date ranges and optional times).
-     */
     private fun isEntryOffByDaysOff(
         today: LocalDate,
         entryStartTime: String,
@@ -704,10 +776,6 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         return false
     }
 
-    /**
-     * Check if today falls within any day-off (ignoring time, just date range).
-     * Used for the simple "is today a day off at all?" check.
-     */
     private fun isTodayInAnyDayOff(today: LocalDate, daysOffJsonList: List<org.json.JSONObject>): Boolean {
         for (dayOff in daysOffJsonList) {
             val dateStr = dayOff.optString("date", "")
