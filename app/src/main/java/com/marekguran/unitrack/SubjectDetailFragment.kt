@@ -679,6 +679,7 @@ class SubjectDetailFragment : Fragment() {
         }
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.enroll_students_dialog, null)
+        dialogView.findViewById<View>(R.id.spinnerContainer).visibility = View.GONE
         val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.enrollStudentsRecyclerView)
         val saveButton = dialogView.findViewById<Button>(R.id.saveEnrollmentsButton)
@@ -727,6 +728,8 @@ class SubjectDetailFragment : Fragment() {
                 window.decorView.setPadding(margin, margin, margin, margin)
             }
 
+            dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }
+
             saveButton.setOnClickListener {
                 val subjectKey = openedSubjectKey ?: ""
                 var pending = items.size
@@ -758,6 +761,7 @@ class SubjectDetailFragment : Fragment() {
     private fun showEnrollStudentsDialogOffline() {
         val dialogView = LayoutInflater.from(requireContext())
             .inflate(R.layout.enroll_students_dialog, null)
+        dialogView.findViewById<View>(R.id.spinnerContainer).visibility = View.GONE
         val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.enrollStudentsRecyclerView)
         val saveButton = dialogView.findViewById<Button>(R.id.saveEnrollmentsButton)
@@ -804,6 +808,8 @@ class SubjectDetailFragment : Fragment() {
             window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             window.decorView.setPadding(margin, margin, margin, margin)
         }
+
+        dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }
 
         saveButton.setOnClickListener {
             val subjectKey = openedSubjectKey ?: ""

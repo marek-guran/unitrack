@@ -26,6 +26,8 @@ import com.marekguran.unitrack.databinding.FragmentHomeBinding
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
 import org.json.JSONObject
+import android.text.Editable
+import android.text.TextWatcher
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -72,6 +74,7 @@ class HomeFragment : Fragment() {
     private var openedSubjectKey: String? = null
     private var selectedSchoolYear: String = ""
     private var selectedSemester: String = ""
+    private var isAdminUser: Boolean = false
 
     private lateinit var prefs: SharedPreferences
 
@@ -140,10 +143,21 @@ class HomeFragment : Fragment() {
         binding.subjectRecyclerView.adapter = summaryAdapter
 
         if (isOffline) {
+            isAdminUser = true
             loadSchoolYearsOffline()
         } else {
-            loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
-                setupSpinners(schoolYearKeys, schoolYearNames)
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                db.child("admins").child(uid).get().addOnSuccessListener { adminSnap ->
+                    isAdminUser = adminSnap.exists()
+                    loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
+                        setupSpinners(schoolYearKeys, schoolYearNames)
+                    }
+                }
+            } else {
+                loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
+                    setupSpinners(schoolYearKeys, schoolYearNames)
+                }
             }
         }
 
@@ -192,10 +206,19 @@ class HomeFragment : Fragment() {
         setupSpinners(schoolYearKeys, schoolYearNames)
     }
 
+    private val NEW_SEMESTER_MARKER = "__new_semester__"
+
     private fun setupSpinners(schoolYearKeys: List<String>, schoolYearNames: Map<String, String>) {
         val semesterKeys = listOf("zimny", "letny")
         val semesterDisplay = semesterKeys.map { formatSemester(it) }
-        val schoolYearDisplay = schoolYearKeys.map { formatSchoolYear(it, schoolYearNames) }
+
+        // Add "New semester" option at the top for admin/offline mode
+        val allYearKeys = schoolYearKeys.toMutableList()
+        val allYearDisplay = schoolYearKeys.map { formatSchoolYear(it, schoolYearNames) }.toMutableList()
+        if (isOffline || isAdminUser) {
+            allYearKeys.add(0, NEW_SEMESTER_MARKER)
+            allYearDisplay.add(0, getString(R.string.new_semester_option))
+        }
 
         val savedYear = prefs.getString("school_year", null)
         val savedSemester = prefs.getString("semester", null)
@@ -204,10 +227,11 @@ class HomeFragment : Fragment() {
         selectedSchoolYear = savedYear ?: schoolYearKeys.firstOrNull() ?: ""
         selectedSemester = savedSemester ?: currentSemesterKey
 
-        val yearIndex = schoolYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) 0 else it }
+        val defaultYearIndex = if (isOffline || isAdminUser) minOf(1, allYearKeys.size - 1) else 0
+        val yearIndex = allYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) defaultYearIndex else it }
         val semIndex = semesterKeys.indexOf(selectedSemester).let { if (it == -1) 0 else it }
         binding.schoolYearSpinner.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, schoolYearDisplay)
+            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, allYearDisplay)
         binding.semesterSpinner.adapter =
             ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, semesterDisplay)
         binding.schoolYearSpinner.setSelection(yearIndex)
@@ -215,7 +239,15 @@ class HomeFragment : Fragment() {
 
         binding.schoolYearSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                selectedSchoolYear = schoolYearKeys[position]
+                val selectedKey = allYearKeys[position]
+                if (selectedKey == NEW_SEMESTER_MARKER) {
+                    showNewSemesterDialog()
+                    // Reset spinner to previous selection
+                    val prevIndex = allYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) defaultYearIndex else it }
+                    binding.schoolYearSpinner.setSelection(prevIndex)
+                    return
+                }
+                selectedSchoolYear = selectedKey
                 prefs.edit().putString("school_year", selectedSchoolYear).apply()
                 reloadData()
             }
@@ -231,6 +263,124 @@ class HomeFragment : Fragment() {
         }
 
         reloadData()
+    }
+
+    private fun showNewSemesterDialog() {
+        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_new_semester, null)
+        val inputYear = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.inputYear)
+        val yearPreview = dialogView.findViewById<TextView>(R.id.yearPreview)
+        val copyFromSpinner = dialogView.findViewById<Spinner>(R.id.copyFromSpinner)
+        val confirmBtn = dialogView.findViewById<MaterialButton>(R.id.confirmButton)
+        val cancelBtn = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+
+        // Build copy-from options
+        val copyOptions = mutableListOf(getString(R.string.new_semester_no_copy))
+        val copyYearKeys = mutableListOf("")
+        if (isOffline) {
+            val existingYears = localDb.getSchoolYears()
+            for ((key, name) in existingYears.entries.sortedByDescending { it.key }) {
+                copyOptions.add(name)
+                copyYearKeys.add(key)
+            }
+            copyFromSpinner.adapter = ArrayAdapter(
+                requireContext(), android.R.layout.simple_spinner_item, copyOptions
+            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        } else {
+            copyFromSpinner.adapter = ArrayAdapter(
+                requireContext(), android.R.layout.simple_spinner_item, copyOptions
+            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            db.child("school_years").get().addOnSuccessListener { snap ->
+                snap.children.sortedByDescending { it.key }.forEach { yearSnap ->
+                    val key = yearSnap.key ?: return@forEach
+                    val name = yearSnap.child("name").getValue(String::class.java) ?: key.replace("_", "/")
+                    copyOptions.add(name)
+                    copyYearKeys.add(key)
+                }
+                (copyFromSpinner.adapter as? ArrayAdapter<*>)?.notifyDataSetChanged()
+            }
+        }
+
+        // Auto-preview year as user types
+        inputYear.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val yearStr = s?.toString()?.trim() ?: ""
+                val year = yearStr.toIntOrNull()
+                if (year != null && year in 2000..2099) {
+                    val displayName = "$year/${year + 1}"
+                    yearPreview.text = getString(R.string.new_semester_preview, displayName)
+                    yearPreview.visibility = View.VISIBLE
+                } else {
+                    yearPreview.visibility = View.GONE
+                }
+            }
+        })
+
+        val dialog = Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+        dialog.show()
+
+        cancelBtn.setOnClickListener { dialog.dismiss() }
+        confirmBtn.setOnClickListener {
+            val yearStr = inputYear.text.toString().trim()
+            val year = yearStr.toIntOrNull()
+            if (year == null || year !in 2000..2099) {
+                Toast.makeText(requireContext(), getString(R.string.new_semester_invalid_year), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val key = "${year}_${year + 1}"
+            val displayName = "$year/${year + 1}"
+
+            // Check if already exists
+            if (isOffline) {
+                if (localDb.getSchoolYears().containsKey(key)) {
+                    Toast.makeText(requireContext(), getString(R.string.new_semester_exists), Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                localDb.addSchoolYear(key, displayName)
+
+                // Copy subjects from selected year if chosen
+                val copyIndex = copyFromSpinner.selectedItemPosition
+                if (copyIndex > 0) {
+                    val sourceYearKey = copyYearKeys[copyIndex]
+                    copySubjectsFromYear(sourceYearKey, key)
+                }
+
+                Toast.makeText(requireContext(), getString(R.string.new_semester_added, displayName), Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+
+                // Select the new year and reload
+                selectedSchoolYear = key
+                prefs.edit().putString("school_year", selectedSchoolYear).apply()
+                loadSchoolYearsOffline()
+            } else {
+                db.child("school_years").child(key).get().addOnSuccessListener { snap ->
+                    if (snap.exists()) {
+                        Toast.makeText(requireContext(), getString(R.string.new_semester_exists), Toast.LENGTH_SHORT).show()
+                        return@addOnSuccessListener
+                    }
+                    val yearObj = mapOf("name" to displayName)
+                    db.child("school_years").child(key).setValue(yearObj).addOnSuccessListener {
+                        Toast.makeText(requireContext(), getString(R.string.new_semester_added, displayName), Toast.LENGTH_SHORT).show()
+                        dialog.dismiss()
+                        selectedSchoolYear = key
+                        prefs.edit().putString("school_year", selectedSchoolYear).apply()
+                        loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
+                            setupSpinners(schoolYearKeys, schoolYearNames)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun copySubjectsFromYear(sourceYearKey: String, targetYearKey: String) {
+        // Only copies the academic year structure — subjects are global.
+        // Students are NOT copied; they must be enrolled separately in the new year.
     }
 
     private fun loadSchoolYearsWithNames(onLoaded: (List<String>, Map<String, String>) -> Unit) {
@@ -592,7 +742,12 @@ class HomeFragment : Fragment() {
                 for (subjectSnap in predSnap.children) {
                     val key = subjectSnap.key ?: continue
                     val teacherEmailDb = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                    if (teacherEmailDb == teacherEmail) subjectKeys.add(key)
+                    if (teacherEmailDb != teacherEmail) continue
+                    // Filter by semester: show if subject's semester matches, or is "both"/empty
+                    val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                    if (subjectSemester.isEmpty() || subjectSemester == "both" || subjectSemester == semester) {
+                        subjectKeys.add(key)
+                    }
                 }
 
                 db.child("students").child(year).get().addOnSuccessListener { studentsYearSnap ->
@@ -654,7 +809,13 @@ class HomeFragment : Fragment() {
         val year = selectedSchoolYear
         val semester = selectedSemester
         val subjects = localDb.getSubjects()
-        val subjectKeys = subjects.keys.toList()
+
+        // Filter subjects by semester: show if subject's semester matches, or is "both"/empty
+        val filteredSubjects = subjects.filter { (_, json) ->
+            val subjectSemester = json.optString("semester", "both")
+            subjectSemester.isEmpty() || subjectSemester == "both" || subjectSemester == semester
+        }
+        val subjectKeys = filteredSubjects.keys.toList()
 
         // Count students per subject
         val studentsMap = localDb.getStudents(year)
@@ -676,7 +837,7 @@ class HomeFragment : Fragment() {
 
         val tempSummaries = mutableListOf<TeacherSubjectSummary>()
         for (subjectKey in subjectKeys) {
-            val subjectJson = subjects[subjectKey]!!
+            val subjectJson = filteredSubjects[subjectKey]!!
             val name = subjectJson.optString("name", subjectKey.replaceFirstChar { it.uppercaseChar() })
 
             // Calculate average marks

@@ -11,7 +11,6 @@ constraintlayout = "2.2.1"
 lifecycleLivedataKtx = "2.9.4"
 lifecycleViewmodelKtx = "2.9.4"
 blurview = "version-3.2.0"
-mpandroidchart = "v3.1.0"
 navigationFragmentKtx = "2.9.6"
 navigationUiKtx = "2.9.6"
 annotation = "1.9.1"
@@ -35,7 +34,6 @@ androidx-annotation = { group = "androidx.annotation", name = "annotation", vers
 firebase-database = { group = "com.google.firebase", name = "firebase-database", version.ref = "firebaseDatabase" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth", version.ref = "firebaseAuth" }
 blurview = { module = "com.github.Dimezis:BlurView", version.ref = "blurview" }
-mpandroidchart = { module = "com.github.PhilJay:MPAndroidChart", version.ref = "mpandroidchart" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -128,6 +128,10 @@ class SettingsFragment : Fragment() {
         // Show export/import section
         binding.layoutExportImport.visibility = View.VISIBLE
 
+        // Show school year management in offline mode
+        binding.layoutSchoolYears.visibility = View.VISIBLE
+        setupSchoolYearManagement()
+
         // Hide online-only UI elements
         binding.btnResetPassword.visibility = View.GONE
         binding.textResetStatus.visibility = View.GONE
@@ -295,15 +299,18 @@ class SettingsFragment : Fragment() {
 
         adminsRef.child(currentUser.uid).get().addOnSuccessListener { snapshot ->
             if (snapshot.exists()) {
-                binding.layoutAddUser.visibility = View.VISIBLE
-                binding.layoutAddSubject.visibility = View.VISIBLE
-                binding.recyclerSubjects.visibility = View.VISIBLE
-                setupUserAdmin()
-                setupSubjectAdmin()
+                // Admin user/subject management is now in nav tabs — hide from settings
+                binding.layoutAddUser.visibility = View.GONE
+                binding.layoutAddSubject.visibility = View.GONE
+                binding.recyclerSubjects.visibility = View.GONE
+                // Keep school years management in settings
+                binding.layoutSchoolYears.visibility = View.VISIBLE
+                setupSchoolYearManagement()
             } else {
                 binding.layoutAddUser.visibility = View.GONE
                 binding.layoutAddSubject.visibility = View.GONE
                 binding.recyclerSubjects.visibility = View.GONE
+                binding.layoutSchoolYears.visibility = View.GONE
             }
         }
     }
@@ -402,6 +409,16 @@ class SettingsFragment : Fragment() {
         })
     }
 
+    private val semesterKeys = listOf("both", "zimny", "letny")
+
+    private fun getSemesterDisplayNames(): List<String> {
+        return listOf(
+            getString(R.string.semester_both),
+            getString(R.string.semester_winter),
+            getString(R.string.semester_summer)
+        )
+    }
+
     @SuppressLint("NotifyDataSetChanged")
     private fun showEditSubjectDialog(subject: SubjectInfo) {
         if (isOffline) {
@@ -411,24 +428,42 @@ class SettingsFragment : Fragment() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_edit_subject, null)
         val editTextSubjectName = dialogView.findViewById<EditText>(R.id.editSubjectName)
         val spinnerTeachers = dialogView.findViewById<Spinner>(R.id.spinnerTeachers)
+        val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
         editTextSubjectName.setText(subject.name)
 
-        val teachers = mutableListOf("(nepriradený)")
+        // Semester spinner setup
+        val semesterAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames())
+        semesterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerSemester.adapter = semesterAdapter
+
+        val teacherNames = mutableListOf("(nepriradený)")
+        val teacherEmails = mutableListOf("")
         val db = FirebaseDatabase.getInstance().reference
+
+        // Load current semester value from Firebase
+        db.child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
+            val currentSemester = semSnap.getValue(String::class.java) ?: "both"
+            val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
+            spinnerSemester.setSelection(semIndex)
+        }
+
         db.child("teachers").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (child in snapshot.children) {
                     val value = child.value as? String
                     value?.let {
-                        val email = it.split(",")[0].trim()
-                        teachers.add(email)
+                        val parts = it.split(",").map { p -> p.trim() }
+                        val email = parts.getOrElse(0) { "" }
+                        val name = parts.getOrElse(1) { email }
+                        teacherNames.add(name)
+                        teacherEmails.add(email)
                     }
                 }
-                val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, teachers)
+                val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, teacherNames)
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 spinnerTeachers.adapter = adapter
-                val index = teachers.indexOf(subject.teacherEmail)
+                val index = teacherEmails.indexOf(subject.teacherEmail)
                 spinnerTeachers.setSelection(if (index >= 0) index else 0)
             }
             override fun onCancelled(error: DatabaseError) {}
@@ -457,16 +492,17 @@ class SettingsFragment : Fragment() {
         }
         dialogView.findViewById<Button>(R.id.btnSave).setOnClickListener {
             val newNameUi = editTextSubjectName.text.toString().trim()
-            val selectedTeacher = spinnerTeachers.selectedItem as String
-            val assign = if (selectedTeacher == "(nepriradený)") "" else selectedTeacher
+            val selectedIdx = spinnerTeachers.selectedItemPosition
+            val assign = teacherEmails.getOrElse(selectedIdx) { "" }
+            val selectedSemester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "both" }
 
             if (newNameUi.isEmpty()) {
                 Toast.makeText(requireContext(), "Zadajte názov predmetu.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Key never changes — just update name and teacher
-            db.child("predmety").child(subject.key).setValue(mapOf("name" to newNameUi, "teacherEmail" to assign))
+            // Key never changes — just update name, teacher, and semester
+            db.child("predmety").child(subject.key).setValue(mapOf("name" to newNameUi, "teacherEmail" to assign, "semester" to selectedSemester))
             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
@@ -479,8 +515,20 @@ class SettingsFragment : Fragment() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_edit_subject, null)
         val editTextSubjectName = dialogView.findViewById<EditText>(R.id.editSubjectName)
         val spinnerTeachers = dialogView.findViewById<Spinner>(R.id.spinnerTeachers)
+        val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
         editTextSubjectName.setText(subject.name)
+
+        // Semester spinner setup
+        val semesterAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames())
+        semesterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerSemester.adapter = semesterAdapter
+
+        // Pre-select current semester value
+        val subjectJson = localDb.getSubjects()[subject.key]
+        val currentSemester = subjectJson?.optString("semester", "both") ?: "both"
+        val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
+        spinnerSemester.setSelection(semIndex)
 
         val teachers = mutableListOf("(nepriradený)")
         val teachersMap = localDb.getTeachers()
@@ -512,14 +560,19 @@ class SettingsFragment : Fragment() {
             val newNameUi = editTextSubjectName.text.toString().trim()
             val selectedTeacher = spinnerTeachers.selectedItem as String
             val assign = if (selectedTeacher == "(nepriradený)") "" else selectedTeacher
+            val selectedSemester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "both" }
 
             if (newNameUi.isEmpty()) {
                 Toast.makeText(requireContext(), "Zadajte názov predmetu.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            // Key never changes — just update name and teacher
-            localDb.addSubject(subject.key, newNameUi, assign)
+            // Key never changes — just update name, teacher, and semester
+            // Migrate student data if semester changed
+            if (currentSemester != selectedSemester) {
+                localDb.migrateSubjectSemester(subject.key, currentSemester, selectedSemester)
+            }
+            localDb.addSubject(subject.key, newNameUi, assign, selectedSemester)
             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
             showSubjectListOffline()
             dialog.dismiss()
@@ -533,7 +586,8 @@ class SettingsFragment : Fragment() {
         val key = db.push().key ?: return
         val subjectObj = mapOf(
             "name" to subjectInput,
-            "teacherEmail" to (teacherEmail ?: "")
+            "teacherEmail" to (teacherEmail ?: ""),
+            "semester" to "both"
         )
         db.child(key).setValue(subjectObj)
             .addOnSuccessListener {
@@ -674,6 +728,144 @@ class SettingsFragment : Fragment() {
         }
         binding.switchDarkMode.isChecked = isNight
         binding.switchDarkMode.setOnCheckedChangeListener(darkModeListener)
+    }
+
+    // --- Academic Year Management ---
+
+    data class SchoolYearItem(val key: String, val name: String)
+
+    private val schoolYearItems = mutableListOf<SchoolYearItem>()
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun setupSchoolYearManagement() {
+        val recycler = binding.recyclerSchoolYears
+        recycler.layoutManager = LinearLayoutManager(requireContext())
+
+        val adapter = object : androidx.recyclerview.widget.RecyclerView.Adapter<SchoolYearViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SchoolYearViewHolder {
+                val v = LayoutInflater.from(parent.context).inflate(R.layout.item_school_year, parent, false)
+                return SchoolYearViewHolder(v)
+            }
+            override fun onBindViewHolder(holder: SchoolYearViewHolder, position: Int) {
+                val item = schoolYearItems[position]
+                holder.name.text = item.name
+                holder.editBtn.setOnClickListener { showEditSchoolYearDialog(item) }
+                holder.deleteBtn.setOnClickListener { confirmDeleteSchoolYear(item) }
+            }
+            override fun getItemCount() = schoolYearItems.size
+        }
+        recycler.adapter = adapter
+        loadSchoolYears()
+    }
+
+    class SchoolYearViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
+        val name: TextView = view.findViewById(R.id.textSchoolYearName)
+        val editBtn: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnEditYear)
+        val deleteBtn: com.google.android.material.button.MaterialButton = view.findViewById(R.id.btnDeleteYear)
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun loadSchoolYears() {
+        schoolYearItems.clear()
+        if (isOffline) {
+            val years = localDb.getSchoolYears()
+            for ((key, name) in years.entries.sortedByDescending { it.key }) {
+                schoolYearItems.add(SchoolYearItem(key, name))
+            }
+            binding.recyclerSchoolYears.adapter?.notifyDataSetChanged()
+        } else {
+            val db = FirebaseDatabase.getInstance().reference.child("school_years")
+            db.get().addOnSuccessListener { snap ->
+                schoolYearItems.clear()
+                for (child in snap.children) {
+                    val key = child.key ?: continue
+                    val name = child.child("name").getValue(String::class.java) ?: key.replace("_", "/")
+                    schoolYearItems.add(SchoolYearItem(key, name))
+                }
+                schoolYearItems.sortByDescending { it.key }
+                binding.recyclerSchoolYears.adapter?.notifyDataSetChanged()
+            }
+        }
+    }
+
+    private fun showEditSchoolYearDialog(item: SchoolYearItem) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_input, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Upraviť akademický rok"
+        val input = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogInput)
+        input.hint = "Názov (napr. 2025/2026)"
+        input.setText(item.name)
+        val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+        confirmBtn.text = "Uložiť"
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+            .setOnClickListener { dialog.dismiss() }
+        confirmBtn.setOnClickListener {
+            val newName = input.text.toString().trim()
+            if (newName.isEmpty()) {
+                Toast.makeText(requireContext(), "Zadajte názov.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (isOffline) {
+                localDb.addSchoolYear(item.key, newName)
+                loadSchoolYears()
+                dialog.dismiss()
+            } else {
+                val yearObj = mapOf("name" to newName)
+                FirebaseDatabase.getInstance().reference.child("school_years").child(item.key)
+                    .setValue(yearObj).addOnSuccessListener {
+                        loadSchoolYears()
+                        dialog.dismiss()
+                    }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun confirmDeleteSchoolYear(item: SchoolYearItem) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_confirm, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Odstrániť akademický rok"
+        dialogView.findViewById<TextView>(R.id.dialogMessage).text =
+            "Naozaj chcete odstrániť akademický rok ${item.name}? Tým sa odstránia aj všetky dáta pre tento rok."
+        val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+        confirmBtn.text = "Odstrániť"
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+            .setOnClickListener { dialog.dismiss() }
+        confirmBtn.setOnClickListener {
+            if (isOffline) {
+                localDb.remove("school_years/${item.key}")
+                localDb.remove("students/${item.key}")
+                // Clean up marks and attendance for this year
+                for (semester in listOf("zimny", "letny")) {
+                    localDb.remove("hodnotenia/${item.key}/$semester")
+                    localDb.remove("pritomnost/${item.key}/$semester")
+                }
+                Toast.makeText(requireContext(), "Akademický rok odstránený.", Toast.LENGTH_SHORT).show()
+                loadSchoolYears()
+                dialog.dismiss()
+            } else {
+                val db = FirebaseDatabase.getInstance().reference
+                db.child("school_years").child(item.key).removeValue().addOnSuccessListener {
+                    db.child("students").child(item.key).removeValue()
+                    Toast.makeText(requireContext(), "Akademický rok odstránený.", Toast.LENGTH_SHORT).show()
+                    loadSchoolYears()
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialog.show()
     }
 
     override fun onResume() {

@@ -31,6 +31,16 @@
         app:popExitAnim="@anim/fade_out" />
 
     <fragment
+        android:id="@+id/navigation_timetable"
+        android:name="com.marekguran.unitrack.ui.timetable.TimetableFragment"
+        android:label="@string/title_timetable"
+        tools:layout="@layout/fragment_timetable"
+        app:enterAnim="@anim/fade_in"
+        app:exitAnim="@anim/fade_out"
+        app:popEnterAnim="@anim/fade_in"
+        app:popExitAnim="@anim/fade_out" />
+
+    <fragment
         android:id="@+id/navigation_settings"
         android:name="com.marekguran.unitrack.ui.settings.SettingsFragment"
         android:label="@string/title_settings"

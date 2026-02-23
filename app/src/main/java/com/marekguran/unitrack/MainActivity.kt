@@ -1,15 +1,18 @@
 package com.marekguran.unitrack
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.animation.DecelerateInterpolator
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -19,9 +22,10 @@ import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.marekguran.unitrack.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import com.marekguran.unitrack.ui.PillNavigationBar
-import com.marekguran.unitrack.ui.login.LoginActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,6 +37,11 @@ class MainActivity : AppCompatActivity() {
 
     // Navigation destination IDs mapped to pill nav indices
     private lateinit var navDestinations: List<Int>
+
+    // Notification permission request for Android 13+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* granted or not, we proceed gracefully */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = getSharedPreferences("app_settings", 0)
@@ -55,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         if (!isOffline) {
             val currentUser = FirebaseAuth.getInstance().currentUser
             if (currentUser == null) {
-                startActivity(Intent(this, LoginActivity::class.java))
+                startActivity(Intent(this, com.marekguran.unitrack.ui.login.LoginActivity::class.java))
                 finish()
                 return
             }
@@ -69,7 +78,36 @@ class MainActivity : AppCompatActivity() {
         val navController = navHostFragment.navController
         val pillNav: PillNavigationBar = binding.pillNavBar
 
-        // Build nav items based on online/offline mode
+        if (isOffline) {
+            // Offline mode — always show Students + Subjects tabs
+            buildNavigation(pillNav, navController, includeAdminTabs = true, isOnline = false)
+        } else {
+            // Online mode — start without admin tabs, then check if admin
+            buildNavigation(pillNav, navController, includeAdminTabs = false, isOnline = true)
+            checkAdminAndRebuildNav(pillNav, navController)
+        }
+
+        // Request notification permission for Android 13+ (API 33)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        // Initialize Live Update notification for next class
+        NextClassAlarmReceiver.createNotificationChannels(this)
+        NextClassAlarmReceiver.triggerNextClassCheck(this)
+        NextClassAlarmReceiver.scheduleNextClass(this)
+        NextClassAlarmReceiver.scheduleChangesCheck(this)
+    }
+
+    private fun buildNavigation(
+        pillNav: PillNavigationBar,
+        navController: androidx.navigation.NavController,
+        includeAdminTabs: Boolean,
+        isOnline: Boolean
+    ) {
         val labels = mutableListOf<String>()
         val icons = mutableListOf<Drawable>()
         val destinations = mutableListOf<Int>()
@@ -78,8 +116,14 @@ class MainActivity : AppCompatActivity() {
         icons.add(ContextCompat.getDrawable(this, R.drawable.home)!!)
         destinations.add(R.id.navigation_home)
 
-        if (isOffline) {
-            labels.add(getString(R.string.title_students))
+        labels.add(getString(R.string.title_timetable))
+        icons.add(ContextCompat.getDrawable(this, R.drawable.ic_timetable)!!)
+        destinations.add(R.id.navigation_timetable)
+
+        if (includeAdminTabs) {
+            // Use "Účty" for online, "Študenti" for offline
+            val studentsLabel = if (isOnline) getString(R.string.title_accounts) else getString(R.string.title_students)
+            labels.add(studentsLabel)
             icons.add(ContextCompat.getDrawable(this, R.drawable.ic_people)!!)
             destinations.add(R.id.navigation_students)
             labels.add(getString(R.string.title_subjects))
@@ -156,6 +200,20 @@ class MainActivity : AppCompatActivity() {
             .setStartDelay(200)
             .setInterpolator(DecelerateInterpolator(2.5f))
             .start()
+    }
+
+    private fun checkAdminAndRebuildNav(
+        pillNav: PillNavigationBar,
+        navController: androidx.navigation.NavController
+    ) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+        val adminsRef = FirebaseDatabase.getInstance().reference.child("admins")
+        adminsRef.child(user.uid).get().addOnSuccessListener { snapshot ->
+            if (snapshot.exists()) {
+                // User is admin — rebuild navigation with admin tabs
+                buildNavigation(pillNav, navController, includeAdminTabs = true, isOnline = true)
+            }
+        }
     }
 
     override fun onDestroy() {

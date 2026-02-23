@@ -207,10 +207,12 @@ class LocalDatabase private constructor(private val context: Context) {
         return result
     }
 
-    fun addSubject(key: String, name: String, teacherEmail: String) {
-        val subj = JSONObject()
+    fun addSubject(key: String, name: String, teacherEmail: String, semester: String = "both") {
+        val existing = getJson("predmety/$key")
+        val subj = existing ?: JSONObject()
         subj.put("name", name)
         subj.put("teacherEmail", teacherEmail)
+        subj.put("semester", semester)
         put("predmety/$key", subj)
     }
 
@@ -327,6 +329,50 @@ class LocalDatabase private constructor(private val context: Context) {
         root = createDefaultDb()
     }
 
+    // --- Timetable methods ---
+
+    fun getTimetableEntries(subjectKey: String): Map<String, JSONObject> {
+        val entries = getJson("predmety/$subjectKey/timetable") ?: return emptyMap()
+        val result = mutableMapOf<String, JSONObject>()
+        for (key in entries.keys()) {
+            val entry = entries.optJSONObject(key) ?: continue
+            result[key] = entry
+        }
+        return result
+    }
+
+    fun addTimetableEntry(subjectKey: String, entry: JSONObject): String {
+        val entryId = push("predmety/$subjectKey/timetable")
+        put("predmety/$subjectKey/timetable/$entryId", entry)
+        return entryId
+    }
+
+    fun removeTimetableEntry(subjectKey: String, entryKey: String) {
+        remove("predmety/$subjectKey/timetable/$entryKey")
+    }
+
+    // --- Days off methods ---
+
+    fun getDaysOff(teacherUid: String): Map<String, JSONObject> {
+        val daysOff = getJson("days_off/$teacherUid") ?: return emptyMap()
+        val result = mutableMapOf<String, JSONObject>()
+        for (key in daysOff.keys()) {
+            val entry = daysOff.optJSONObject(key) ?: continue
+            result[key] = entry
+        }
+        return result
+    }
+
+    fun addDayOff(teacherUid: String, dayOff: JSONObject): String {
+        val key = push("days_off/$teacherUid")
+        put("days_off/$teacherUid/$key", dayOff)
+        return key
+    }
+
+    fun removeDayOff(teacherUid: String, key: String) {
+        remove("days_off/$teacherUid/$key")
+    }
+
     fun updateStudentSubjects(year: String, uid: String, semester: String, subjectKeys: List<String>) {
         val studentPath = "students/$year/$uid"
         val student = getJson(studentPath) ?: return
@@ -334,5 +380,104 @@ class LocalDatabase private constructor(private val context: Context) {
         subjects.put(semester, JSONArray(subjectKeys))
         student.put("subjects", subjects)
         put(studentPath, student)
+    }
+
+    /**
+     * Migrate student enrollment and data (marks, attendance) when a subject's semester changes.
+     * oldSemester/newSemester can be "both", "zimny", or "letny".
+     * - When changing from "both" to a specific semester: only data from the removed semester
+     *   is moved to the kept semester. Data already in the kept semester is untouched.
+     * - When changing from one specific semester to another: data is moved to the new semester.
+     * - When changing to "both": nothing is migrated (no data is lost, subject just becomes
+     *   available in both semesters).
+     * Marks/attendance with identical keys in the target are preserved (no overwrite).
+     */
+    fun migrateSubjectSemester(subjectKey: String, oldSemester: String, newSemester: String) {
+        if (oldSemester == newSemester) return
+
+        val allSemesters = listOf("zimny", "letny")
+        // Determine which semesters had the subject before and after
+        val oldSems = if (oldSemester == "both") allSemesters else listOf(oldSemester)
+        val newSems = if (newSemester == "both") allSemesters else listOf(newSemester)
+
+        // Semesters that are being removed (subject no longer in these)
+        val removedSems = oldSems - newSems.toSet()
+        // Semesters that are being added (subject now in these)
+        val addedSems = newSems - oldSems.toSet()
+
+        if (removedSems.isEmpty()) return // nothing to migrate (e.g. specific -> both)
+
+        // Target semester to migrate data to
+        val targetSem = addedSems.firstOrNull() ?: newSems.first()
+
+        // Iterate over all school years and migrate data
+        val schoolYears = getSchoolYears()
+        for ((year, _) in schoolYears) {
+            for (removedSem in removedSems) {
+                // Migrate student enrollments
+                val students = getStudents(year)
+                for ((uid, studentJson) in students) {
+                    val subjectsObj = studentJson.optJSONObject("subjects") ?: continue
+                    val semArr = subjectsObj.optJSONArray(removedSem) ?: continue
+                    val subjectList = mutableListOf<String>()
+                    for (i in 0 until semArr.length()) {
+                        subjectList.add(semArr.optString(i))
+                    }
+                    if (subjectKey in subjectList) {
+                        // Remove from old semester enrollment
+                        subjectList.remove(subjectKey)
+                        updateStudentSubjects(year, uid, removedSem, subjectList)
+
+                        // Add to target semester enrollment if not already there
+                        val targetArr = subjectsObj.optJSONArray(targetSem)
+                        val targetList = mutableListOf<String>()
+                        if (targetArr != null) {
+                            for (i in 0 until targetArr.length()) {
+                                targetList.add(targetArr.optString(i))
+                            }
+                        }
+                        if (subjectKey !in targetList) {
+                            targetList.add(subjectKey)
+                            updateStudentSubjects(year, uid, targetSem, targetList)
+                        }
+                    }
+                }
+
+                // Migrate marks (hodnotenia)
+                val marksNode = getJson("hodnotenia/$year/$removedSem/$subjectKey")
+                if (marksNode != null) {
+                    // Copy each student's marks to the target semester
+                    for (studentUid in marksNode.keys()) {
+                        val studentMarks = marksNode.optJSONObject(studentUid) ?: continue
+                        // Merge into target — if target already has marks, preserve them
+                        val targetMarks = getJson("hodnotenia/$year/$targetSem/$subjectKey/$studentUid")
+                        for (markId in studentMarks.keys()) {
+                            val mark = studentMarks.optJSONObject(markId) ?: continue
+                            if (targetMarks == null || !targetMarks.has(markId)) {
+                                put("hodnotenia/$year/$targetSem/$subjectKey/$studentUid/$markId", mark)
+                            }
+                        }
+                    }
+                    // Remove from old semester
+                    remove("hodnotenia/$year/$removedSem/$subjectKey")
+                }
+
+                // Migrate attendance (pritomnost)
+                val attNode = getJson("pritomnost/$year/$removedSem/$subjectKey")
+                if (attNode != null) {
+                    for (studentUid in attNode.keys()) {
+                        val studentAtt = attNode.optJSONObject(studentUid) ?: continue
+                        val targetAtt = getJson("pritomnost/$year/$targetSem/$subjectKey/$studentUid")
+                        for (date in studentAtt.keys()) {
+                            val entry = studentAtt.optJSONObject(date) ?: continue
+                            if (targetAtt == null || !targetAtt.has(date)) {
+                                put("pritomnost/$year/$targetSem/$subjectKey/$studentUid/$date", entry)
+                            }
+                        }
+                    }
+                    remove("pritomnost/$year/$removedSem/$subjectKey")
+                }
+            }
+        }
     }
 }

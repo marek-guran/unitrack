@@ -14,6 +14,10 @@
         app:strokeColor="?attr/colorOutlineVariant"
         app:cardBackgroundColor="?attr/colorSurface">
 
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
@@ -49,6 +53,45 @@
             android:id="@+id/spinnerTeachers"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/subject_semester"
+            android:layout_marginBottom="4dp" />
+
+        <Spinner
+            android:id="@+id/spinnerSemester"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Timetable section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/title_timetable"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:id="@+id/timetableEntriesContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddTimetableEntry"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/timetable_add_entry"
+            app:cornerRadius="12dp"
             android:layout_marginBottom="20dp" />
 
         <LinearLayout
@@ -86,5 +129,6 @@
                 app:cornerRadius="12dp" />
         </LinearLayout>
     </LinearLayout>
+    </ScrollView>
     </com.google.android.material.card.MaterialCardView>
 </FrameLayout>
