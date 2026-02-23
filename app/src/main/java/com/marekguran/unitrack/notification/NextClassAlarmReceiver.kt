@@ -45,7 +45,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         private const val KEY_GRADE_SNAPSHOT = "grade_snapshot"
         private const val KEY_DAYSOFF_SNAPSHOT = "daysoff_snapshot"
 
-        /** Schedule the silent next-class Live Update check (every 15 min). */
+        /** Schedule the silent next-class Live Update check (every 2 min). */
         fun scheduleNextClass(context: Context) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NextClassAlarmReceiver::class.java).apply {
@@ -58,7 +58,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             alarmManager.setRepeating(
                 AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + 5000,
-                15 * 60 * 1000L,
+                2 * 60 * 1000L, // Aktualizuj sa kazde 2 minuty
                 pendingIntent
             )
         }
