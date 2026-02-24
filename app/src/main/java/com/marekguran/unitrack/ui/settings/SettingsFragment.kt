@@ -31,6 +31,9 @@ import com.marekguran.unitrack.data.model.SubjectInfo
 import com.marekguran.unitrack.data.model.SubjectAdapterAdmin
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
+import com.marekguran.unitrack.notification.NextClassAlarmReceiver
+import android.content.Context
+import android.os.Build
 import java.security.SecureRandom
 import java.util.UUID
 
@@ -69,6 +72,13 @@ class SettingsFragment : Fragment() {
             try {
                 requireContext().contentResolver.openInputStream(uri)?.use { inputStream ->
                     localDb.importFromStream(inputStream)
+                }
+                // Sync teacher name from database into SharedPreferences
+                localDb.getTeacherName()?.let { name ->
+                    prefs.edit().putString("teacher_name", name).apply()
+                    if (_binding != null) {
+                        binding.editTeacherName.setText(name)
+                    }
                 }
                 Toast.makeText(requireContext(), getString(R.string.import_success), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
@@ -110,6 +120,13 @@ class SettingsFragment : Fragment() {
         binding.recyclerSubjects.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerSubjects.adapter = adminSubjectAdapter
 
+        binding.btnAboutUs?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/marek-guran/unitrack"))
+            startActivity(intent)
+        }
+
+        setupNotificationSettings()
+
         if (isOffline) {
             setupOfflineMode()
         } else {
@@ -139,18 +156,25 @@ class SettingsFragment : Fragment() {
         // Change logout button to reset app button
         binding.btnLogout.text = getString(R.string.reset_app)
         binding.btnLogout.setOnClickListener {
-            AlertDialog.Builder(requireContext())
-                .setTitle(getString(R.string.reset_app))
-                .setMessage(getString(R.string.reset_app_confirm))
-                .setPositiveButton("Áno") { _, _ ->
-                    OfflineMode.resetMode(requireContext())
-                    localDb.clearAll()
-                    val intent = Intent(requireContext(), LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    startActivity(intent)
-                }
-                .setNegativeButton("Nie", null)
-                .show()
+            val confirmView = layoutInflater.inflate(R.layout.dialog_confirm, null)
+            confirmView.findViewById<TextView>(R.id.dialogTitle).text = getString(R.string.reset_app)
+            confirmView.findViewById<TextView>(R.id.dialogMessage).text = getString(R.string.reset_app_confirm)
+            val confirmBtn = confirmView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+            confirmBtn.text = "Áno"
+            val dialog = AlertDialog.Builder(requireContext())
+                .setView(confirmView)
+                .create()
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            confirmView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+                .setOnClickListener { dialog.dismiss() }
+            confirmBtn.setOnClickListener {
+                OfflineMode.resetMode(requireContext())
+                localDb.clearAll()
+                val intent = Intent(requireContext(), LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+            }
+            dialog.show()
         }
 
         // Export/Import buttons
@@ -159,6 +183,19 @@ class SettingsFragment : Fragment() {
         }
         binding.btnImportDatabase.setOnClickListener {
             importLauncher.launch(arrayOf("application/json", "*/*"))
+        }
+
+        // Teacher name
+        binding.labelTeacherSection.visibility = View.VISIBLE
+        binding.layoutTeacherName.visibility = View.VISIBLE
+        val savedName = localDb.getTeacherName()
+            ?: prefs.getString("teacher_name", "") ?: ""
+        binding.editTeacherName.setText(savedName)
+        binding.btnSaveTeacherName.setOnClickListener {
+            val name = binding.editTeacherName.text.toString().trim()
+            prefs.edit().putString("teacher_name", name).apply()
+            localDb.setTeacherName(name)
+            Toast.makeText(requireContext(), "Meno učiteľa uložené", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -433,8 +470,8 @@ class SettingsFragment : Fragment() {
         editTextSubjectName.setText(subject.name)
 
         // Semester spinner setup
-        val semesterAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames())
-        semesterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val semesterAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, getSemesterDisplayNames())
+        semesterAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         spinnerSemester.adapter = semesterAdapter
 
         val teacherNames = mutableListOf("(nepriradený)")
@@ -460,8 +497,8 @@ class SettingsFragment : Fragment() {
                         teacherEmails.add(email)
                     }
                 }
-                val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, teacherNames)
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                val adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, teacherNames)
+                adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
                 spinnerTeachers.adapter = adapter
                 val index = teacherEmails.indexOf(subject.teacherEmail)
                 spinnerTeachers.setSelection(if (index >= 0) index else 0)
@@ -520,8 +557,8 @@ class SettingsFragment : Fragment() {
         editTextSubjectName.setText(subject.name)
 
         // Semester spinner setup
-        val semesterAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames())
-        semesterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val semesterAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, getSemesterDisplayNames())
+        semesterAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         spinnerSemester.adapter = semesterAdapter
 
         // Pre-select current semester value
@@ -536,8 +573,8 @@ class SettingsFragment : Fragment() {
             val email = value.split(",")[0].trim()
             teachers.add(email)
         }
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, teachers)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, teachers)
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         spinnerTeachers.adapter = adapter
         val index = teachers.indexOf(subject.teacherEmail)
         spinnerTeachers.setSelection(if (index >= 0) index else 0)
@@ -866,6 +903,102 @@ class SettingsFragment : Fragment() {
             }
         }
         dialog.show()
+    }
+
+    private fun setupNotificationSettings() {
+        // Live notification switch
+        val liveEnabled = prefs.getBoolean("notif_enabled_live", true)
+        binding.switchNotifLive.isChecked = liveEnabled
+        binding.switchNotifLive.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("notif_enabled_live", isChecked).apply()
+            rescheduleNotifications()
+        }
+
+        // Live interval spinner (options: 1, 2, 5, 10, 15 minutes)
+        val liveIntervals = listOf("1", "2", "5", "10", "15")
+        val liveIntervalAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, liveIntervals.map { "$it min" })
+        liveIntervalAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerLiveInterval.adapter = liveIntervalAdapter
+        val savedLiveInterval = prefs.getInt("notif_interval_live", 2)
+        val liveIdx = liveIntervals.indexOf(savedLiveInterval.toString()).coerceAtLeast(0)
+        binding.spinnerLiveInterval.setSelection(liveIdx)
+        binding.spinnerLiveInterval.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                prefs.edit().putInt("notif_interval_live", liveIntervals[pos].toInt()).apply()
+                rescheduleNotifications()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Minutes before class spinner (options: 15, 30, 45, 60, 90)
+        val minutesBefore = listOf("15", "30", "45", "60", "90")
+        val minutesBeforeAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, minutesBefore.map { "$it min" })
+        minutesBeforeAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerMinutesBefore.adapter = minutesBeforeAdapter
+        val savedMinutesBefore = prefs.getInt("notif_minutes_before", 30)
+        val minIdx = minutesBefore.indexOf(savedMinutesBefore.toString()).coerceAtLeast(0)
+        binding.spinnerMinutesBefore.setSelection(minIdx)
+        binding.spinnerMinutesBefore.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                prefs.edit().putInt("notif_minutes_before", minutesBefore[pos].toInt()).apply()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Changes notification switch
+        val changesEnabled = prefs.getBoolean("notif_enabled_changes", true)
+        binding.switchNotifChanges.isChecked = changesEnabled
+        binding.switchNotifChanges.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("notif_enabled_changes", isChecked).apply()
+            rescheduleNotifications()
+        }
+
+        // Changes interval spinner (options: 15, 30, 60, 120 minutes)
+        val changeIntervals = listOf("15", "30", "60", "120")
+        val changeIntervalAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, changeIntervals.map { "$it min" })
+        changeIntervalAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerChangesInterval.adapter = changeIntervalAdapter
+        val savedChangeInterval = prefs.getInt("notif_interval_changes", 30)
+        val changeIdx = changeIntervals.indexOf(savedChangeInterval.toString()).coerceAtLeast(0)
+        binding.spinnerChangesInterval.setSelection(changeIdx)
+        binding.spinnerChangesInterval.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                prefs.edit().putInt("notif_interval_changes", changeIntervals[pos].toInt()).apply()
+                rescheduleNotifications()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Show classroom switch
+        binding.switchNotifClassroom.isChecked = prefs.getBoolean("notif_show_classroom", true)
+        binding.switchNotifClassroom.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("notif_show_classroom", isChecked).apply()
+        }
+
+        // Show upcoming class switch
+        binding.switchNotifUpcoming.isChecked = prefs.getBoolean("notif_show_upcoming", true)
+        binding.switchNotifUpcoming.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("notif_show_upcoming", isChecked).apply()
+        }
+
+        // Battery optimization button
+        binding.btnBatteryOptimization.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = requireContext().getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                if (!pm.isIgnoringBatteryOptimizations(requireContext().packageName)) {
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    intent.data = Uri.parse("package:${requireContext().packageName}")
+                    startActivity(intent)
+                } else {
+                    Toast.makeText(requireContext(), "Optimalizácia batérie je už vypnutá", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun rescheduleNotifications() {
+        NextClassAlarmReceiver.scheduleNextClass(requireContext())
+        NextClassAlarmReceiver.scheduleChangesCheck(requireContext())
     }
 
     override fun onResume() {

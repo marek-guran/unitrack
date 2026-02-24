@@ -40,8 +40,13 @@ Duálny backend: buď Firebase Realtime Database (online), alebo `LocalDatabase`
 
 ### Spustenie (cold start)
 
-1. `UniTrackApplication.onCreate()` — inicializácia Application triedy
-2. `MainActivity.onCreate()`:
+1. `UniTrackApplication.onCreate()` — inicializácia Application triedy, aplikovanie tmavého režimu zo `SharedPreferences` (aby všetky Activity vrátane SplashActivity mali správnu tému od začiatku)
+2. `SplashActivity.onCreate()`:
+   - Aplikuje tmavý režim (záloha pre prípad, že Application ešte nestihla)
+   - Skryje ActionBar a nastaví edge-to-edge zobrazenie
+   - Zobrazí animovaný obsah (logo a názov aplikácie) — animácia zdola nahor
+   - Po 2 sekundách presmeruje na `MainActivity` s fade prechodom
+3. `MainActivity.onCreate()`:
    - Načíta preferenciu tmavého režimu zo `SharedPreferences` a nastaví tému
    - Skontroluje `OfflineMode.isOffline()`:
      - **Offline** → preskočí prihlásenie, rovno zobrazí navigáciu so všetkými tabmi
@@ -51,6 +56,7 @@ Duálny backend: buď Firebase Realtime Database (online), alebo `LocalDatabase`
    - Postaví navigáciu (`buildNavigation()`)
    - V online režime asynchrónne overí admin práva (`checkAdminAndRebuildNav()`)
    - Vytvorí notifikačné kanály a naplánuje alarmy
+   - Vyžiada oprávnenie `POST_NOTIFICATIONS` (Android 13+)
 
 ### Prihlásenie (LoginActivity)
 
@@ -62,7 +68,7 @@ LoginActivity
             └─ Chyba → zobrazí chybovú hlášku
 ```
 
-`LoginActivity` nie je launcher — `MainActivity` je. Ak `MainActivity` zistí, že nie je prihlásený, presmeruje na `LoginActivity`. Po úspešnom prihlásení sa `LoginActivity` zatvorí a `MainActivity` zostane v zásobníku.
+`LoginActivity` nie je launcher — `SplashActivity` je launcher, ktorá po animácii spustí `MainActivity`. Ak `MainActivity` zistí, že nie je prihlásený, presmeruje na `LoginActivity`. Po úspešnom prihlásení sa `LoginActivity` zatvorí a `MainActivity` zostane v zásobníku.
 
 ### Detekcia admin práv
 
@@ -76,11 +82,12 @@ Projekt má jediný modul `app/`. Nie je rozdelený do feature modulov — je to
 
 ```
 com.marekguran.unitrack/
-├── MainActivity.kt              # Vstupný bod, navigácia, internet check
-├── UniTrackApplication.kt       # Application trieda
+├── SplashActivity.kt            # Animovaná splash obrazovka (launcher)
+├── MainActivity.kt              # Vstupný bod po splashi, navigácia, internet check
+├── UniTrackApplication.kt       # Application trieda (inicializácia témy)
 ├── SubjectDetailFragment.kt     # Detail predmetu (známky, dochádzka)
 ├── data/                        # Dátová vrstva
-│   ├── LocalDatabase.kt         # Offline JSON databáza
+│   ├── LocalDatabase.kt         # Offline JSON databáza s convenience metódami
 │   ├── LoginDataSource.kt       # Prihlásenie (scaffold, reálne cez Firebase)
 │   ├── LoginRepository.kt       # Repository pre prihlásenie
 │   ├── OfflineMode.kt           # Online/offline prepínač
@@ -96,12 +103,16 @@ com.marekguran.unitrack/
     ├── timetable/               # Rozvrh
     ├── students/                # Správa študentov / účtov
     ├── subjects/                # Správa predmetov
-    └── settings/                # Nastavenia
+    └── settings/                # Nastavenia (téma, notifikácie, export, admin)
 ```
 
 ---
 
 ## Kľúčové architektonické rozhodnutia
+
+### Prečo SplashActivity?
+
+`SplashActivity` je vstupný bod aplikácie (launcher). Slúži na zobrazenie animovaného loga počas načítavania. Tmavý režim sa aplikuje už v `UniTrackApplication.onCreate()`, takže používateľ nikdy nevidí nesprávnu tému. Po dvoch sekundách sa plynulo presunie na `MainActivity`.
 
 ### Prečo duálny backend?
 
@@ -109,7 +120,7 @@ Offline režim existuje preto, aby učiteľ mohol spravovať známky a dochádzk
 
 ### Prečo vlastná navigácia (PillNavigationBar)?
 
-Štandardný `BottomNavigationView` z Material knižnice nepodporoval požadovaný dizajn — animovanú „pilulku" so skleneným efektom, adaptívnu veľkosť pre tablety, a dynamické pridávanie/odoberanie tabov podľa role. `PillNavigationBar` je vlastný `View`, ktorý toto všetko rieši.
+Štandardný `BottomNavigationView` z Material knižnice nepodporoval požadovaný dizajn — animovanú „pilulku" s tieňovým efektom, adaptívnu veľkosť pre tablety, a dynamické pridávanie/odoberanie tabov podľa role. `PillNavigationBar` je vlastný `View`, ktorý toto všetko rieši.
 
 ### Prečo JSON súbor namiesto Room/SQLite?
 
@@ -137,7 +148,7 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 | `androidx.navigation` | Fragment navigácia |
 | `firebase-database` | Firebase Realtime Database |
 | `firebase-auth` | Firebase Authentication |
-| `BlurView` | Sklenený rozmazaný efekt pre navigáciu |
+
 
 ### Build konfigurácia
 

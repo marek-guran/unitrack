@@ -1,0 +1,167 @@
+# 🧪 Testovanie
+
+Tento dokument popisuje prístup k testovaniu aplikácie UniTrack — akými spôsobmi bola aplikácia testovaná, na akých zariadeniach, aké scenáre boli overované a aké sú výsledky.
+
+---
+
+## Prístup k testovaniu
+
+UniTrack bol testovaný primárne **manuálnym testovaním** na reálnych zariadeniach a emulátoroch. Vzhľadom na povahu aplikácie (úzke prepojenie s Firebase, bohatý UI s animáciami, notifikácie závislé od systémového času) bolo manuálne testovanie najefektívnejším spôsobom overenia správnosti.
+
+### Typy testovania
+
+| Typ | Popis | Pokrytie |
+|---|---|---|
+| **Funkčné testovanie** | Overenie správnosti jednotlivých funkcií (známky, dochádzka, rozvrh, notifikácie) | Kompletné |
+| **Integračné testovanie** | Overenie spolupráce komponentov (Firebase ↔ UI, offline ↔ online prepínanie) | Kompletné |
+| **UI/UX testovanie** | Testovanie používateľského rozhrania, animácií, responzivity | Kompletné |
+| **Testovanie na zariadeniach** | Overenie na rôznych veľkostiach obrazoviek a verziách Androidu | Podrobná matica nižšie |
+| **Regresné testovanie** | Kontrola, že nové zmeny nenarušili existujúcu funkcionalitu | Priebežné |
+| **Testovanie hraničných stavov** | Prázdna databáza, chýbajúci internet, veľký počet záznamov, neplatný vstup | Vybrané scenáre |
+
+---
+
+## Matica testovacích zariadení
+
+Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
+
+| Zariadenie | Typ | Android verzia | API | Veľkosť displeja | Režim |
+|---|---|---|---|---|---|
+| Samsung Galaxy S25 Ultra | Fyzické zariadenie | Android 16 | 36 | 6.9" (telefón) | Online + Offline |
+| Samsung Galaxy A35 5G | Fyzické zariadenie | Android 16 | 36 | 6.6" (telefón) | Online + Offline |
+| Google Pixel 9 Pro | Emulátor | Android 16 | 36 | 6.3" (telefón) | Online + Offline |
+| Pixel Tablet | Emulátor | Android 16 | 36 | 10.95" (tablet) | Online + Offline |
+
+### Poznámky k testovaniu
+
+- **Fyzické zariadenia:** Aplikácia bola priebežne testovaná na Samsung Galaxy S25 Ultra a Samsung Galaxy A35 5G, čo umožnilo overenie na reálnom hardvéri vrátane notifikácií, výkonu a Samsung One UI prostredia
+- **Android 16 (API 36):** Testovanie segmentovaného `ProgressStyle` v notifikáciách, overenie `POST_PROMOTED_NOTIFICATIONS` oprávnenia
+- **Tablet:** Overenie responzívneho dizajnu, textového režimu PillNavigationBar, tabletových layoutov (`layout-sw600dp`)
+
+---
+
+## Testovacie scenáre
+
+### 1. Prihlásenie a autentifikácia
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 1.1 | Prihlásenie s platným emailom a heslom | Presmerovanie na domovskú obrazovku | ✅ |
+| 1.2 | Prihlásenie s nesprávnym heslom | Zobrazenie chybovej hlášky | ✅ |
+| 1.3 | Prihlásenie s neexistujúcim emailom | Zobrazenie chybovej hlášky | ✅ |
+| 1.4 | Prihlásenie s prázdnym formulárom | Tlačidlo je neaktívne, validačná hláška | ✅ |
+| 1.5 | Automatické prihlásenie (zapamätaný používateľ) | Preskočenie prihlasovacieho okna | ✅ |
+| 1.6 | Spustenie offline režimu | Presmerovanie na domovskú obrazovku bez prihlásenia | ✅ |
+| 1.7 | Reset hesla z nastavení | Odoslaný email na obnovu hesla | ✅ |
+
+### 2. Správa známok
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 2.1 | Pridanie novej známky | Známka sa uloží a zobrazí v zozname | ✅ |
+| 2.2 | Úprava existujúcej známky | Známka sa aktualizuje | ✅ |
+| 2.3 | Odstránenie známky | Známka zmizne zo zoznamu | ✅ |
+| 2.4 | Pridanie známky v offline režime | Známka sa uloží lokálne | ✅ |
+| 2.5 | Overenie výpočtu priemeru | Priemer sa správne prepočíta po pridaní/úprave | ✅ |
+
+### 3. Dochádzka
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 3.1 | Zaznamenanie prítomnosti | Záznam sa uloží s dátumom a časom | ✅ |
+| 3.2 | Zaznamenanie neprítomnosti | Záznam s `absent = true` | ✅ |
+| 3.3 | Percentuálny výpočet dochádzky | Správne percento (prítomní/celkom) | ✅ |
+| 3.4 | Dochádzka v offline režime | Záznamy sa ukladajú lokálne | ✅ |
+
+### 4. Rozvrh a voľné dni
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 4.1 | Zobrazenie celého rozvrhu | Všetky hodiny pre aktuálny semester | ✅ |
+| 4.2 | Filter „Dnes" | Len dnešné hodiny | ✅ |
+| 4.3 | Filter párny/nepárny týždeň | Hodiny zodpovedajúce parite | ✅ |
+| 4.4 | Pridanie voľného dňa (celý deň) | Zrušenie všetkých hodín v daný deň | ✅ |
+| 4.5 | Pridanie voľného dňa (časový rozsah) | Zrušenie len kolidujúcich hodín | ✅ |
+| 4.6 | Voľný deň s rozsahom dátumov | Správne pokrytie viacerých dní | ✅ |
+| 4.7 | Detekcia časového konfliktu | Upozornenie pri prekrývajúcich sa hodinách | ✅ |
+
+### 5. Notifikácie
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 5.1 | Živá notifikácia — prebieha hodina | Zobrazenie názvu predmetu a učebne | ✅ |
+| 5.2 | Živá notifikácia — prestávka | Zobrazenie „Prestávka" + nasledujúca hodina | ✅ |
+| 5.3 | Živá notifikácia — po skončení vyučovania | Notifikácia sa automaticky zruší | ✅ |
+| 5.4 | Notifikácia — nová známka | Zvukové upozornenie s detailmi | ✅ |
+| 5.5 | Notifikácia — zrušená hodina | Zvukové upozornenie s názvom predmetu | ✅ |
+| 5.6 | Notifikácia — nová neprítomnosť | Zvukové upozornenie | ✅ |
+| 5.7 | Notifikácie po reštarte zariadenia | Alarmy sa nanovo naplánujú | ✅ |
+| 5.8 | Segmentovaný progress bar (Android 16) | Farebné segmenty pre hodiny a prestávky | ✅ |
+| 5.9 | Vypnutie notifikačného kanálu | Alarm sa zruší, notifikácia sa nezobrazuje | ✅ |
+
+### 6. Offline režim
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 6.1 | Spustenie v offline režime | Aplikácia funguje bez internetu | ✅ |
+| 6.2 | Export databázy do JSON | Kompletná záloha sa uloží | ✅ |
+| 6.3 | Import databázy zo súboru | Dáta sa obnovia, meno učiteľa sa synchronizuje | ✅ |
+| 6.4 | Reset aplikácie | Všetky dáta sa vymažú, presmerovanie na login | ✅ |
+| 6.5 | Živá notifikácia v offline | Rozvrh sa číta z lokálnej databázy | ✅ |
+
+### 7. Správa predmetov a semestrov
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 7.1 | Vytvorenie nového predmetu | Predmet sa uloží s názvom, učiteľom, semestrom | ✅ |
+| 7.2 | Zmena semestra predmetu | Automatická migrácia známok a dochádzky | ✅ |
+| 7.3 | Priradenie učiteľa k predmetu | Email učiteľa sa uloží | ✅ |
+| 7.4 | Odstránenie predmetu | Predmet a súvisiace dáta sa zmažú | ✅ |
+
+### 8. Responzívny dizajn
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 8.1 | Zobrazenie na telefóne (< 600dp) | Ikonový režim navigácie, kompaktné layouty | ✅ |
+| 8.2 | Zobrazenie na tablete (≥ 600dp) | Textový režim navigácie, rozšírené layouty | ✅ |
+| 8.3 | Tmavý režim na všetkých obrazovkách | Správne farby a kontrasty | ✅ |
+| 8.4 | Orientácia na výšku a šírku | Správne prekreslenie UI komponentov | ✅ |
+
+### 9. PDF reporty a tlač
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 9.1 | Export reportu predmetu | PDF s tabuľkou študentov, známkami, dochádzkou | ✅ |
+| 9.2 | Export výsledkov študenta | PDF s predmetmi a hodnoteniami | ✅ |
+| 9.3 | Export prehľadu učiteľa | PDF s predmetmi a štatistikami | ✅ |
+| 9.4 | Viacstránkový report | Automatické stránkovanie pri dlhom zozname | ✅ |
+
+---
+
+## Overenie kompatibility
+
+### Android verzie
+
+| Android verzia | API | Výsledok | Poznámka |
+|---|---|---|---|
+| Android 16 | 36 | ✅ Plne funkčné | ProgressStyle segmenty v notifikáciách, POST_PROMOTED_NOTIFICATIONS |
+
+### Veľkosti obrazoviek
+
+| Kategória | Šírka | Výsledok | Navigačný režim |
+|---|---|---|---|
+| Kompaktný telefón | < 360dp | ✅ Funkčné | Ikony |
+| Štandardný telefón | 360–599dp | ✅ Funkčné | Ikony |
+| Tablet | ≥ 600dp | ✅ Funkčné | Textové popisky |
+
+---
+
+## Poznámky k metodike testovania
+
+- **Manuálne testovanie** bolo zvolené ako primárna metóda, pretože umožňuje dôkladne overiť celý používateľský zážitok vrátane animácií, notifikácií a interakcie s Firebase v reálnom čase.
+- **Testovanie prebiehalo s realistickým objemom dát** — desiatky študentov a stovky známok, čo zodpovedá typickému nasadeniu v akademickom prostredí.
+- **Firebase Security Rules** sa nastavujú priamo vo Firebase Console — odporúčaná konfigurácia je popísaná v dokumente [Bezpečnosť](BEZPECNOST.md).
+
+---
+
+[← Späť na README](../README.md)

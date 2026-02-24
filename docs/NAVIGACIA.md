@@ -32,7 +32,7 @@ Domovská obrazovka (`navigation_home`) je štartovacia destinácia. Z nej vedie
 
 ## PillNavigationBar
 
-Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigationView`. Je to srdce navigácie — animovaná „pilulka" so skleneným efektom.
+Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigationView`. Je to srdce navigácie — animovaná „pilulka" s tieňovým efektom.
 
 ### Dva režimy zobrazenia
 
@@ -43,7 +43,7 @@ Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigati
 
 ### Vizuálne vlastnosti
 
-- **Pill efekt** — priesvitná „pilulka" s rozmazaným pozadím (BlurView) sa plynulo posúva za vybranou položkou
+- **Pill efekt** — priesvitná „pilulka" s tieňom sa plynulo posúva za vybranou položkou
 - **Animácie** — plynulý presun pilulky s `DecelerateInterpolator` (bez bounce efektu)
 - **Farebné miešanie** — farba textu/ikony sa plynulo mení pri presúvaní pilulky
 - **Okrajová deformácia** — položky blízko okraja sa mierne zmenšujú
@@ -139,8 +139,17 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 **Účel:** Nastavenia aplikácie.
 
 - Tmavý režim (switch) — ukladá sa do SharedPreferences
-- Online: správa predmetov pre admina, odhlásenie, zoznam adminov
-- Offline: export/import databázy, vytváranie školských rokov, reset aplikácie
+- **Nastavenia notifikácií:**
+  - Zapnutie/vypnutie živej aktualizácie rozvrhu
+  - Interval živej aktualizácie (1, 2, 5, 10, 15 minút)
+  - Minúty pred prvou hodinou (15, 30, 45, 60, 90 minút)
+  - Zapnutie/vypnutie kontroly zmien (známky, neprítomnosti, zrušené hodiny)
+  - Interval kontroly zmien (15, 30, 60, 120 minút)
+  - Zobrazenie učebne v notifikácii
+  - Zobrazenie nasledujúcej hodiny v notifikácii
+  - Optimalizácia batérie — tlačidlo na vypnutie systémovej optimalizácie
+- Online: správa akademických rokov, reset hesla, odhlásenie
+- Offline: export/import databázy, vytváranie školských rokov, nastavenie mena učiteľa, reset aplikácie
 
 ### DashboardFragment
 **Účel:** Dashboard obrazovka (momentálne placeholder/uvítacia obrazovka).
@@ -156,6 +165,14 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Tlačidlo „Lokálny režim" pre offline
 - Vstupné animácie (staggered fade + bounce)
 - Klávesnica „Done" triggeruje prihlásenie
+
+### SplashActivity
+**Účel:** Animovaná vstupná obrazovka (launcher).
+
+- Zobrazí logo a názov aplikácie s animáciou zdola nahor
+- Aplikuje tmavý režim zo SharedPreferences
+- Po 2 sekundách presmeruje na `MainActivity` s fade prechodom
+- Edge-to-edge zobrazenie bez ActionBaru
 
 ---
 
@@ -187,6 +204,7 @@ Všetky adaptéry sú v `data/model/` a obsluhujú zoznamy v rôznych fragmentoc
 | Hlavné taby | Medzi Home, Timetable, Settings... | Fade (200ms) |
 | Detail predmetu | Home → SubjectDetail | Slide in/out (left/right) |
 | Navigačná lišta | Vstup pri spustení | Slide + fade (600ms, decelerate) |
+| Splash → Main | Po 2 sekundách | Fade in/out |
 
 ### Dialógy
 
@@ -197,6 +215,7 @@ Aplikácia hojne využíva `AlertDialog` s vlastnými layoutmi pre:
 - Pridanie voľného dňa
 - Zápis predmetov
 - Editácia používateľa
+- Potvrdenie resetu aplikácie
 
 ---
 

@@ -26,16 +26,27 @@ class AttendanceAdapter(
     override fun onBindViewHolder(holder: AttendanceDetailViewHolder, position: Int) {
         val entry = attendanceList[position]
         holder.bind(entry, onEdit, onDelete)
+
+        // Alternating row color
+        val rowBgAttr = if (position % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val typedValue = android.util.TypedValue()
+        holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+        (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+            ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
     }
 
     override fun getItemCount(): Int = attendanceList.size
 
     class AttendanceDetailViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val dateText: TextView = itemView.findViewById(R.id.attendanceDate)
-        private val timeText: TextView = itemView.findViewById(R.id.attendanceTime)
-        private val noteText: TextView = itemView.findViewById(R.id.attendanceNote)
-        private val editBtn: Button = itemView.findViewById(R.id.editAttendanceBtn)
-        private val deleteBtn: Button = itemView.findViewById(R.id.deleteAttendanceBtn)
+        private val dateText: TextView = itemView.findViewById(R.id.textDate)
+        private val timeText: TextView = itemView.findViewById(R.id.textTime)
+        private val noteText: TextView = itemView.findViewById(R.id.textNote)
+        private val editBtn: Button = itemView.findViewById(R.id.btnEdit)
+        private val deleteBtn: Button = itemView.findViewById(R.id.btnDelete)
 
         fun formatDate(dateString: String): String {
             return try {
@@ -54,7 +65,12 @@ class AttendanceAdapter(
         ) {
             dateText.text = formatDate(entry.date)
             timeText.text = entry.time.ifBlank { "-" }
-            noteText.text = if (entry.note.isNotBlank()) "Poznámka: ${entry.note}" else ""
+            if (entry.note.isNotBlank()) {
+                noteText.text = "Poznámka: ${entry.note}"
+                noteText.visibility = View.VISIBLE
+            } else {
+                noteText.visibility = View.GONE
+            }
             editBtn.setOnClickListener { onEdit(entry) }
             deleteBtn.setOnClickListener { onDelete(entry) }
         }

@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="24dp">
+    android:padding="14dp">
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
@@ -21,9 +21,10 @@
         android:orientation="vertical">
 
         <TextView
+            android:id="@+id/dialogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Zapísať študentov"
+            android:text="Predmety"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="16dp" />
@@ -50,11 +51,19 @@
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:layout_marginBottom="4dp" />
 
-                <Spinner
-                    android:id="@+id/spinnerYear"
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp" />
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_pill_chip">
+                    <Spinner
+                        android:id="@+id/spinnerYear"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:popupBackground="@drawable/spinner_dropdown_bg"
+                        android:spinnerMode="dropdown" />
+                </FrameLayout>
             </LinearLayout>
 
             <LinearLayout
@@ -71,24 +80,71 @@
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:layout_marginBottom="4dp" />
 
-                <Spinner
-                    android:id="@+id/spinnerSemester"
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp" />
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_pill_chip">
+                    <Spinner
+                        android:id="@+id/spinnerSemester"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:popupBackground="@drawable/spinner_dropdown_bg"
+                        android:spinnerMode="dropdown" />
+                </FrameLayout>
             </LinearLayout>
         </LinearLayout>
 
-        <EditText
-            android:id="@+id/searchStudentEditText"
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Hľadať predmet..."
-            android:textColor="?attr/colorOnSurface"
-            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-            android:inputType="text"
-            android:drawableStart="@android:drawable/ic_menu_search"
-            android:padding="12dp" />
+            android:layout_marginBottom="8dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/searchStudentEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Hľadať predmet..."
+                android:inputType="text"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/enrollFilterChipGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipEnrollAll"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Všetci"
+                android:checked="true" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipEnrollEnrolled"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Zapísaní" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipEnrollNotEnrolled"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nezapísaní" />
+
+        </com.google.android.material.chip.ChipGroup>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/enrollStudentsRecyclerView"

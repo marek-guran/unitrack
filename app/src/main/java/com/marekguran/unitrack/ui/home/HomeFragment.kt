@@ -4,11 +4,21 @@ import android.annotation.SuppressLint
 import android.app.*
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.icu.util.Calendar
 import android.os.Bundle
+import android.os.CancellationSignal
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
+import android.print.pdf.PrintedPdfDocument
 import android.view.*
 import android.widget.*
 import androidx.activity.addCallback
+import androidx.core.app.NotificationCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,6 +35,7 @@ import com.marekguran.unitrack.data.model.*
 import com.marekguran.unitrack.databinding.FragmentHomeBinding
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
+import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import org.json.JSONObject
 import android.text.Editable
 import android.text.TextWatcher
@@ -114,7 +125,7 @@ class HomeFragment : Fragment() {
             onAddMark = { student -> showAddMarkDialog(student) },
             onShowAttendanceDetails = { student -> showAttendanceDetailDialog(student, requireView()) }
         )
-        subjectAdapter = SubjectAdapter(subjects) { subjectInfo ->
+        subjectAdapter = SubjectAdapter(subjects, onViewDetails = { subjectInfo ->
             if (isOffline) {
                 val student = StudentDetail(
                     studentUid = OfflineMode.LOCAL_USER_UID,
@@ -137,7 +148,9 @@ class HomeFragment : Fragment() {
                 )
                 openStudentMarksDialogAsStudent(student, subjectInfo.name)
             }
-        }
+        }, onAttendanceClick = { subjectInfo ->
+            showStudentAttendanceDialog(subjectInfo.name, subjectInfo.attendanceCount)
+        })
 
         binding.subjectRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.subjectRecyclerView.adapter = summaryAdapter
@@ -231,9 +244,11 @@ class HomeFragment : Fragment() {
         val yearIndex = allYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) defaultYearIndex else it }
         val semIndex = semesterKeys.indexOf(selectedSemester).let { if (it == -1) 0 else it }
         binding.schoolYearSpinner.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, allYearDisplay)
+            ArrayAdapter(requireContext(), R.layout.spinner_item, allYearDisplay)
+                .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
         binding.semesterSpinner.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, semesterDisplay)
+            ArrayAdapter(requireContext(), R.layout.spinner_item, semesterDisplay)
+                .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
         binding.schoolYearSpinner.setSelection(yearIndex)
         binding.semesterSpinner.setSelection(semIndex)
 
@@ -283,12 +298,12 @@ class HomeFragment : Fragment() {
                 copyYearKeys.add(key)
             }
             copyFromSpinner.adapter = ArrayAdapter(
-                requireContext(), android.R.layout.simple_spinner_item, copyOptions
-            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+                requireContext(), R.layout.spinner_item, copyOptions
+            ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
         } else {
             copyFromSpinner.adapter = ArrayAdapter(
-                requireContext(), android.R.layout.simple_spinner_item, copyOptions
-            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+                requireContext(), R.layout.spinner_item, copyOptions
+            ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
             db.child("school_years").get().addOnSuccessListener { snap ->
                 snap.children.sortedByDescending { it.key }.forEach { yearSnap ->
                     val key = yearSnap.key ?: return@forEach
@@ -394,6 +409,51 @@ class HomeFragment : Fragment() {
                 if (name != null) names[key] = name
             }
             val sortedKeys = keys.sortedDescending()
+
+            // For non-admin users, check if they are a teacher; if not, filter to enrolled years only
+            if (!isAdminUser) {
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                if (uid != null) {
+                    db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+                        if (teacherSnap.exists()) {
+                            // Teachers see all years
+                            onLoaded(sortedKeys, names)
+                        } else {
+                            // Students: check each year individually for enrollment
+                            val enrolledKeys = mutableListOf<String>()
+                            var checkedCount = 0
+                            if (sortedKeys.isEmpty()) {
+                                onLoaded(enrolledKeys, names)
+                                return@addOnSuccessListener
+                            }
+                            for (yearKey in sortedKeys) {
+                                db.child("students").child(yearKey).child(uid).get()
+                                    .addOnSuccessListener { studentSnap ->
+                                        if (studentSnap.exists()) {
+                                            enrolledKeys.add(yearKey)
+                                        }
+                                        checkedCount++
+                                        if (checkedCount == sortedKeys.size) {
+                                            // Preserve descending sort order
+                                            onLoaded(enrolledKeys.sortedDescending(), names)
+                                        }
+                                    }
+                                    .addOnFailureListener {
+                                        checkedCount++
+                                        if (checkedCount == sortedKeys.size) {
+                                            onLoaded(enrolledKeys.sortedDescending(), names)
+                                        }
+                                    }
+                            }
+                        }
+                    }.addOnFailureListener {
+                        // On failure, show all years as fallback
+                        onLoaded(sortedKeys, names)
+                    }
+                    return@addOnSuccessListener
+                }
+            }
+
             onLoaded(sortedKeys, names)
         }
     }
@@ -486,6 +546,27 @@ class HomeFragment : Fragment() {
                 holder.name.text = markWithKey.mark.name
                 holder.desc.text = markWithKey.mark.desc
                 holder.desc.visibility = if (markWithKey.mark.desc.isNullOrBlank()) View.GONE else View.VISIBLE
+
+                // Show date/time pill from timestamp
+                if (markWithKey.mark.timestamp > 0) {
+                    val instant = java.time.Instant.ofEpochMilli(markWithKey.mark.timestamp)
+                    val ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+                    holder.dateTime.text = ldt.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+                    holder.dateTime.visibility = View.VISIBLE
+                } else {
+                    holder.dateTime.visibility = View.GONE
+                }
+
+                // Alternating row color
+                val rowBgAttr = if (position % 2 == 0) {
+                    com.google.android.material.R.attr.colorSurfaceContainerLowest
+                } else {
+                    com.google.android.material.R.attr.colorSurfaceContainer
+                }
+                val typedValue = android.util.TypedValue()
+                holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                    ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
             }
         }
 
@@ -521,6 +602,7 @@ class HomeFragment : Fragment() {
         val grade: TextView = view.findViewById(R.id.markGrade)
         val name: TextView = view.findViewById(R.id.markName)
         val desc: TextView = view.findViewById(R.id.markDesc)
+        val dateTime: TextView = view.findViewById(R.id.markDateTime)
     }
 
     @SuppressLint("MissingInflatedId")
@@ -678,7 +760,8 @@ class HomeFragment : Fragment() {
                                 snap.getValue(Mark::class.java)
                             }.sortedByDescending { it.timestamp }
 
-                            val marks = marksList.map { it.grade }
+                            // Grades old→latest for homepage card display
+                            val marks = marksList.reversed().map { it.grade }
                             val average = calculateAverage(marks)
 
                             // Fetch attendance for this student in this subject
@@ -718,6 +801,12 @@ class HomeFragment : Fragment() {
                                         subjects.addAll(tempSubjects)
                                         subjectAdapter.notifyDataSetChanged()
                                         binding.subjectRecyclerView.adapter = subjectAdapter
+
+                                        // Show export button for students
+                                        binding.exportStudentResultsBtn.visibility = View.VISIBLE
+                                        binding.exportStudentResultsBtn.setOnClickListener {
+                                            exportStudentResults(studentName, year, semester, tempSubjects)
+                                        }
                                     }
                                 }
                         }
@@ -730,6 +819,7 @@ class HomeFragment : Fragment() {
         subjectSummaries.clear()
         val year = selectedSchoolYear
         val semester = selectedSemester
+        binding.exportStudentResultsBtn.visibility = View.GONE
 
         db.child("teachers").child(teacherUid).get().addOnSuccessListener { teacherSnap ->
             val teacherInfo = teacherSnap.getValue(String::class.java) ?: return@addOnSuccessListener
@@ -753,19 +843,58 @@ class HomeFragment : Fragment() {
                 db.child("students").child(year).get().addOnSuccessListener { studentsYearSnap ->
                     val subjectStudentCount = mutableMapOf<String, Int>()
                     for (subjectKey in subjectKeys) subjectStudentCount[subjectKey] = 0
+                    val uniqueStudentUids = mutableSetOf<String>()
 
                     studentsYearSnap.children.forEach { studentSnap ->
                         val studentObj = studentSnap.getValue(StudentDbModel::class.java)
                         val subjectList = studentObj?.subjects?.get(semester) ?: emptyList()
+                        var isInAnySubject = false
                         for (subjectKey in subjectKeys) {
                             if (subjectList.contains(subjectKey)) {
                                 subjectStudentCount[subjectKey] = subjectStudentCount[subjectKey]!! + 1
+                                isInAnySubject = true
                             }
+                        }
+                        if (isInAnySubject) {
+                            studentSnap.key?.let { uniqueStudentUids.add(it) }
                         }
                     }
 
                     var loadedCount = 0
                     val tempSummaries = mutableListOf<TeacherSubjectSummary>()
+                    val marksResults = mutableMapOf<String, String>()
+                    val attendanceResults = mutableMapOf<String, String>()
+                    val expectedCallbacks = subjectKeys.size * 2 // marks + attendance per subject
+                    var callbackCount = 0
+
+                    fun checkAllLoaded() {
+                        callbackCount++
+                        if (callbackCount == expectedCallbacks) {
+                            for (subjectKey in subjectKeys) {
+                                val name = predSnap.child(subjectKey).child("name").getValue(String::class.java) ?: subjectKey.replaceFirstChar { it.uppercaseChar() }
+                                tempSummaries.add(
+                                    TeacherSubjectSummary(
+                                        subjectKey = subjectKey,
+                                        subjectName = name,
+                                        studentCount = subjectStudentCount[subjectKey] ?: 0,
+                                        averageMark = marksResults[subjectKey] ?: "-",
+                                        averageAttendance = attendanceResults[subjectKey] ?: "-"
+                                    )
+                                )
+                            }
+                            subjectSummaries.clear()
+                            subjectSummaries.addAll(tempSummaries)
+                            summaryAdapter.notifyDataSetChanged()
+
+                            // Show export button for teachers
+                            binding.exportStudentResultsBtn.text = "Exportovať prehľad"
+                            binding.exportStudentResultsBtn.visibility = View.VISIBLE
+                            binding.exportStudentResultsBtn.setOnClickListener {
+                                exportTeacherSubjects(teacherName, year, semester, tempSummaries, uniqueStudentUids.size)
+                            }
+                        }
+                    }
+
                     for (subjectKey in subjectKeys) {
                         db.child("hodnotenia").child(year).child(semester).child(subjectKey).get().addOnSuccessListener { marksSnap ->
                             val allMarks = mutableListOf<Int>()
@@ -773,22 +902,26 @@ class HomeFragment : Fragment() {
                                 val marksList = studentSnap.children.mapNotNull { it.getValue(Mark::class.java) }
                                 allMarks.addAll(marksList.mapNotNull { gradeToInt(it.grade) })
                             }
-                            val avg = if (allMarks.isNotEmpty()) numericToGrade(allMarks.average()) else "-"
-                            val name = predSnap.child(subjectKey).child("name").getValue(String::class.java) ?: subjectKey.replaceFirstChar { it.uppercaseChar() }
-                            tempSummaries.add(
-                                TeacherSubjectSummary(
-                                    subjectKey = subjectKey,
-                                    subjectName = name,
-                                    studentCount = subjectStudentCount[subjectKey] ?: 0,
-                                    averageMark = avg
-                                )
-                            )
-                            loadedCount++
-                            if (loadedCount == subjectKeys.size) {
-                                subjectSummaries.clear()
-                                subjectSummaries.addAll(tempSummaries)
-                                summaryAdapter.notifyDataSetChanged()
+                            marksResults[subjectKey] = if (allMarks.isNotEmpty()) numericToGrade(allMarks.average()) else "-"
+                            checkAllLoaded()
+                        }
+                        db.child("pritomnost").child(year).child(semester).child(subjectKey).get().addOnSuccessListener { attSnap ->
+                            var totalPresent = 0
+                            var totalEntries = 0
+                            attSnap.children.forEach { studentSnap ->
+                                studentSnap.children.forEach { dateSnap ->
+                                    val entry = dateSnap.getValue(AttendanceEntry::class.java)
+                                    if (entry != null) {
+                                        totalEntries++
+                                        if (!entry.absent) totalPresent++
+                                    }
+                                }
                             }
+                            val studentCount = subjectStudentCount[subjectKey] ?: 0
+                            val maxPerStudent = if (studentCount > 0 && totalEntries > 0) Math.round(totalEntries.toFloat() / studentCount) else 0
+                            val avgPresent = if (studentCount > 0 && totalEntries > 0) Math.round(totalPresent.toFloat() / studentCount) else 0
+                            attendanceResults[subjectKey] = if (maxPerStudent > 0) "$avgPresent/$maxPerStudent" else "-"
+                            checkAllLoaded()
                         }
                     }
                 }
@@ -806,6 +939,7 @@ class HomeFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun showSubjectMenuOffline() {
         subjectSummaries.clear()
+        binding.exportStudentResultsBtn.visibility = View.GONE
         val year = selectedSchoolYear
         val semester = selectedSemester
         val subjects = localDb.getSubjects()
@@ -821,17 +955,21 @@ class HomeFragment : Fragment() {
         val studentsMap = localDb.getStudents(year)
         val subjectStudentCount = mutableMapOf<String, Int>()
         for (key in subjectKeys) subjectStudentCount[key] = 0
+        val uniqueStudentUids = mutableSetOf<String>()
 
-        for ((_, studentJson) in studentsMap) {
+        for ((studentUid, studentJson) in studentsMap) {
             val subjectsObj = studentJson.optJSONObject("subjects")
             val semSubjects = subjectsObj?.optJSONArray(semester)
             if (semSubjects != null) {
+                var isInAnySubject = false
                 for (i in 0 until semSubjects.length()) {
                     val subjectKey = semSubjects.optString(i)
                     if (subjectKey in subjectStudentCount) {
                         subjectStudentCount[subjectKey] = subjectStudentCount[subjectKey]!! + 1
+                        isInAnySubject = true
                     }
                 }
+                if (isInAnySubject) uniqueStudentUids.add(studentUid)
             }
         }
 
@@ -853,18 +991,49 @@ class HomeFragment : Fragment() {
                 }
             }
             val avg = if (allMarks.isNotEmpty()) numericToGrade(allMarks.average()) else "-"
+
+            // Calculate average attendance
+            var totalPresent = 0
+            var totalEntries = 0
+            val attPath = localDb.getJson("pritomnost/$year/$semester/$subjectKey")
+            if (attPath != null) {
+                for (studentUid in attPath.keys()) {
+                    val studentAtt = attPath.optJSONObject(studentUid) ?: continue
+                    for (dateKey in studentAtt.keys()) {
+                        val entryObj = studentAtt.optJSONObject(dateKey) ?: continue
+                        totalEntries++
+                        if (!entryObj.optBoolean("absent", false)) totalPresent++
+                    }
+                }
+            }
+            val studentCount = subjectStudentCount[subjectKey] ?: 0
+            val maxPerStudent = if (studentCount > 0 && totalEntries > 0) Math.round(totalEntries.toFloat() / studentCount) else 0
+            val avgPresent = if (studentCount > 0 && totalEntries > 0) Math.round(totalPresent.toFloat() / studentCount) else 0
+            val avgAttendance = if (maxPerStudent > 0) "$avgPresent/$maxPerStudent" else "-"
+
             tempSummaries.add(
                 TeacherSubjectSummary(
                     subjectKey = subjectKey,
                     subjectName = name,
                     studentCount = subjectStudentCount[subjectKey] ?: 0,
-                    averageMark = avg
+                    averageMark = avg,
+                    averageAttendance = avgAttendance
                 )
             )
         }
         subjectSummaries.addAll(tempSummaries)
         summaryAdapter.notifyDataSetChanged()
         binding.subjectRecyclerView.adapter = summaryAdapter
+
+        // Show export button for teacher (offline)
+        binding.exportStudentResultsBtn.text = "Exportovať prehľad"
+        binding.exportStudentResultsBtn.visibility = View.VISIBLE
+        binding.exportStudentResultsBtn.setOnClickListener {
+            val offlineTeacherName = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                .getString("teacher_name", null)?.takeIf { it.isNotBlank() }
+                ?: getString(R.string.offline_admin)
+            exportTeacherSubjects(offlineTeacherName, year, semester, tempSummaries, uniqueStudentUids.size)
+        }
     }
 
     private fun openSubjectDetail(subjectName: String, subjectKey: String) {
@@ -1517,6 +1686,498 @@ class HomeFragment : Fragment() {
             avg < 4.75 -> "D"
             avg < 5.25 -> "E"
             else -> "Fx"
+        }
+    }
+
+    private fun showStudentAttendanceDialog(subjectName: String, attendanceMap: Map<String, AttendanceEntry>) {
+        val context = requireContext()
+        val dialogView = LayoutInflater.from(context)
+            .inflate(R.layout.dialog_student_attendance, null)
+
+        dialogView.findViewById<TextView>(R.id.attendanceTitle).text = subjectName
+
+        val recyclerView = dialogView.findViewById<RecyclerView>(R.id.attendanceRecyclerView)
+        recyclerView.layoutManager = LinearLayoutManager(context)
+
+        val sorted = attendanceMap.values.sortedByDescending { it.date }
+        recyclerView.adapter = object : RecyclerView.Adapter<StudentAttendanceViewHolder>() {
+            override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StudentAttendanceViewHolder {
+                val view = LayoutInflater.from(parent.context)
+                    .inflate(R.layout.item_student_attendance_row, parent, false)
+                return StudentAttendanceViewHolder(view)
+            }
+            override fun getItemCount(): Int = sorted.size
+            override fun onBindViewHolder(holder: StudentAttendanceViewHolder, position: Int) {
+                val entry = sorted[position]
+                // Format date
+                holder.date.text = try {
+                    val inputFmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                    val outputFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+                    java.time.LocalDate.parse(entry.date, inputFmt).format(outputFmt)
+                } catch (_: Exception) { entry.date }
+
+                if (entry.note.isNotBlank()) {
+                    holder.note.text = entry.note
+                    holder.note.visibility = View.VISIBLE
+                } else {
+                    holder.note.visibility = View.GONE
+                }
+
+                if (entry.absent) {
+                    holder.status.text = "Neprítomný"
+                    holder.status.background = resources.getDrawable(R.drawable.bg_pill_tertiary_outlined, context.theme)
+                    holder.status.setTextColor(resolveThemeColor(context, com.google.android.material.R.attr.colorOnTertiaryContainer))
+                } else {
+                    holder.status.text = "Prítomný"
+                    holder.status.background = resources.getDrawable(R.drawable.bg_pill_chip_outlined, context.theme)
+                    holder.status.setTextColor(resolveThemeColor(context, com.google.android.material.R.attr.colorOnSecondaryContainer))
+                }
+
+                // Click to show full note from teacher
+                if (entry.note.isNotBlank()) {
+                    holder.itemView.setOnClickListener {
+                        val formattedDate = holder.date.text
+                        val noteDialogView = LayoutInflater.from(context)
+                            .inflate(R.layout.dialog_attendance_note, null)
+                        noteDialogView.findViewById<TextView>(R.id.noteDialogTitle).text = formattedDate
+                        val statusView = noteDialogView.findViewById<TextView>(R.id.noteDialogStatus)
+                        if (entry.absent) {
+                            statusView.text = "Neprítomný"
+                            statusView.background = resources.getDrawable(R.drawable.bg_pill_tertiary_outlined, context.theme)
+                            statusView.setTextColor(resolveThemeColor(context, com.google.android.material.R.attr.colorOnTertiaryContainer))
+                        } else {
+                            statusView.text = "Prítomný"
+                            statusView.background = resources.getDrawable(R.drawable.bg_pill_chip_outlined, context.theme)
+                            statusView.setTextColor(resolveThemeColor(context, com.google.android.material.R.attr.colorOnSecondaryContainer))
+                        }
+                        noteDialogView.findViewById<TextView>(R.id.noteDialogMessage).text = entry.note
+                        val noteDialog = Dialog(context)
+                        noteDialog.setContentView(noteDialogView)
+                        noteDialog.setCancelable(true)
+                        noteDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                        noteDialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
+                        noteDialogView.findViewById<MaterialButton>(R.id.noteDialogCloseBtn).setOnClickListener { noteDialog.dismiss() }
+                        noteDialog.show()
+                        noteDialog.window?.let { win ->
+                            val m = (10 * resources.displayMetrics.density).toInt()
+                            win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                            win.decorView.setPadding(m, m, m, m)
+                        }
+                    }
+                } else {
+                    holder.itemView.setOnClickListener(null)
+                    holder.itemView.isClickable = false
+                }
+
+                // Alternating row color
+                val rowBgAttr = if (position % 2 == 0) {
+                    com.google.android.material.R.attr.colorSurfaceContainerLowest
+                } else {
+                    com.google.android.material.R.attr.colorSurfaceContainer
+                }
+                val typedValue = android.util.TypedValue()
+                holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                    ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
+            }
+        }
+
+        val dialog = Dialog(context)
+        dialog.setContentView(dialogView)
+        dialog.setCancelable(true)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
+
+        dialogView.findViewById<MaterialButton>(R.id.closeButton).setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
+        dialog.window?.let { window ->
+            val margin = (10 * resources.displayMetrics.density).toInt()
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            window.decorView.setPadding(margin, margin, margin, margin)
+        }
+    }
+
+    class StudentAttendanceViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val date: TextView = view.findViewById(R.id.attendanceDate)
+        val note: TextView = view.findViewById(R.id.attendanceNote)
+        val status: TextView = view.findViewById(R.id.attendanceStatus)
+    }
+
+    private fun resolveThemeColor(context: Context, attr: Int): Int {
+        val typedValue = android.util.TypedValue()
+        context.theme.resolveAttribute(attr, typedValue, true)
+        return typedValue.data
+    }
+
+    private fun exportStudentResults(studentName: String, year: String, semester: String, subjectsList: List<SubjectInfo>) {
+        val semesterDisplay = if (semester == "zimny") "Zimný" else "Letný"
+        val yearDisplay = year.replace("_", "/")
+
+        val printManager = requireContext().getSystemService(Context.PRINT_SERVICE) as PrintManager
+        printManager.print(
+            "StudentResults",
+            StudentResultsPrintAdapter(
+                requireContext(), studentName, yearDisplay, semesterDisplay, subjectsList
+            ),
+            null
+        )
+    }
+
+    inner class StudentResultsPrintAdapter(
+        private val context: Context,
+        private val studentName: String,
+        private val academicYear: String,
+        private val semester: String,
+        private val subjectsList: List<SubjectInfo>
+    ) : PrintDocumentAdapter() {
+
+        private var pdfDocument: PrintedPdfDocument? = null
+
+        override fun onLayout(
+            oldAttributes: PrintAttributes?,
+            newAttributes: PrintAttributes,
+            cancellationSignal: CancellationSignal?,
+            layoutResultCallback: LayoutResultCallback,
+            extras: Bundle?
+        ) {
+            pdfDocument = PrintedPdfDocument(context, newAttributes)
+            val info = PrintDocumentInfo.Builder("$studentName-vysledky.pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(1)
+                .build()
+            layoutResultCallback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<PageRange>,
+            destination: android.os.ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal,
+            writeResultCallback: WriteResultCallback
+        ) {
+            val marginLeft = 40f
+            val pageWidth = 595f
+            val lineHeight = 20f
+            val paint = Paint().apply { textSize = 12f; isAntiAlias = true }
+
+            val page = pdfDocument!!.startPage(0)
+            val canvas = page.canvas
+            var y = 40f
+
+            // --- App logo header ---
+            try {
+                val logoSize = 36f
+                val renderSize = (logoSize * 4).toInt()
+                var logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round)
+                if (logoBitmap == null) {
+                    logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+                }
+                if (logoBitmap == null) {
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher_round)
+                        ?: androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+                    if (drawable != null) {
+                        logoBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                        val logoCanvas = Canvas(logoBitmap)
+                        drawable.setBounds(0, 0, renderSize, renderSize)
+                        drawable.draw(logoCanvas)
+                    }
+                }
+                if (logoBitmap != null) {
+                    val scaledLogo = android.graphics.Bitmap.createScaledBitmap(logoBitmap, renderSize, renderSize, true)
+                    val circularBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                    val circCanvas = Canvas(circularBitmap)
+                    val circPaint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+                    val renderRadius = renderSize / 2f
+                    circCanvas.drawCircle(renderRadius, renderRadius, renderRadius, circPaint)
+                    circPaint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                    circCanvas.drawBitmap(scaledLogo, 0f, 0f, circPaint)
+
+                    val destRect = android.graphics.RectF(marginLeft, y - logoSize + 10f, marginLeft + logoSize, y + 10f)
+                    canvas.drawBitmap(circularBitmap, null, destRect, Paint().apply { isAntiAlias = true; isFilterBitmap = true })
+                    val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                    canvas.drawText("UniTrack", marginLeft + logoSize + 8f, y, headerPaint)
+                    y += 20f
+                    canvas.drawLine(marginLeft, y, pageWidth - marginLeft, y, Paint().apply { color = 0xFFCCCCCC.toInt(); strokeWidth = 1f })
+                    y += 15f
+                }
+            } catch (_: Exception) {
+                val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                canvas.drawText("UniTrack", marginLeft, y, headerPaint)
+                y += 30f
+            }
+
+            // --- Student info ---
+            paint.textSize = 14f; paint.isFakeBoldText = true
+            canvas.drawText("Študent: $studentName", marginLeft, y, paint)
+            y += 24f
+            paint.isFakeBoldText = false; paint.textSize = 12f
+            canvas.drawText("Akademický rok: $academicYear", marginLeft, y, paint)
+            y += 20f
+            canvas.drawText("Semester: $semester", marginLeft, y, paint)
+            y += 20f
+            val printDateTime = java.time.LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+            canvas.drawText("Dátum tlače: $printDateTime", marginLeft, y, paint)
+            y += 30f
+
+            // --- Table ---
+            val columns = listOf("Predmet", "Semester", "Známky", "Priemer")
+            val colWidths = listOf(180f, 80f, 160f, 80f)
+            val tableWidth = colWidths.sum()
+
+            // Table header
+            val headerBg = Paint().apply { color = 0xFFE0E0E0.toInt(); style = Paint.Style.FILL }
+            canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + 30f, headerBg)
+            var x = marginLeft
+            paint.isFakeBoldText = true
+            for ((i, col) in columns.withIndex()) {
+                canvas.drawText(col, x + 5f, y + 20f, paint)
+                x += colWidths[i]
+            }
+            paint.isFakeBoldText = false
+            // Header borders
+            x = marginLeft
+            for (w in colWidths) { canvas.drawLine(x, y, x, y + 30f, paint); x += w }
+            canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + 30f, paint)
+            canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
+            canvas.drawLine(marginLeft, y + 30f, marginLeft + tableWidth, y + 30f, paint)
+            y += 30f
+
+            // Table rows — Predmet column supports multi-line wrapping
+            for (subject in subjectsList) {
+                val marksStr = subject.marks.joinToString(", ")
+
+                // Wrap subject name to fit within column width
+                val nameLines = wrapText(subject.name, paint, colWidths[0] - 10f)
+                val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
+
+                // Draw cell text
+                for ((lineIdx, line) in nameLines.withIndex()) {
+                    canvas.drawText(line, marginLeft + 5f, y + 14f + lineIdx * lineHeight, paint)
+                }
+                x = marginLeft + colWidths[0]
+                canvas.drawText(semester, x + 5f, y + 14f, paint); x += colWidths[1]
+                canvas.drawText(marksStr, x + 5f, y + 14f, paint); x += colWidths[2]
+                canvas.drawText(subject.average, x + 5f, y + 14f, paint)
+
+                // Row borders
+                x = marginLeft
+                for (w in colWidths) { canvas.drawLine(x, y, x, y + rowHeight, paint); x += w }
+                canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
+                canvas.drawLine(marginLeft, y + rowHeight, marginLeft + tableWidth, y + rowHeight, paint)
+                y += rowHeight
+            }
+
+            pdfDocument!!.finishPage(page)
+            pdfDocument!!.writeTo(android.os.ParcelFileDescriptor.AutoCloseOutputStream(destination))
+            pdfDocument!!.close()
+            pdfDocument = null
+            writeResultCallback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        }
+
+        private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
+            val words = text.split(" ")
+            val lines = mutableListOf<String>()
+            var currentLine = ""
+            for (word in words) {
+                val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                if (paint.measureText(testLine) > maxWidth && currentLine.isNotEmpty()) {
+                    lines.add(currentLine)
+                    currentLine = word
+                } else {
+                    currentLine = testLine
+                }
+            }
+            if (currentLine.isNotEmpty()) lines.add(currentLine)
+            return lines
+        }
+    }
+
+    private fun exportTeacherSubjects(teacherName: String, year: String, semester: String, summaries: List<TeacherSubjectSummary>, uniqueStudentCount: Int) {
+        val semesterDisplay = if (semester == "zimny") "Zimný" else "Letný"
+        val yearDisplay = year.replace("_", "/")
+
+        val printManager = requireContext().getSystemService(Context.PRINT_SERVICE) as PrintManager
+        printManager.print(
+            "TeacherSubjects",
+            TeacherSubjectsPrintAdapter(
+                requireContext(), teacherName, yearDisplay, semesterDisplay, summaries, uniqueStudentCount
+            ),
+            null
+        )
+    }
+
+    inner class TeacherSubjectsPrintAdapter(
+        private val context: Context,
+        private val teacherName: String,
+        private val academicYear: String,
+        private val semester: String,
+        private val summaries: List<TeacherSubjectSummary>,
+        private val uniqueStudentCount: Int
+    ) : PrintDocumentAdapter() {
+
+        private var pdfDocument: PrintedPdfDocument? = null
+
+        override fun onLayout(
+            oldAttributes: PrintAttributes?,
+            newAttributes: PrintAttributes,
+            cancellationSignal: CancellationSignal?,
+            layoutResultCallback: LayoutResultCallback,
+            extras: Bundle?
+        ) {
+            pdfDocument = PrintedPdfDocument(context, newAttributes)
+            val info = PrintDocumentInfo.Builder("$teacherName-predmety.pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(1)
+                .build()
+            layoutResultCallback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<PageRange>,
+            destination: android.os.ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal,
+            writeResultCallback: WriteResultCallback
+        ) {
+            val marginLeft = 40f
+            val pageWidth = 595f
+            val lineHeight = 20f
+            val paint = Paint().apply { textSize = 12f; isAntiAlias = true }
+
+            val page = pdfDocument!!.startPage(0)
+            val canvas = page.canvas
+            var y = 40f
+
+            // --- App logo header ---
+            try {
+                val logoSize = 36f
+                val renderSize = (logoSize * 4).toInt()
+                var logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round)
+                if (logoBitmap == null) {
+                    logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+                }
+                if (logoBitmap == null) {
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher_round)
+                        ?: androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+                    if (drawable != null) {
+                        logoBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                        val logoCanvas = Canvas(logoBitmap)
+                        drawable.setBounds(0, 0, renderSize, renderSize)
+                        drawable.draw(logoCanvas)
+                    }
+                }
+                if (logoBitmap != null) {
+                    val scaledLogo = android.graphics.Bitmap.createScaledBitmap(logoBitmap, renderSize, renderSize, true)
+                    val circularBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                    val circCanvas = Canvas(circularBitmap)
+                    val circPaint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+                    val renderRadius = renderSize / 2f
+                    circCanvas.drawCircle(renderRadius, renderRadius, renderRadius, circPaint)
+                    circPaint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                    circCanvas.drawBitmap(scaledLogo, 0f, 0f, circPaint)
+
+                    val destRect = android.graphics.RectF(marginLeft, y - logoSize + 10f, marginLeft + logoSize, y + 10f)
+                    canvas.drawBitmap(circularBitmap, null, destRect, Paint().apply { isAntiAlias = true; isFilterBitmap = true })
+                    val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                    canvas.drawText("UniTrack", marginLeft + logoSize + 8f, y, headerPaint)
+                    y += 20f
+                    canvas.drawLine(marginLeft, y, pageWidth - marginLeft, y, Paint().apply { color = 0xFFCCCCCC.toInt(); strokeWidth = 1f })
+                    y += 15f
+                }
+            } catch (_: Exception) {
+                val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                canvas.drawText("UniTrack", marginLeft, y, headerPaint)
+                y += 30f
+            }
+
+            // --- Teacher info ---
+            paint.textSize = 14f; paint.isFakeBoldText = true
+            canvas.drawText("Učiteľ: $teacherName", marginLeft, y, paint)
+            y += 24f
+            paint.isFakeBoldText = false; paint.textSize = 12f
+            canvas.drawText("Akademický rok: $academicYear", marginLeft, y, paint)
+            y += 20f
+            canvas.drawText("Semester: $semester", marginLeft, y, paint)
+            y += 20f
+            val printDateTime = java.time.LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+            canvas.drawText("Dátum tlače: $printDateTime", marginLeft, y, paint)
+            y += 30f
+
+            // --- Table ---
+            val columns = listOf("Predmet", "Študenti", "Priem. dochádzka", "Priem. známka")
+            val colWidths = listOf(180f, 70f, 120f, 110f)
+            val tableWidth = colWidths.sum()
+
+            // Table header
+            val headerBg = Paint().apply { color = 0xFFE0E0E0.toInt(); style = Paint.Style.FILL }
+            canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + 30f, headerBg)
+            var x = marginLeft
+            paint.isFakeBoldText = true
+            for ((i, col) in columns.withIndex()) {
+                canvas.drawText(col, x + 5f, y + 20f, paint)
+                x += colWidths[i]
+            }
+            paint.isFakeBoldText = false
+            // Header borders
+            x = marginLeft
+            for (w in colWidths) { canvas.drawLine(x, y, x, y + 30f, paint); x += w }
+            canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + 30f, paint)
+            canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
+            canvas.drawLine(marginLeft, y + 30f, marginLeft + tableWidth, y + 30f, paint)
+            y += 30f
+
+            // Table rows
+            for (summary in summaries) {
+                val nameLines = wrapText(summary.subjectName, paint, colWidths[0] - 10f)
+                val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
+
+                for ((lineIdx, line) in nameLines.withIndex()) {
+                    canvas.drawText(line, marginLeft + 5f, y + 14f + lineIdx * lineHeight, paint)
+                }
+                x = marginLeft + colWidths[0]
+                canvas.drawText("${summary.studentCount}", x + 5f, y + 14f, paint); x += colWidths[1]
+                canvas.drawText(summary.averageAttendance, x + 5f, y + 14f, paint); x += colWidths[2]
+                canvas.drawText(summary.averageMark, x + 5f, y + 14f, paint)
+
+                // Row borders
+                x = marginLeft
+                for (w in colWidths) { canvas.drawLine(x, y, x, y + rowHeight, paint); x += w }
+                canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
+                canvas.drawLine(marginLeft, y + rowHeight, marginLeft + tableWidth, y + rowHeight, paint)
+                y += rowHeight
+            }
+
+            // --- Summary ---
+            y += 30f
+            paint.isFakeBoldText = true
+            canvas.drawText("Zhrnutie:", marginLeft, y, paint)
+            paint.isFakeBoldText = false
+            y += 20f
+            canvas.drawText("Celkom predmetov: ${summaries.size}", marginLeft, y, paint)
+            y += 20f
+            canvas.drawText("Celkom unikátnych študentov: $uniqueStudentCount", marginLeft, y, paint)
+
+            pdfDocument!!.finishPage(page)
+            pdfDocument!!.writeTo(android.os.ParcelFileDescriptor.AutoCloseOutputStream(destination))
+            pdfDocument!!.close()
+            pdfDocument = null
+            writeResultCallback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+        }
+
+        private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
+            val words = text.split(" ")
+            val lines = mutableListOf<String>()
+            var currentLine = ""
+            for (word in words) {
+                val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
+                if (paint.measureText(testLine) > maxWidth && currentLine.isNotEmpty()) {
+                    lines.add(currentLine)
+                    currentLine = word
+                } else {
+                    currentLine = testLine
+                }
+            }
+            if (currentLine.isNotEmpty()) lines.add(currentLine)
+            return lines
         }
     }
 

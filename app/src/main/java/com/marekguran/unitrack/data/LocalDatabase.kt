@@ -329,6 +329,16 @@ class LocalDatabase private constructor(private val context: Context) {
         root = createDefaultDb()
     }
 
+    // --- Teacher name persistence ---
+
+    fun setTeacherName(name: String) {
+        put("settings/teacher_name", name)
+    }
+
+    fun getTeacherName(): String? {
+        return getString("settings/teacher_name")
+    }
+
     // --- Timetable methods ---
 
     fun getTimetableEntries(subjectKey: String): Map<String, JSONObject> {

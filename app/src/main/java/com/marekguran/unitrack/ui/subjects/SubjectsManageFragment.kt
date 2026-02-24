@@ -3,12 +3,15 @@ package com.marekguran.unitrack.ui.subjects
 import android.annotation.SuppressLint
 import android.app.Dialog
 import android.app.TimePickerDialog
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -37,6 +40,13 @@ class SubjectsManageFragment : Fragment() {
     private val filteredSubjectItems = mutableListOf<SubjectManageItem>()
     private lateinit var adapter: SubjectManageAdapter
 
+    private lateinit var prefs: SharedPreferences
+    private var selectedSchoolYear: String = ""
+    private var selectedSemester: String = "all"
+    private val filterSemesterKeys = listOf("all", "zimny", "letny")
+    private var schoolYearKeys = mutableListOf<String>()
+    private var searchQuery: String = ""
+
     data class SubjectManageItem(
         val key: String,
         val name: String,
@@ -50,17 +60,26 @@ class SubjectsManageFragment : Fragment() {
     ): View {
         val view = inflater.inflate(R.layout.fragment_subjects_manage, container, false)
 
+        prefs = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerSubjects)
         val fabAdd = view.findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.fabAddSubject)
         val searchInput = view.findViewById<TextInputEditText>(R.id.searchInput)
 
         adapter = SubjectManageAdapter(
             filteredSubjectItems,
-            onEdit = { subject -> showEditSubjectDialog(subject) },
-            onDelete = { subject -> confirmDeleteSubject(subject) }
+            onEdit = { subject -> showEditSubjectDialog(subject) }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
+
+        // Hide FAB on scroll down, show on scroll up
+        recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (dy > 0 && fabAdd.isShown) fabAdd.hide()
+                else if (dy < 0 && !fabAdd.isShown) fabAdd.show()
+            }
+        })
 
         fabAdd.setOnClickListener { showAddSubjectDialog() }
 
@@ -68,10 +87,12 @@ class SubjectsManageFragment : Fragment() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                filterSubjects(s?.toString() ?: "")
+                searchQuery = s?.toString() ?: ""
+                applyFilters()
             }
         })
 
+        setupFilterSpinners(view)
         loadSubjects()
 
         return view
@@ -84,17 +105,27 @@ class SubjectsManageFragment : Fragment() {
     }
 
     @SuppressLint("NotifyDataSetChanged")
-    private fun filterSubjects(query: String) {
+    private fun applyFilters() {
         filteredSubjectItems.clear()
-        if (query.isEmpty()) {
-            filteredSubjectItems.addAll(allSubjectItems)
-        } else {
-            val lowerQuery = query.lowercase()
-            filteredSubjectItems.addAll(allSubjectItems.filter {
+        var result = allSubjectItems.toList()
+
+        // Filter by semester
+        if (selectedSemester != "all") {
+            result = result.filter {
+                it.semester.isEmpty() || it.semester == "both" || it.semester == selectedSemester
+            }
+        }
+
+        // Filter by search query
+        if (searchQuery.isNotEmpty()) {
+            val lowerQuery = searchQuery.lowercase()
+            result = result.filter {
                 it.name.lowercase().contains(lowerQuery) ||
                         it.teacherEmail.lowercase().contains(lowerQuery)
-            })
+            }
         }
+
+        filteredSubjectItems.addAll(result)
         adapter.notifyDataSetChanged()
         updateEmptyState()
     }
@@ -119,10 +150,7 @@ class SubjectsManageFragment : Fragment() {
             allSubjectItems.add(SubjectManageItem(key, name, teacherEmail, semester))
         }
         allSubjectItems.sortBy { it.name.lowercase() }
-        filteredSubjectItems.clear()
-        filteredSubjectItems.addAll(allSubjectItems)
-        adapter.notifyDataSetChanged()
-        updateEmptyState()
+        applyFilters()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -140,10 +168,7 @@ class SubjectsManageFragment : Fragment() {
                     allSubjectItems.add(SubjectManageItem(key, name, teacherEmail, semester))
                 }
                 allSubjectItems.sortBy { it.name.lowercase() }
-                filteredSubjectItems.clear()
-                filteredSubjectItems.addAll(allSubjectItems)
-                adapter.notifyDataSetChanged()
-                updateEmptyState()
+                applyFilters()
             }
             override fun onCancelled(error: DatabaseError) {}
         })
@@ -158,6 +183,96 @@ class SubjectsManageFragment : Fragment() {
         } else {
             emptyText.visibility = View.GONE
             recycler.visibility = View.VISIBLE
+        }
+    }
+
+    private fun formatSchoolYear(key: String, names: Map<String, String>): String {
+        return names[key] ?: key.replace("_", "/")
+    }
+
+    private fun getFilterSemesterDisplayNames(): List<String> {
+        return listOf(
+            getString(R.string.timetable_filter_all),
+            getString(R.string.semester_winter),
+            getString(R.string.semester_summer)
+        )
+    }
+
+    private fun setupFilterSpinners(view: View) {
+        val yearSpinner = view.findViewById<Spinner>(R.id.schoolYearSpinner)
+        val semesterSpinner = view.findViewById<Spinner>(R.id.semesterSpinner)
+
+        // Semester spinner
+        val semesterDisplay = getFilterSemesterDisplayNames()
+        semesterSpinner.adapter = ArrayAdapter(
+            requireContext(), R.layout.spinner_item, semesterDisplay
+        ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+
+        val savedSemester = prefs.getString("subjects_filter_semester", "all") ?: "all"
+        selectedSemester = savedSemester
+        val semIndex = filterSemesterKeys.indexOf(selectedSemester).let { if (it == -1) 0 else it }
+        semesterSpinner.setSelection(semIndex)
+
+        semesterSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, v: View?, position: Int, id: Long) {
+                selectedSemester = filterSemesterKeys[position]
+                prefs.edit().putString("subjects_filter_semester", selectedSemester).apply()
+                applyFilters()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+
+        // School year spinner - load years from appropriate source
+        if (isOffline) {
+            setupYearSpinnerOffline(yearSpinner)
+        } else {
+            setupYearSpinnerOnline(yearSpinner)
+        }
+    }
+
+    private fun setupYearSpinnerOffline(yearSpinner: Spinner) {
+        val yearsMap = localDb.getSchoolYears()
+        populateYearSpinner(yearSpinner, yearsMap.keys.sortedDescending(), yearsMap)
+    }
+
+    private fun setupYearSpinnerOnline(yearSpinner: Spinner) {
+        val db = FirebaseDatabase.getInstance().reference
+        db.child("school_years").get().addOnSuccessListener { snap ->
+            if (!isAdded) return@addOnSuccessListener
+            val keys = mutableListOf<String>()
+            val names = mutableMapOf<String, String>()
+            for (yearSnap in snap.children) {
+                val key = yearSnap.key ?: continue
+                keys.add(key)
+                val name = yearSnap.child("name").getValue(String::class.java)
+                if (name != null) names[key] = name
+            }
+            populateYearSpinner(yearSpinner, keys.sortedDescending(), names)
+        }
+    }
+
+    private fun populateYearSpinner(yearSpinner: Spinner, sortedKeys: List<String>, names: Map<String, String>) {
+        schoolYearKeys.clear()
+        schoolYearKeys.addAll(sortedKeys)
+
+        val displayNames = sortedKeys.map { formatSchoolYear(it, names) }
+
+        yearSpinner.adapter = ArrayAdapter(
+            requireContext(), R.layout.spinner_item, displayNames
+        ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+
+        val savedYear = prefs.getString("school_year", null)
+        selectedSchoolYear = if (savedYear != null && savedYear in sortedKeys) savedYear
+            else sortedKeys.firstOrNull() ?: ""
+        val yearIndex = schoolYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) 0 else it }
+        yearSpinner.setSelection(yearIndex)
+
+        yearSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, v: View?, position: Int, id: Long) {
+                selectedSchoolYear = schoolYearKeys.getOrElse(position) { "" }
+                prefs.edit().putString("school_year", selectedSchoolYear).apply()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
     }
 
@@ -185,8 +300,8 @@ class SubjectsManageFragment : Fragment() {
         semesterLabel?.visibility = View.VISIBLE
         semesterSpinner?.visibility = View.VISIBLE
         semesterSpinner?.adapter = ArrayAdapter(
-            requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames()
-        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            requireContext(), R.layout.spinner_item, getSemesterDisplayNames()
+        ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
@@ -241,8 +356,8 @@ class SubjectsManageFragment : Fragment() {
         semesterLabel?.visibility = View.VISIBLE
         semesterSpinner?.visibility = View.VISIBLE
         semesterSpinner?.adapter = ArrayAdapter(
-            requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames()
-        ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            requireContext(), R.layout.spinner_item, getSemesterDisplayNames()
+        ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         // Pre-select current semester value
         val subjectJson = localDb.getSubjects()[subject.key]
@@ -276,6 +391,36 @@ class SubjectsManageFragment : Fragment() {
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
         dialog.show()
 
+        // Add delete button programmatically before the cancel/confirm row
+        val deleteBtn = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
+        deleteBtn.text = "Odstrániť predmet"
+        val errorTypedValue = android.util.TypedValue()
+        requireContext().theme.resolveAttribute(android.R.attr.colorError, errorTypedValue, true)
+        val errorColorInt = errorTypedValue.data
+        deleteBtn.setTextColor(errorColorInt)
+        deleteBtn.strokeColor = android.content.res.ColorStateList.valueOf(errorColorInt)
+        deleteBtn.cornerRadius = (12 * resources.displayMetrics.density).toInt()
+        deleteBtn.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (8 * resources.displayMetrics.density).toInt() }
+        // Find the main vertical LinearLayout inside the dialog
+        fun findVerticalLinearLayout(vg: ViewGroup): LinearLayout? {
+            for (i in 0 until vg.childCount) {
+                val child = vg.getChildAt(i)
+                if (child is LinearLayout && child.orientation == LinearLayout.VERTICAL) return child
+                if (child is ViewGroup) findVerticalLinearLayout(child)?.let { return it }
+            }
+            return null
+        }
+        findVerticalLinearLayout(dialogView as ViewGroup)?.let { mainLayout ->
+            mainLayout.addView(deleteBtn, mainLayout.childCount - 1)
+        }
+        deleteBtn.setOnClickListener {
+            dialog.dismiss()
+            confirmDeleteSubject(subject)
+        }
+
         dialogView.findViewById<MaterialButton>(R.id.cancelButton)
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
@@ -307,8 +452,8 @@ class SubjectsManageFragment : Fragment() {
         editTextSubjectName.setText(subject.name)
 
         // Semester spinner setup
-        val semesterAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, getSemesterDisplayNames())
-        semesterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        val semesterAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, getSemesterDisplayNames())
+        semesterAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         spinnerSemester.adapter = semesterAdapter
 
         val teacherNames = mutableListOf("(nepriradený)")
@@ -343,8 +488,8 @@ class SubjectsManageFragment : Fragment() {
                         teacherEmails.add(email)
                     }
                 }
-                val tAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, teacherNames)
-                tAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                val tAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, teacherNames)
+                tAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
                 spinnerTeachers.adapter = tAdapter
                 val index = teacherEmails.indexOf(subject.teacherEmail)
                 spinnerTeachers.setSelection(if (index >= 0) index else 0)
@@ -431,14 +576,12 @@ class SubjectsManageFragment : Fragment() {
     // --- Inner adapter for subject list ---
     class SubjectManageAdapter(
         private val subjects: List<SubjectManageItem>,
-        private val onEdit: (SubjectManageItem) -> Unit,
-        private val onDelete: (SubjectManageItem) -> Unit
+        private val onEdit: (SubjectManageItem) -> Unit
     ) : RecyclerView.Adapter<SubjectManageAdapter.ViewHolder>() {
 
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val name: TextView = view.findViewById(R.id.textSubjectName)
             val editBtn: MaterialButton = view.findViewById(R.id.btnEditSubject)
-            val deleteBtn: MaterialButton = view.findViewById(R.id.btnDeleteSubject)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -450,7 +593,17 @@ class SubjectsManageFragment : Fragment() {
             val subject = subjects[position]
             holder.name.text = subject.name
             holder.editBtn.setOnClickListener { onEdit(subject) }
-            holder.deleteBtn.setOnClickListener { onDelete(subject) }
+
+            // Alternating row color
+            val rowBgAttr = if (position % 2 == 0) {
+                com.google.android.material.R.attr.colorSurfaceContainerLowest
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainer
+            }
+            val typedValue = android.util.TypedValue()
+            holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+            (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
         }
 
         override fun getItemCount() = subjects.size
@@ -539,27 +692,43 @@ class SubjectsManageFragment : Fragment() {
     }
 
     private fun addTimetableEntryRow(container: LinearLayout, label: String, onEdit: () -> Unit) {
-        val row = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-            setPadding(0, 4, 0, 4)
+        val position = container.childCount
+        val card = com.google.android.material.card.MaterialCardView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (4 * resources.displayMetrics.density).toInt() }
+            radius = 12 * resources.displayMetrics.density
+            cardElevation = 0f
+            strokeWidth = (1 * resources.displayMetrics.density).toInt()
+            val outlineAttr = android.util.TypedValue()
+            context.theme.resolveAttribute(com.google.android.material.R.attr.colorOutlineVariant, outlineAttr, true)
+            setStrokeColor(android.content.res.ColorStateList.valueOf(outlineAttr.data))
+            // Alternating row color
+            val bgColorAttr = if (position % 2 == 0) {
+                com.google.android.material.R.attr.colorSurfaceContainerLowest
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainer
+            }
+            val bgAttr = android.util.TypedValue()
+            context.theme.resolveAttribute(bgColorAttr, bgAttr, true)
+            setCardBackgroundColor(bgAttr.data)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onEdit() }
         }
         val textView = TextView(requireContext()).apply {
             text = label
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            val pad = (12 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
         }
-        val editBtn = MaterialButton(requireContext(), null, com.google.android.material.R.attr.materialIconButtonStyle).apply {
-            text = "✎"
-            setOnClickListener { onEdit() }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-        row.addView(textView)
-        row.addView(editBtn)
-        container.addView(row)
+        card.addView(textView)
+        container.addView(card)
     }
 
     private fun showEditTimetableEntryDialog(
@@ -586,10 +755,10 @@ class SubjectsManageFragment : Fragment() {
         btnSave.text = "Uložiť"
         btnDelete.visibility = View.VISIBLE
 
-        spinnerDay.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, dayDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, parityDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         // Pre-fill current values
         spinnerDay.setSelection(dayKeys.indexOf(currentDay).coerceAtLeast(0))
@@ -680,11 +849,11 @@ class SubjectsManageFragment : Fragment() {
         val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveEntry)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelEntry)
 
-        spinnerDay.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, dayDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
-        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, parityDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         editStartTime.setOnClickListener { showTimePicker(editStartTime) }
         editEndTime.setOnClickListener { showTimePicker(editEndTime) }

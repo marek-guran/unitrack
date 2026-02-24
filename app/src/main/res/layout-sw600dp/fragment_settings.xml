@@ -14,8 +14,18 @@
         android:orientation="vertical"
         android:paddingStart="40dp"
         android:paddingEnd="40dp"
-        android:paddingTop="100dp"
+        android:paddingTop="48dp"
         android:paddingBottom="32dp">
+
+        <!-- App name label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:letterSpacing="0.1"
+            android:paddingBottom="4dp" />
 
         <!-- Title -->
         <TextView
@@ -133,6 +143,64 @@
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
         </LinearLayout>
+
+        <!-- Teacher name section (offline mode) -->
+        <TextView
+            android:id="@+id/labelTeacherSection"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Učiteľ"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05"
+            android:visibility="gone" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/layoutTeacherName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:hint="Meno učiteľa"
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:startIconDrawable="@android:drawable/ic_menu_myplaces">
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/editTeacherName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPersonName" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveTeacherName"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="Uložiť"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <!-- Admin: Add user section -->
         <com.google.android.material.card.MaterialCardView
@@ -409,6 +477,155 @@
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:text="@string/import_database"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Notification settings group -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Notifikácie"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <!-- Enable live timetable notifications -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchNotifLive"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Živé notifikácie rozvrhu"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:padding="4dp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- Live notification update interval -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Interval živých notifikácií (minúty)"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:layout_marginBottom="4dp" />
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/bg_pill_chip">
+                    <Spinner
+                        android:id="@+id/spinnerLiveInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:popupBackground="@drawable/spinner_dropdown_bg"
+                        android:spinnerMode="dropdown" />
+                </FrameLayout>
+
+                <!-- Minutes before class to start showing notification -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Zobraziť pred začiatkom hodiny (minúty)"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:layout_marginBottom="4dp" />
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/bg_pill_chip">
+                    <Spinner
+                        android:id="@+id/spinnerMinutesBefore"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:popupBackground="@drawable/spinner_dropdown_bg"
+                        android:spinnerMode="dropdown" />
+                </FrameLayout>
+
+                <!-- Enable changes notifications (grades, cancellations) -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchNotifChanges"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Notifikácie o zmenách (známky, zrušenia)"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:padding="4dp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- Changes check interval -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Interval kontroly zmien (minúty)"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:layout_marginBottom="4dp" />
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@drawable/bg_pill_chip">
+                    <Spinner
+                        android:id="@+id/spinnerChangesInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:popupBackground="@drawable/spinner_dropdown_bg"
+                        android:spinnerMode="dropdown" />
+                </FrameLayout>
+
+                <!-- Show classroom in notification -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchNotifClassroom"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Zobraziť učebňu v notifikácii"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:padding="4dp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- Show upcoming class -->
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchNotifUpcoming"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Zobraziť nadchádzajúcu hodinu"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                    android:padding="4dp"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Battery optimization button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBatteryOptimization"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:text="Vypnúť optimalizáciu batérie"
                     app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

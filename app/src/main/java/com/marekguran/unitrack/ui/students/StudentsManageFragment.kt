@@ -18,6 +18,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -25,6 +26,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -50,7 +52,11 @@ class StudentsManageFragment : Fragment() {
     private lateinit var adapter: StudentManageAdapter
     private var currentSearchQuery = ""
     private var currentRoleFilter = RoleFilter.ALL
+    private var currentSubjectFilter: String? = null
     private var adminUids = setOf<String>()
+    private val subjectKeysList = mutableListOf<String>()
+    private val subjectNamesList = mutableListOf<String>()
+    private val studentSubjectsMap = mutableMapOf<String, MutableSet<String>>()
 
     enum class RoleFilter { ALL, STUDENTS, TEACHERS, ADMINS }
 
@@ -81,17 +87,31 @@ class StudentsManageFragment : Fragment() {
         adapter = StudentManageAdapter(
             filteredStudentItems,
             isOffline = isOffline,
-            onAction = { student ->
-                if (isOffline) confirmDeleteStudent(student)
-                else showEditAccountDialog(student)
-            },
-            onSecondary = { student ->
-                if (student.isTeacher) showTeacherSubjectsDialog(student)
-                else showEnrollDialog(student)
+            onClick = { student -> showStudentOptionsDialog(student) },
+            onAction = { student, actionIndex ->
+                when (actionIndex) {
+                    0 -> {
+                        if (student.isTeacher) showTeacherSubjectsDialog(student)
+                        else showEnrollDialog(student)
+                    }
+                    1 -> showRenameDialog(student)
+                    2 -> {
+                        if (isOffline) confirmDeleteStudent(student)
+                        else showEditAccountDialog(student)
+                    }
+                }
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
+
+        // Hide FAB on scroll down, show on scroll up
+        recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (dy > 0 && fabAdd.isShown) fabAdd.hide()
+                else if (dy < 0 && !fabAdd.isShown) fabAdd.show()
+            }
+        })
 
         fabAdd.setOnClickListener {
             if (isOffline) showAddStudentDialogOffline() else showAddAccountDialogOnline()
@@ -116,7 +136,15 @@ class StudentsManageFragment : Fragment() {
             view.findViewById<Chip>(R.id.chipAdmins).setOnClickListener { currentRoleFilter = RoleFilter.ADMINS; applyFilters() }
         }
 
-        loadStudents()
+        // Setup subject filter spinner
+        val spinnerSubjectFilter = view.findViewById<Spinner>(R.id.spinnerSubjectFilter)
+        spinnerSubjectFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, v: View?, position: Int, id: Long) {
+                currentSubjectFilter = if (position == 0) null else subjectKeysList[position - 1]
+                applyFilters()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
 
         return view
     }
@@ -149,6 +177,10 @@ class StudentsManageFragment : Fragment() {
             }
         }
 
+        if (currentSubjectFilter != null) {
+            source = source.filter { studentSubjectsMap[it.uid]?.contains(currentSubjectFilter) == true }
+        }
+
         filteredStudentItems.addAll(source)
         adapter.notifyDataSetChanged()
         updateEmptyState()
@@ -162,26 +194,48 @@ class StudentsManageFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun loadStudentsOffline() {
         allStudentItems.clear()
+        studentSubjectsMap.clear()
+        subjectKeysList.clear()
+        subjectNamesList.clear()
         val year = getLatestYearOffline()
         if (year.isEmpty()) {
             filteredStudentItems.clear()
             adapter.notifyDataSetChanged()
             updateEmptyState()
+            populateSubjectSpinner()
             return
+        }
+        val semester = prefs.getString("semester", "zimny") ?: "zimny"
+        val subjects = localDb.getSubjects()
+        for ((key, subjectJson) in subjects) {
+            val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
+            subjectKeysList.add(key)
+            subjectNamesList.add(name)
         }
         val students = localDb.getStudents(year)
         for ((uid, json) in students) {
             val name = json.optString("name", "(bez mena)")
             val email = json.optString("email", "")
             allStudentItems.add(StudentManageItem(uid, name, email))
+            val subjectsObj = json.optJSONObject("subjects")
+            val semSubjects = subjectsObj?.optJSONArray(semester)
+            if (semSubjects != null) {
+                val enrolled = mutableSetOf<String>()
+                for (i in 0 until semSubjects.length()) enrolled.add(semSubjects.optString(i))
+                if (enrolled.isNotEmpty()) studentSubjectsMap[uid] = enrolled
+            }
         }
         allStudentItems.sortBy { it.name.lowercase() }
+        populateSubjectSpinner()
         applyFilters()
     }
 
     @SuppressLint("NotifyDataSetChanged")
     private fun loadStudentsOnline() {
         val db = FirebaseDatabase.getInstance().reference
+        studentSubjectsMap.clear()
+        subjectKeysList.clear()
+        subjectNamesList.clear()
 
         db.child("admins").get().addOnSuccessListener { adminSnap ->
             adminUids = adminSnap.children.mapNotNull { it.key }.toSet()
@@ -204,20 +258,27 @@ class StudentsManageFragment : Fragment() {
 
                     if (latestYear.isEmpty()) {
                         allStudentItems.sortBy { it.name.lowercase() }
-                        applyFilters()
+                        loadSubjectNamesOnline(db)
                         return@addOnSuccessListener
                     }
 
                     db.child("students").child(latestYear).get().addOnSuccessListener { studentSnap ->
+                        val semester = prefs.getString("semester", "zimny") ?: "zimny"
                         for (child in studentSnap.children) {
                             val uid = child.key ?: continue
                             if (uid in teacherUids) continue
                             val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
                             val email = child.child("email").getValue(String::class.java) ?: ""
                             allStudentItems.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in adminUids))
+                            val enrolled = mutableSetOf<String>()
+                            child.child("subjects").child(semester).children.forEach { subjectChild ->
+                                val subjectKey = subjectChild.getValue(String::class.java)
+                                if (subjectKey != null) enrolled.add(subjectKey)
+                            }
+                            if (enrolled.isNotEmpty()) studentSubjectsMap[uid] = enrolled
                         }
                         allStudentItems.sortBy { it.name.lowercase() }
-                        applyFilters()
+                        loadSubjectNamesOnline(db)
                     }
                 }
             }
@@ -445,17 +506,11 @@ class StudentsManageFragment : Fragment() {
                                 onResult("Chyba: Nie je nastavený žiadny školský rok.")
                                 return@addOnSuccessListener
                             }
-                            val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
-                            db.child("predmety").get().addOnSuccessListener { snapshot ->
-                                val allSubjects = snapshot.children.mapNotNull { it.key }
-                                val subjectsMap = mapOf(currentSemester to allSubjects)
-
-                                val studentObj = mapOf(
-                                    "email" to email,
-                                    "name" to name,
-                                    "subjects" to subjectsMap
-                                )
-                                db.child("students").child(latestSchoolYear).child(userId).setValue(studentObj)
+                            val studentObj = mapOf(
+                                "email" to email,
+                                "name" to name
+                            )
+                            db.child("students").child(latestSchoolYear).child(userId).setValue(studentObj)
                                     .addOnSuccessListener {
                                         secondaryAuth.sendPasswordResetEmail(email)
                                             .addOnCompleteListener { resetTask ->
@@ -471,7 +526,6 @@ class StudentsManageFragment : Fragment() {
                                         secondaryAuth.signOut()
                                         onResult("Chyba pri ukladaní do DB: ${ex.message}")
                                     }
-                            }
                         }
                     }
                 } else {
@@ -658,18 +712,19 @@ class StudentsManageFragment : Fragment() {
         val spinnerYear = dialogView.findViewById<Spinner>(R.id.spinnerYear)
         val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Predmety · ${student.name}"
         searchEdit.hint = "Hľadať predmet..."
 
         val yearsMap = localDb.getSchoolYears()
         val yearKeys = yearsMap.keys.sortedDescending()
         val yearDisplay = yearKeys.map { yearsMap[it] ?: it.replace("_", "/") }
-        spinnerYear.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, yearDisplay)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerYear.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, yearDisplay)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         val semesterKeys = listOf("zimny", "letny")
         val semesterDisplay = listOf("Zimný", "Letný")
-        spinnerSemester.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, semesterDisplay)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerSemester.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, semesterDisplay)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
         spinnerSemester.setSelection(semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it })
@@ -766,15 +821,16 @@ class StudentsManageFragment : Fragment() {
             val spinnerYear = dialogView.findViewById<Spinner>(R.id.spinnerYear)
             val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
+            dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Predmety · ${student.name}"
             searchEdit.hint = "Hľadať predmet..."
 
-            spinnerYear.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, yearDisplay)
-                .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            spinnerYear.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, yearDisplay)
+                .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
             val semesterKeys = listOf("zimny", "letny")
             val semesterDisplay = listOf("Zimný", "Letný")
-            spinnerSemester.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, semesterDisplay)
-                .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            spinnerSemester.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, semesterDisplay)
+                .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
             val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
             spinnerSemester.setSelection(semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it })
@@ -860,6 +916,117 @@ class StudentsManageFragment : Fragment() {
         }
     }
 
+    // --- Card click: show options ---
+    private fun showStudentOptionsDialog(student: StudentManageItem) {
+        val options = if (isOffline) {
+            arrayOf("Predmety", "Premenovať", "Odstrániť")
+        } else {
+            arrayOf("Predmety", "Premenovať", "Upraviť")
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(student.name)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> {
+                        if (student.isTeacher) showTeacherSubjectsDialog(student)
+                        else showEnrollDialog(student)
+                    }
+                    1 -> showRenameDialog(student)
+                    2 -> {
+                        if (isOffline) confirmDeleteStudent(student)
+                        else showEditAccountDialog(student)
+                    }
+                }
+            }
+            .show()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun showRenameDialog(student: StudentManageItem) {
+        val input = EditText(requireContext())
+        input.setText(student.name)
+        input.setSelection(input.text.length)
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Premenovať")
+            .setView(input)
+            .setPositiveButton("Uložiť") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isEmpty()) {
+                    Toast.makeText(requireContext(), "Zadajte meno.", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (isOffline) {
+                    val year = getLatestYearOffline()
+                    if (year.isNotEmpty()) {
+                        localDb.updateStudentName(year, student.uid, newName)
+                        loadStudents()
+                    }
+                } else {
+                    val db = FirebaseDatabase.getInstance().reference
+                    if (student.isTeacher) {
+                        db.child("teachers").child(student.uid).setValue("${student.email}, $newName")
+                            .addOnSuccessListener {
+                                Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                                loadStudents()
+                            }
+                    } else {
+                        db.child("school_years").get().addOnSuccessListener { snap ->
+                            val years = snap.children.mapNotNull { it.key }
+                            for (year in years) {
+                                db.child("students").child(year).child(student.uid).child("name").setValue(newName)
+                            }
+                            Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                            loadStudents()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Zrušiť", null)
+            .show()
+    }
+
+    // --- Subject filter helpers ---
+    private fun populateSubjectSpinner() {
+        val spinner = view?.findViewById<Spinner>(R.id.spinnerSubjectFilter) ?: return
+        val displayList = mutableListOf("Všetky predmety")
+        displayList.addAll(subjectNamesList)
+        spinner.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, displayList)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+        val previousIndex = if (currentSubjectFilter != null) {
+            val idx = subjectKeysList.indexOf(currentSubjectFilter!!)
+            if (idx >= 0) idx + 1 else 0
+        } else 0
+        spinner.setSelection(previousIndex)
+    }
+
+    private fun loadSubjectNamesOnline(db: DatabaseReference) {
+        db.child("predmety").get().addOnSuccessListener { subjectsSnap ->
+            subjectKeysList.clear()
+            subjectNamesList.clear()
+            for (subjectSnap in subjectsSnap.children) {
+                val key = subjectSnap.key ?: continue
+                val name = subjectSnap.child("name").getValue(String::class.java)
+                    ?: key.replaceFirstChar { it.uppercaseChar() }
+                subjectKeysList.add(key)
+                subjectNamesList.add(name)
+                val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                if (teacherEmail.isNotEmpty()) {
+                    val teacher = allStudentItems.find { it.isTeacher && it.email == teacherEmail }
+                    if (teacher != null) {
+                        studentSubjectsMap.getOrPut(teacher.uid) { mutableSetOf() }.add(key)
+                    }
+                }
+            }
+            populateSubjectSpinner()
+            applyFilters()
+        }.addOnFailureListener {
+            populateSubjectSpinner()
+            applyFilters()
+        }
+    }
+
     // --- Helpers ---
     private fun getLatestYearOffline(): String {
         val yearsMap = localDb.getSchoolYears()
@@ -882,14 +1049,33 @@ class StudentsManageFragment : Fragment() {
     class StudentManageAdapter(
         private val students: List<StudentManageItem>,
         private val isOffline: Boolean,
-        private val onAction: (StudentManageItem) -> Unit,
-        private val onSecondary: (StudentManageItem) -> Unit
+        private val onClick: (StudentManageItem) -> Unit,
+        private val onAction: ((StudentManageItem, Int) -> Unit)? = null
     ) : RecyclerView.Adapter<StudentManageAdapter.ViewHolder>() {
+
+        companion object {
+            private val GRADE_MAP = mapOf("A" to 1.0, "B" to 2.0, "C" to 3.0, "D" to 4.0, "E" to 5.0, "FX" to 6.0, "Fx" to 6.0, "F" to 6.0)
+            fun formatAverage(grades: List<Double>): String {
+                if (grades.isEmpty()) return "—"
+                val avg = grades.average()
+                val letter = when {
+                    avg <= 1.5 -> "A"
+                    avg <= 2.5 -> "B"
+                    avg <= 3.5 -> "C"
+                    avg <= 4.5 -> "D"
+                    avg <= 5.5 -> "E"
+                    else -> "FX"
+                }
+                return "Priemer: $letter"
+            }
+        }
+
+        private var expandedPosition = -1
 
         class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val name: TextView = view.findViewById(R.id.textStudentName)
-            val enrollBtn: MaterialButton = view.findViewById(R.id.btnEnrollStudent)
-            val deleteBtn: MaterialButton = view.findViewById(R.id.btnDeleteStudent)
+            val averageText: TextView = view.findViewById(R.id.textStudentAverage)
+            val expandedOptions: LinearLayout = view.findViewById(R.id.expandedOptions)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -900,27 +1086,132 @@ class StudentsManageFragment : Fragment() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val student = students[position]
             holder.name.text = student.name
+            holder.averageText.text = "Počítam…"
 
-            if (isOffline) {
-                holder.enrollBtn.text = "Zápis"
-                holder.enrollBtn.setOnClickListener { onSecondary(student) }
-                holder.deleteBtn.text = "Odstrániť"
-                holder.deleteBtn.setOnClickListener { onAction(student) }
-            } else {
-                // Secondary button: "Predmety" for teachers, "Zápis" for students
-                holder.enrollBtn.text = if (student.isTeacher) "Predmety" else "Zápis"
-                holder.enrollBtn.setOnClickListener { onSecondary(student) }
-                // Action button: "Upraviť" (edit) instead of delete
-                holder.deleteBtn.text = "Upraviť"
-                val ctx = holder.deleteBtn.context
-                val typedValue = TypedValue()
-                val resolved = ctx.theme.resolveAttribute(android.R.attr.colorPrimary, typedValue, true)
-                if (resolved && typedValue.resourceId != 0) {
-                    val primaryColor = ContextCompat.getColor(ctx, typedValue.resourceId)
-                    holder.deleteBtn.setTextColor(primaryColor)
-                    holder.deleteBtn.strokeColor = android.content.res.ColorStateList.valueOf(primaryColor)
+            // Calculate average grade from all subjects
+            calculateStudentAverage(holder, student)
+
+            val isExpanded = position == expandedPosition
+            holder.expandedOptions.visibility = if (isExpanded) View.VISIBLE else View.GONE
+
+            holder.expandedOptions.removeAllViews()
+            if (isExpanded) {
+                val ctx = holder.itemView.context
+                val density = ctx.resources.displayMetrics.density
+                val options = if (isOffline) {
+                    listOf("Predmety", "Premenovať", "Odstrániť")
+                } else {
+                    listOf("Predmety", "Premenovať", "Upraviť")
                 }
-                holder.deleteBtn.setOnClickListener { onAction(student) }
+                for ((index, option) in options.withIndex()) {
+                    val btn = MaterialButton(ctx, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = option
+                        textSize = 11f
+                        cornerRadius = (10 * density).toInt()
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            marginEnd = (6 * density).toInt()
+                        }
+                        setOnClickListener {
+                            if (onAction != null) {
+                                onAction.invoke(student, index)
+                            } else {
+                                onClick(student)
+                            }
+                        }
+                    }
+                    holder.expandedOptions.addView(btn)
+                }
+            }
+
+            holder.itemView.setOnClickListener {
+                val prevExpanded = expandedPosition
+                expandedPosition = if (isExpanded) -1 else holder.adapterPosition
+                if (prevExpanded >= 0) notifyItemChanged(prevExpanded)
+                if (!isExpanded) notifyItemChanged(holder.adapterPosition)
+            }
+
+            // Alternating row color
+            val rowBgAttr = if (position % 2 == 0) {
+                com.google.android.material.R.attr.colorSurfaceContainerLowest
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainer
+            }
+            val typedValue = android.util.TypedValue()
+            holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+            (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
+        }
+
+        private fun calculateStudentAverage(holder: ViewHolder, student: StudentManageItem) {
+            if (isOffline) {
+                val ctx = holder.itemView.context
+                val localDb = LocalDatabase.getInstance(ctx)
+                val prefs = ctx.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+                val year = prefs.getString("school_year", "") ?: ""
+                val semester = prefs.getString("semester", "") ?: ""
+                if (year.isEmpty() || semester.isEmpty()) {
+                    holder.averageText.text = "—"
+                    return
+                }
+                val studentJson = localDb.getJson("students/$year/${student.uid}")
+                val subjectsObj = studentJson?.optJSONObject("subjects")
+                val semSubjects = subjectsObj?.optJSONArray(semester)
+                val subjectKeys = mutableListOf<String>()
+                if (semSubjects != null) {
+                    for (i in 0 until semSubjects.length()) subjectKeys.add(semSubjects.optString(i))
+                }
+                val allGrades = mutableListOf<Double>()
+                for (subjectKey in subjectKeys) {
+                    val marks = localDb.getMarks(year, semester, subjectKey, student.uid)
+                    for ((_, markJson) in marks) {
+                        val grade = markJson.optString("grade", "")
+                        GRADE_MAP[grade]?.let { allGrades.add(it) }
+                    }
+                }
+                holder.averageText.text = formatAverage(allGrades)
+            } else {
+                // Online mode: fetch marks from Firebase
+                val ctx = holder.itemView.context
+                val prefs = ctx.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+                val year = prefs.getString("school_year", "") ?: ""
+                val semester = prefs.getString("semester", "") ?: ""
+                if (year.isEmpty() || semester.isEmpty() || student.isTeacher) {
+                    holder.averageText.text = if (student.isTeacher) "Učiteľ" else "—"
+                    return
+                }
+                val db = FirebaseDatabase.getInstance().reference
+                db.child("students").child(year).child(student.uid).child("subjects").child(semester)
+                    .get().addOnSuccessListener { subjectsSnap ->
+                        val subjectKeys = mutableListOf<String>()
+                        for (child in subjectsSnap.children) {
+                            child.getValue(String::class.java)?.let { subjectKeys.add(it) }
+                        }
+                        if (subjectKeys.isEmpty()) {
+                            holder.averageText.text = "—"
+                            return@addOnSuccessListener
+                        }
+                        val allGrades = mutableListOf<Double>()
+                        var pending = subjectKeys.size
+                        for (subjectKey in subjectKeys) {
+                            db.child("hodnotenia").child(year).child(semester).child(subjectKey).child(student.uid)
+                                .get().addOnSuccessListener { marksSnap ->
+                                    for (markSnap in marksSnap.children) {
+                                        val grade = markSnap.child("grade").getValue(String::class.java) ?: ""
+                                        GRADE_MAP[grade]?.let { allGrades.add(it) }
+                                    }
+                                    pending--
+                                    if (pending == 0) holder.averageText.text = formatAverage(allGrades)
+                                }.addOnFailureListener {
+                                    pending--
+                                    if (pending == 0) holder.averageText.text = formatAverage(allGrades)
+                                }
+                        }
+                    }.addOnFailureListener {
+                        holder.averageText.text = "—"
+                    }
             }
         }
 
@@ -952,6 +1243,17 @@ class StudentsManageFragment : Fragment() {
             holder.enrolled.setOnCheckedChangeListener { _, checked ->
                 onCheckedChange(position, checked)
             }
+
+            // Alternating row color
+            val rowBgAttr = if (position % 2 == 0) {
+                com.google.android.material.R.attr.colorSurfaceContainerLowest
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainer
+            }
+            val typedValue = android.util.TypedValue()
+            holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+            (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
         }
 
         override fun getItemCount() = subjects.size

@@ -44,6 +44,17 @@ class AttendanceStudentAdapter(
             updateChipAppearance(holder.chip, isChecked)
             onPresentChanged(position, isChecked)
         }
+
+        // Alternating row color
+        val rowBgAttr = if (position % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val rowTypedValue = android.util.TypedValue()
+        holder.itemView.context.theme.resolveAttribute(rowBgAttr, rowTypedValue, true)
+        (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(rowTypedValue.data)
+            ?: run { holder.itemView.setBackgroundColor(rowTypedValue.data) }
     }
 
     private fun updateChipAppearance(chip: Chip, isPresent: Boolean) {

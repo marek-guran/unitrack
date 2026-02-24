@@ -51,7 +51,8 @@ class SubjectDetailFragment : Fragment() {
     inner class SubjectReportPrintAdapter(
         private val context: Context,
         private val subjectName: String,
-        private val students: List<StudentDetail>
+        private val students: List<StudentDetail>,
+        private val teacherName: String
     ) : PrintDocumentAdapter() {
 
         private var pdfDocument: PrintedPdfDocument? = null
@@ -80,8 +81,8 @@ class SubjectDetailFragment : Fragment() {
             writeResultCallback: WriteResultCallback
         ) {
             val columns = listOf("Meno Študenta", "Prítomnosť", "Známky", "Priemer")
-            val lineHeight = 18f
-            val paint = Paint().apply { textSize = 14f }
+            val lineHeight = 20f
+            val paint = Paint().apply { textSize = 12f; isAntiAlias = true }
 
             // Dynamic column widths based on student name lengths
             val marginLeft = 40f
@@ -100,11 +101,78 @@ class SubjectDetailFragment : Fragment() {
             var page = pdfDocument!!.startPage(pageNum)
             var canvas = page.canvas
 
+            // --- App logo header ---
+            try {
+                val logoSize = 36f
+                val renderSize = (logoSize * 4).toInt() // render at 4x for sharp PDF output
+                // Try BitmapFactory first; fallback to drawable-to-bitmap for adaptive icons
+                var logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round)
+                if (logoBitmap == null) {
+                    logoBitmap = android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+                }
+                if (logoBitmap == null) {
+                    // Adaptive icons return null from BitmapFactory; draw via Drawable
+                    val drawable = androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher_round)
+                        ?: androidx.core.content.ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+                    if (drawable != null) {
+                        logoBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                        val logoCanvas = Canvas(logoBitmap)
+                        drawable.setBounds(0, 0, renderSize, renderSize)
+                        drawable.draw(logoCanvas)
+                    }
+                }
+                if (logoBitmap != null) {
+                    val scaledLogo = android.graphics.Bitmap.createScaledBitmap(logoBitmap, renderSize, renderSize, true)
+                    // Create circular bitmap at high resolution
+                    val circularBitmap = android.graphics.Bitmap.createBitmap(renderSize, renderSize, android.graphics.Bitmap.Config.ARGB_8888)
+                    val circCanvas = Canvas(circularBitmap)
+                    val circPaint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+                    val renderRadius = renderSize / 2f
+                    circCanvas.drawCircle(renderRadius, renderRadius, renderRadius, circPaint)
+                    circPaint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                    circCanvas.drawBitmap(scaledLogo, 0f, 0f, circPaint)
+
+                    // Draw high-res bitmap scaled down to logoSize on canvas
+                    val destRect = android.graphics.RectF(marginLeft, y - logoSize + 10f, marginLeft + logoSize, y + 10f)
+                    val drawPaint = Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+                    canvas.drawBitmap(circularBitmap, null, destRect, drawPaint)
+                    val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                    canvas.drawText("UniTrack", marginLeft + logoSize + 8f, y, headerPaint)
+                    y += 20f
+                    // Divider line
+                    val dividerPaint = Paint().apply { color = 0xFFCCCCCC.toInt(); strokeWidth = 1f }
+                    canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, dividerPaint)
+                    y += 15f
+                } else {
+                    val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                    canvas.drawText("UniTrack", marginLeft, y, headerPaint)
+                    y += 30f
+                }
+            } catch (_: Exception) {
+                // Fallback: just text header
+                val headerPaint = Paint().apply { textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
+                canvas.drawText("UniTrack", marginLeft, y, headerPaint)
+                y += 30f
+            }
+
             // --- Title
+            paint.textSize = 14f
             paint.isFakeBoldText = true
             canvas.drawText("Predmet: $subjectName", 40f, y, paint)
-            y += 30f
+            y += 24f
             paint.isFakeBoldText = false
+            paint.textSize = 12f
+
+            // Teacher name
+            if (teacherName.isNotBlank()) {
+                canvas.drawText("Učiteľ: $teacherName", 40f, y, paint)
+                y += 20f
+            }
+            // Print date/time
+            val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+            val printDateTime = dateFormat.format(Date())
+            canvas.drawText("Dátum tlače: $printDateTime", 40f, y, paint)
+            y += 30f
 
             // --- Table Header
             drawTableHeader(canvas, paint, columns, colWidths, y)
@@ -113,7 +181,10 @@ class SubjectDetailFragment : Fragment() {
             // --- Table Rows
             for (student in students) {
                 val marksStr = student.marks.joinToString(", ") { it.mark.grade.replace("FX", "Fx") }
+                // Student names are bold
+                paint.isFakeBoldText = true
                 val nameLines = wrapText(student.studentName, paint, colWidths[0] - 10f, " ")
+                paint.isFakeBoldText = false
                 val marksLines = wrapText(marksStr, paint, colWidths[2] - 10f)
                 val maxLines = maxOf(nameLines.size, marksLines.size)
                 val attCount = student.attendanceMap.values.count { !it.absent }
@@ -138,9 +209,11 @@ class SubjectDetailFragment : Fragment() {
 
                 for (line in 0 until maxLines) {
                     var x = 40f
-                    // Student Name (wrapped)
+                    // Student Name (wrapped, bold)
                     val nameLine = if (line < nameLines.size) nameLines[line] else ""
+                    paint.isFakeBoldText = true
                     canvas.drawText(nameLine, x + 5f, y + 14f + line * lineHeight, paint)
+                    paint.isFakeBoldText = false
                     x += colWidths[0]
                     // Attendance
                     val attendance = if (line == 0) attendanceText else ""
@@ -209,6 +282,8 @@ class SubjectDetailFragment : Fragment() {
                 canvas.drawLine(x, y, x, y + 30f, paint)
                 x += w
             }
+            // Right border of last column
+            canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + 30f, paint)
             canvas.drawLine(marginLeft, y + 30f, marginLeft + tableWidth, y + 30f, paint)
             canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
         }
@@ -228,6 +303,8 @@ class SubjectDetailFragment : Fragment() {
                 canvas.drawLine(x, y, x, y + rowHeight, paint)
                 x += w
             }
+            // Right border of last column
+            canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
             canvas.drawLine(
                 marginLeft,
                 y + rowHeight,
@@ -265,6 +342,19 @@ class SubjectDetailFragment : Fragment() {
 
     private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
+
+    private fun getTeacherName(): String {
+        return if (isOffline) {
+            localDb.getTeacherName()
+                ?: requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    .getString("teacher_name", "") ?: ""
+        } else {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
+                ?: localDb.getTeacherName()
+                ?: requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    .getString("teacher_name", "") ?: ""
+        }
+    }
 
     private var openedSubject: String? = null
     private var openedSubjectKey: String? = null
@@ -356,8 +446,8 @@ class SubjectDetailFragment : Fragment() {
                         showMarkAttendanceDialog(
                             students = students,
                             subjectName = openedSubject ?: "Unknown",
-                            onAttendanceSaved = { presentMap: Map<String, Boolean> ->
-                                val today = LocalDate.now().toString()
+                            onAttendanceSaved = { presentMap: Map<String, Boolean>, dateStr: String ->
+                                val today = dateStr
                                 val now = LocalTime.now().toString()
                                 val sanitizedSubject = openedSubjectKey ?: ""
                                 if (isOffline) {
@@ -410,6 +500,7 @@ class SubjectDetailFragment : Fragment() {
                         updateStudentsButtonAppearance()
                     }
                     3 -> { // Export tab
+                        val teacherName = getTeacherName()
                         val printManager =
                             requireContext().getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
                         printManager.print(
@@ -417,7 +508,8 @@ class SubjectDetailFragment : Fragment() {
                             SubjectReportPrintAdapter(
                                 requireContext(),
                                 openedSubject ?: "Unknown Subject",
-                                students
+                                students,
+                                teacherName
                             ),
                             null
                         )
@@ -436,8 +528,8 @@ class SubjectDetailFragment : Fragment() {
             showMarkAttendanceDialog(
                 students = students,
                 subjectName = openedSubject ?: "Unknown",
-                onAttendanceSaved = { presentMap: Map<String, Boolean> ->
-                    val today = LocalDate.now().toString()
+                onAttendanceSaved = { presentMap: Map<String, Boolean>, dateStr: String ->
+                    val today = dateStr
                     val now = LocalTime.now().toString()
                     val sanitizedSubject = openedSubjectKey ?: ""
                     if (isOffline) {
@@ -500,6 +592,7 @@ class SubjectDetailFragment : Fragment() {
         }
 
         binding.exportButton.setOnClickListener {
+            val teacherName = getTeacherName()
             val printManager =
                 requireContext().getSystemService(Context.PRINT_SERVICE) as PrintManager
             printManager.print(
@@ -507,7 +600,8 @@ class SubjectDetailFragment : Fragment() {
                 SubjectReportPrintAdapter(
                     requireContext(),
                     openedSubject ?: "Unknown Subject",
-                    students
+                    students,
+                    teacherName
                 ),
                 null
             )
@@ -567,7 +661,7 @@ class SubjectDetailFragment : Fragment() {
                             snap.getValue(Mark::class.java)?.let { mark ->
                                 MarkWithKey(key = snap.key ?: "", mark = mark)
                             }
-                        }.sortedByDescending { it.mark.timestamp }
+                        }.sortedBy { it.mark.timestamp }
 
                         val studentName = studentObj?.name ?: ""
                         db.child("pritomnost")
@@ -637,7 +731,7 @@ class SubjectDetailFragment : Fragment() {
                         timestamp = markJson.optLong("timestamp", 0)
                     )
                 )
-            }.sortedByDescending { it.mark.timestamp }
+            }.sortedBy { it.mark.timestamp }
 
             val attMap = localDb.getAttendance(selectedSchoolYear, selectedSemester, dbSubjectKey, studentUid)
             val attendanceMap = attMap.map { (date, entryJson) ->
@@ -683,6 +777,9 @@ class SubjectDetailFragment : Fragment() {
         val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.enrollStudentsRecyclerView)
         val saveButton = dialogView.findViewById<Button>(R.id.saveEnrollmentsButton)
+        val chipAll = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollAll)
+        val chipEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollEnrolled)
+        val chipNotEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollNotEnrolled)
 
         db.child("students").child(selectedSchoolYear).get().addOnSuccessListener { snap ->
             val items = mutableListOf<EnrollStudentItem>()
@@ -694,24 +791,33 @@ class SubjectDetailFragment : Fragment() {
                 val enrolled = subjects.contains(openedSubjectKey ?: "")
                 items.add(EnrollStudentItem(uid, name, enrolled))
             }
-            var filtered = items.toMutableList()
-            val adapter = EnrollStudentAdapter(filtered) { pos, checked ->
-                filtered[pos].enrolled = checked
+            var enrollFilter = "all" // "all", "enrolled", "not_enrolled"
+            fun applyFilters() {
+                val query = searchEditText.text?.toString()?.lowercase() ?: ""
+                val filtered = items.filter { item ->
+                    val matchesSearch = item.name.lowercase().contains(query)
+                    val matchesEnroll = when (enrollFilter) {
+                        "enrolled" -> item.enrolled
+                        "not_enrolled" -> !item.enrolled
+                        else -> true
+                    }
+                    matchesSearch && matchesEnroll
+                }.toMutableList()
+                recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
+                    filtered[pos].enrolled = checked
+                }
             }
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
-            recyclerView.adapter = adapter
+            applyFilters()
 
             searchEditText.addTextChangedListener(object : android.text.TextWatcher {
-                override fun afterTextChanged(s: android.text.Editable?) {
-                    val query = s?.toString()?.lowercase() ?: ""
-                    filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
-                    recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
-                        filtered[pos].enrolled = checked
-                    }
-                }
+                override fun afterTextChanged(s: android.text.Editable?) { applyFilters() }
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             })
+            chipAll.setOnClickListener { enrollFilter = "all"; applyFilters() }
+            chipEnrolled.setOnClickListener { enrollFilter = "enrolled"; applyFilters() }
+            chipNotEnrolled.setOnClickListener { enrollFilter = "not_enrolled"; applyFilters() }
 
             val dialog = Dialog(requireContext())
             dialog.setContentView(dialogView)
@@ -765,6 +871,9 @@ class SubjectDetailFragment : Fragment() {
         val searchEditText = dialogView.findViewById<EditText>(R.id.searchStudentEditText)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.enrollStudentsRecyclerView)
         val saveButton = dialogView.findViewById<Button>(R.id.saveEnrollmentsButton)
+        val chipAll = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollAll)
+        val chipEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollEnrolled)
+        val chipNotEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollNotEnrolled)
 
         val studentsMap = localDb.getStudents(selectedSchoolYear)
         val items = mutableListOf<EnrollStudentItem>()
@@ -779,23 +888,33 @@ class SubjectDetailFragment : Fragment() {
             val enrolled = subjectList.contains(openedSubjectKey ?: "")
             items.add(EnrollStudentItem(uid, name, enrolled))
         }
-        var filtered = items.toMutableList()
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
-            filtered[pos].enrolled = checked
+        var enrollFilter = "all"
+        fun applyFilters() {
+            val query = searchEditText.text?.toString()?.lowercase() ?: ""
+            val filtered = items.filter { item ->
+                val matchesSearch = item.name.lowercase().contains(query)
+                val matchesEnroll = when (enrollFilter) {
+                    "enrolled" -> item.enrolled
+                    "not_enrolled" -> !item.enrolled
+                    else -> true
+                }
+                matchesSearch && matchesEnroll
+            }.toMutableList()
+            recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
+                filtered[pos].enrolled = checked
+            }
         }
+        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        applyFilters()
 
         searchEditText.addTextChangedListener(object : android.text.TextWatcher {
-            override fun afterTextChanged(s: android.text.Editable?) {
-                val query = s?.toString()?.lowercase() ?: ""
-                filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
-                recyclerView.adapter = EnrollStudentAdapter(filtered) { pos, checked ->
-                    filtered[pos].enrolled = checked
-                }
-            }
+            override fun afterTextChanged(s: android.text.Editable?) { applyFilters() }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
+        chipAll.setOnClickListener { enrollFilter = "all"; applyFilters() }
+        chipEnrolled.setOnClickListener { enrollFilter = "enrolled"; applyFilters() }
+        chipNotEnrolled.setOnClickListener { enrollFilter = "not_enrolled"; applyFilters() }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
@@ -965,6 +1084,7 @@ class SubjectDetailFragment : Fragment() {
         val marksRecyclerView =
             dialogView.findViewById<RecyclerView>(R.id.studentMarksTableRecyclerView)
         marksRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        val sortedMarks = student.marks.sortedByDescending { it.mark.timestamp }
         marksRecyclerView.adapter = object : RecyclerView.Adapter<MarkDateViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MarkDateViewHolder {
                 val view = LayoutInflater.from(parent.context)
@@ -972,21 +1092,31 @@ class SubjectDetailFragment : Fragment() {
                 return MarkDateViewHolder(view)
             }
 
-            override fun getItemCount() = student.marks.size
+            override fun getItemCount() = sortedMarks.size
 
             override fun onBindViewHolder(holder: MarkDateViewHolder, position: Int) {
-                val markWithKey = student.marks[position]
+                val markWithKey = sortedMarks[position]
                 holder.markNameText.text = markWithKey.mark.name
                 holder.markGradeText.text = markWithKey.mark.grade
                 holder.markDateText.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
                     .format(Date(markWithKey.mark.timestamp))
                 holder.itemView.setOnClickListener { showMarkDetailsDialog(student, markWithKey) }
+
+                // Alternating row color
+                val rowBgAttr = if (position % 2 == 0) {
+                    com.google.android.material.R.attr.colorSurfaceContainerLowest
+                } else {
+                    com.google.android.material.R.attr.colorSurfaceContainer
+                }
+                val typedValue = android.util.TypedValue()
+                holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                    ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
             }
         }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
-        dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         currentStudentDialog = dialog
@@ -1009,8 +1139,6 @@ class SubjectDetailFragment : Fragment() {
             activeDialogs.remove(dialog)
         }
 
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * resources.displayMetrics.density).toInt()
             window.setLayout(
@@ -1020,7 +1148,6 @@ class SubjectDetailFragment : Fragment() {
             window.decorView.setPadding(margin, margin, margin, margin)
         }
         dialog.show()
-        activeDialogs.add(dialog)
     }
 
     @SuppressLint("InflateParams")
@@ -1029,6 +1156,15 @@ class SubjectDetailFragment : Fragment() {
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_add_mark, null)
         val titleView = dialogView.findViewById<TextView>(R.id.newMark)
         titleView.text = student.studentName
+
+        val avgDisplay = dialogView.findViewById<TextView>(R.id.avgMarkDisplay)
+        val gradeList = student.marks.map { it.mark.grade }
+        val avg = calculateAverage(gradeList)
+        if (avg.isNotBlank()) {
+            avgDisplay.text = "Priemer: $avg"
+        } else {
+            avgDisplay.visibility = View.GONE
+        }
 
         // Grade chips instead of text input
         val gradeChipGroup = dialogView.findViewById<ChipGroup>(R.id.gradeChipGroup)
@@ -1272,14 +1408,23 @@ class SubjectDetailFragment : Fragment() {
             ),
             onEdit = { entry -> showEditAttendanceDialog(student, entry, requireView) },
             onDelete = { entry ->
-                AlertDialog.Builder(requireView.context)
-                    .setTitle("Odstrániť záznam z prezenčky?")
-                    .setMessage("Naozaj si prajete odstrániť záznam pre dátum ${formatDate(entry.date)}?")
-                    .setPositiveButton("Odstrániť") { _, _ ->
-                        removeAttendance(student, entry.date, entry, requireView)
-                    }
-                    .setNegativeButton("Zrušiť", null)
-                    .show()
+                val confirmView = LayoutInflater.from(requireView.context).inflate(R.layout.dialog_confirm, null)
+                confirmView.findViewById<TextView>(R.id.dialogTitle).text = "Odstrániť záznam z prezenčky?"
+                confirmView.findViewById<TextView>(R.id.dialogMessage).text =
+                    "Naozaj si prajete odstrániť záznam pre dátum ${formatDate(entry.date)}?"
+                val confirmBtn = confirmView.findViewById<MaterialButton>(R.id.confirmButton)
+                confirmBtn.text = "Odstrániť"
+                val confirmDialog = AlertDialog.Builder(requireView.context)
+                    .setView(confirmView)
+                    .create()
+                confirmDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                confirmView.findViewById<MaterialButton>(R.id.cancelButton)
+                    .setOnClickListener { confirmDialog.dismiss() }
+                confirmBtn.setOnClickListener {
+                    confirmDialog.dismiss()
+                    removeAttendance(student, entry.date, entry, requireView)
+                }
+                confirmDialog.show()
             }
         )
 
@@ -1326,14 +1471,14 @@ class SubjectDetailFragment : Fragment() {
         val absentCheckbox = dialogView.findViewById<CheckBox>(R.id.absentCheckbox)
 
         titleView.text = student.studentName
-        dateField.text = pickedDate.toString()
+        dateField.text = pickedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
         timeField.text = pickedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 
         dateField.setOnClickListener {
             android.icu.util.Calendar.getInstance()
             DatePickerDialog(context, { _, year, month, day ->
                 pickedDate = LocalDate.of(year, month + 1, day)
-                dateField.text = pickedDate.toString()
+                dateField.text = pickedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
             }, pickedDate.year, pickedDate.monthValue - 1, pickedDate.dayOfMonth).show()
         }
 
@@ -1660,7 +1805,7 @@ class SubjectDetailFragment : Fragment() {
     private fun showMarkAttendanceDialog(
         students: List<StudentDetail>,
         subjectName: String,
-        onAttendanceSaved: (Map<String, Boolean>) -> Unit
+        onAttendanceSaved: (Map<String, Boolean>, String) -> Unit
     ) {
         closeAllDialogs()
         val context = requireContext()
@@ -1673,8 +1818,30 @@ class SubjectDetailFragment : Fragment() {
         val saveButton = dialogView.findViewById<MaterialButton>(R.id.attendanceSaveButton)
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.attendanceCancelButton)
 
+        // Date picker - default to today
+        val datePicker = dialogView.findViewById<TextView>(R.id.attendanceDatePicker)
+        val datePickerCard = dialogView.findViewById<View>(R.id.datePickerCard)
+        var selectedDate = LocalDate.now()
+        datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+        val openDatePicker = View.OnClickListener {
+            val cal = java.util.Calendar.getInstance()
+            cal.set(selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth)
+            DatePickerDialog(
+                context,
+                { _, year, month, dayOfMonth ->
+                    selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
+                    datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                },
+                cal.get(java.util.Calendar.YEAR),
+                cal.get(java.util.Calendar.MONTH),
+                cal.get(java.util.Calendar.DAY_OF_MONTH)
+            ).show()
+        }
+        datePicker.setOnClickListener(openDatePicker)
+        datePickerCard.setOnClickListener(openDatePicker)
+
         titleView.text =
-            "Prezenčka pre predmet $subjectName (${formatDate(LocalDate.now().toString())})"
+            "Prezenčka: $subjectName"
         val presentStates = MutableList(students.size) { true }
 
         lateinit var attendanceAdapter: AttendanceStudentAdapter
@@ -1707,7 +1874,7 @@ class SubjectDetailFragment : Fragment() {
         saveButton.setOnClickListener {
             val result =
                 students.mapIndexed { i, student -> student.studentUid to presentStates[i] }.toMap()
-            onAttendanceSaved(result)
+            onAttendanceSaved(result, selectedDate.toString())
             dialog.dismiss()
         }
         cancelButton.setOnClickListener {
@@ -1793,6 +1960,16 @@ class SubjectDetailFragment : Fragment() {
                 holder.studentNameText.text = student.studentName
                 holder.marksText.text = student.marks.joinToString(", ") { it.mark.grade }
                 holder.itemView.setOnClickListener { showStudentMarksDialog(student) }
+                // Alternating row color
+                val rowBgAttr = if (position % 2 == 0) {
+                    com.google.android.material.R.attr.colorSurfaceContainerLowest
+                } else {
+                    com.google.android.material.R.attr.colorSurfaceContainer
+                }
+                val typedValue = android.util.TypedValue()
+                holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                    ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
             }
         }
     }
@@ -1810,6 +1987,7 @@ class SubjectDetailFragment : Fragment() {
         val marksRecyclerView =
             dialogView.findViewById<RecyclerView>(R.id.studentMarksTableRecyclerView)
         marksRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        val sortedMarks = student.marks.sortedByDescending { it.mark.timestamp }
         marksRecyclerView.adapter = object : RecyclerView.Adapter<MarkDateViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MarkDateViewHolder {
                 val view = LayoutInflater.from(parent.context)
@@ -1817,14 +1995,24 @@ class SubjectDetailFragment : Fragment() {
                 return MarkDateViewHolder(view)
             }
 
-            override fun getItemCount() = student.marks.size
+            override fun getItemCount() = sortedMarks.size
             override fun onBindViewHolder(holder: MarkDateViewHolder, position: Int) {
-                val markWithKey = student.marks[position]
+                val markWithKey = sortedMarks[position]
                 holder.markNameText.text = markWithKey.mark.name
                 holder.markGradeText.text = markWithKey.mark.grade
                 holder.markDateText.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
                     .format(Date(markWithKey.mark.timestamp))
                 holder.itemView.setOnClickListener { showMarkDetailsDialog(student, markWithKey) }
+                // Alternating row color
+                val rowBgAttr = if (position % 2 == 0) {
+                    com.google.android.material.R.attr.colorSurfaceContainerLowest
+                } else {
+                    com.google.android.material.R.attr.colorSurfaceContainer
+                }
+                val typedValue = android.util.TypedValue()
+                holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                    ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
             }
         }
         val dialog = Dialog(requireContext())
@@ -1980,6 +2168,16 @@ class SubjectDetailFragment : Fragment() {
                     holder.studentNameText.text = student.studentName
                     holder.marksText.text = student.marks.joinToString(", ") { it.mark.grade }
                     holder.itemView.setOnClickListener { showStudentMarksDialog(student) }
+                    // Alternating row color
+                    val rowBgAttr = if (position % 2 == 0) {
+                        com.google.android.material.R.attr.colorSurfaceContainerLowest
+                    } else {
+                        com.google.android.material.R.attr.colorSurfaceContainer
+                    }
+                    val typedValue = android.util.TypedValue()
+                    holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+                    (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+                        ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
                 }
             }
         class StudentMarkSummaryViewHolder(view: View) : RecyclerView.ViewHolder(view) {

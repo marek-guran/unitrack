@@ -4,29 +4,21 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="10dp"
+    android:layout_marginBottom="4dp"
     android:clickable="true"
     android:focusable="true"
     app:cardCornerRadius="16dp"
     app:cardElevation="0dp"
     app:strokeWidth="1dp"
     app:strokeColor="?attr/colorOutlineVariant"
-    app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
+    app:cardBackgroundColor="?attr/colorSurface">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:padding="14dp"
         android:gravity="center_vertical">
-
-        <!-- Accent dot -->
-        <View
-            android:id="@+id/accentBar"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:layout_marginEnd="14dp"
-            android:background="@drawable/bg_accent_dot" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -40,51 +32,57 @@
                 android:layout_height="wrap_content"
                 android:text="Subject Name"
                 android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
-                android:textStyle="bold"
                 android:textColor="?attr/colorOnSurface"
                 android:layout_marginBottom="4dp" />
 
-            <LinearLayout
-                android:id="@+id/statsContainer"
+            <TextView
+                android:id="@+id/subjectMarks"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/subjectMarks"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Známky: "
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:layout_marginBottom="2dp" />
-
-                <TextView
-                    android:id="@+id/subjectAverage"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Priemer: "
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:layout_marginBottom="2dp" />
-
-                <TextView
-                    android:id="@+id/subjectAttendance"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Prezenčka: "
-                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                    android:textColor="?attr/colorOnSurfaceVariant" />
-            </LinearLayout>
+                android:text="Známky: "
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/viewSubjectDetailsBtn"
-            style="@style/Widget.Material3.Button.TextButton"
+        <!-- Right side: pill badges matching teacher style -->
+        <LinearLayout
+            android:id="@+id/statsContainer"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Otvoriť"
-            android:textSize="13sp"
-            app:cornerRadius="12dp" />
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="end"
+            android:layout_marginStart="8dp">
+
+            <TextView
+                android:id="@+id/subjectAverage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Priemer: "
+                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                android:textColor="?attr/colorOnSecondaryContainer"
+                android:background="@drawable/bg_pill_chip_outlined"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/subjectAttendance"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Prezenčka: "
+                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                android:textColor="?attr/colorOnTertiaryContainer"
+                android:background="@drawable/bg_pill_tertiary_outlined"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:gravity="center"
+                android:layout_marginTop="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

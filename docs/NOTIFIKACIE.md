@@ -1,6 +1,6 @@
 # 🔔 Notifikačný systém
 
-Tento dokument popisuje, ako fungujú notifikácie v UniTracku — aké kanály existujú, ako sa plánujú, ako sa detegujú zmeny známok a zrušené hodiny, a ako to celé funguje aj v offline režime.
+Tento dokument popisuje, ako fungujú notifikácie v UniTracku — aké kanály existujú, ako sa plánujú, ako sa detegujú zmeny známok, neprítomnosti a zrušené hodiny, a ako to celé funguje aj v offline režime.
 
 ---
 
@@ -8,16 +8,18 @@ Tento dokument popisuje, ako fungujú notifikácie v UniTracku — aké kanály 
 
 Notifikácie obsluhuje jediná trieda `NextClassAlarmReceiver` (v balíku `notification/`), ktorá je zaregistrovaná ako `BroadcastReceiver` v `AndroidManifest.xml`. Reaguje na dva typy akcií:
 
-| Akcia | Interval | Priorita | Čo robí |
+| Akcia | Predvolený interval | Priorita | Čo robí |
 |---|---|---|---|
-| `ACTION_NEXT_CLASS` | Každých 15 minút | Tichá (nízka) | Aktualizuje „živú" notifikáciu s aktuálnou/ďalšou hodinou |
-| `ACTION_CHECK_CHANGES` | Každých 30 minút | Vysoká (zvuková) | Kontroluje zmeny známok a zrušené hodiny |
+| `ACTION_NEXT_CLASS` | Každé 2 minúty (konfigurovateľné) | Tichá (nízka) | Aktualizuje „živú" notifikáciu s aktuálnou/ďalšou hodinou |
+| `ACTION_CHECK_CHANGES` | Každých 30 minút (konfigurovateľné) | Vysoká (zvuková) | Kontroluje zmeny známok, neprítomnosti a zrušené hodiny |
+
+Oba intervaly si používateľ môže prispôsobiť v nastaveniach aplikácie a takisto oba kanály môže individuálne zapnúť alebo vypnúť.
 
 ---
 
 ## Notifikačné kanály
 
-Android 8+ vyžaduje kanály. UniTrack vytvára tri:
+Android 8+ vyžaduje kanály. UniTrack vytvára štyri:
 
 ### 1. Rozvrh hodín (`next_class_channel`)
 - **Názov:** Rozvrh hodín
@@ -35,6 +37,11 @@ Android 8+ vyžaduje kanály. UniTrack vytvára tri:
 - **Priorita:** Vysoká (zvuk + vibrácie)
 - **Obsah:** Nová známka, upravená známka alebo odstránená známka
 
+### 4. Neprítomnosť (`absence_channel`)
+- **Názov:** Neprítomnosť
+- **Priorita:** Vysoká (zvuk + vibrácie)
+- **Obsah:** Keď sa študentovi zaznamená nová neprítomnosť na hodine
+
 ---
 
 ## Živá notifikácia rozvrhu
@@ -43,22 +50,40 @@ Toto je hlavná notifikácia, ktorá sa zobrazuje počas školského dňa a prie
 
 ### Ako funguje
 
-1. Každých 15 minút sa spustí `handleNextClass()`
-2. Načíta sa rozvrh pre aktuálny deň (zohľadňujú sa parné/nepárne týždne)
+1. V nastavenom intervale (predvolene každé 2 minúty) sa spustí `handleNextClass()`
+2. Načíta sa rozvrh pre aktuálny deň (zohľadňujú sa párne/nepárne týždne a aktuálny semester)
 3. Odfiltrujú sa hodiny, ktoré kolidujú s voľnými dňami
 4. Podľa aktuálneho času sa určí stav:
 
 | Stav | Správa v notifikácii | Príklad |
 |---|---|---|
-| Prebieha hodina | „Teraz: {predmet}" | „Teraz: Matematika 1" |
-| Prestávka | „Prestávka" + „Ďalej: {predmet} o {čas}" | „Ďalej: Fyzika o 10:00" |
-| Pred prvou hodinou | „Ďalej: {predmet} o {čas}" | „Ďalej: Informatika o 08:00" |
-| Po poslednej hodine | „Voľno" | — |
+| Pred prvou hodinou (v rámci okna) | „Vyučovanie začína čoskoro" | „Matematika 1 (A402) • Štart 08:00" |
+| Prebieha hodina | „{predmet} ({učebňa})" | „Matematika 1 (A402)" |
+| Prestávka (≤ 30 min) | „Prestávka" + „Ďalej: {predmet}" | „Ďalej: Fyzika • Štart 10:00" |
+| Dlhšia pauza (> 30 min) | „Voľno" + „Ďalej: {predmet}" | — |
+| Po poslednej hodine | Notifikácia sa automaticky zruší | — |
 | Žiadne hodiny | Notifikácia sa nezobrazí | — |
 
-### Progress bar
+### Konfigurovateľné nastavenia
 
-Notifikácia obsahuje progress bar, ktorý ukazuje priebeh celého školského dňa — od začiatku prvej hodiny po koniec poslednej.
+V nastaveniach aplikácie si používateľ môže upraviť:
+- **Interval živej aktualizácie** — 1, 2, 5, 10 alebo 15 minút (predvolene 2 min)
+- **Minúty pred prvou hodinou** — 15, 30, 45, 60 alebo 90 minút (predvolene 30 min) — notifikácia sa zobrazí až keď zostáva menej ako nastavený počet minút do začiatku vyučovania
+- **Zobrazenie učebne** — zapnuté/vypnuté (predvolene zapnuté)
+- **Zobrazenie nasledujúcej hodiny** — zapnuté/vypnuté (predvolene zapnuté)
+
+### Android 16 ProgressStyle (segmentovaný progress bar)
+
+Na zariadeniach s Android 16 (API 36) notifikácia využíva natívny `Notification.ProgressStyle` so segmentmi. Každý segment reprezentuje jednu hodinu alebo prestávku a má priradenú farbu:
+
+- **Hodina** — oranžová (svetlá v tmavom režime)
+- **Prestávka** — zelená (svetlá v tmavom režime)
+
+Progress ukazuje, koľko z celkového školského dňa už uplynulo. Na starších verziách Android sa zobrazuje klasický nesegmentovaný progress bar.
+
+### Semester-aware filtrovanie
+
+Rozvrh sa filtruje podľa aktuálneho semestra. Ak má predmet nastavený semester (zimný/letný), hodiny sa zobrazia len ak sa aktuálny semester zhoduje so semestrom predmetu. Predmety s nastavením „obidva" sa zobrazujú vždy.
 
 ### Detekcia parity týždňa
 
@@ -75,11 +100,11 @@ Hodiny sa filtrujú podľa tejto parity — zobrazujú sa len tie, ktoré zodpov
 
 ## Detekcia zmien známok
 
-Každých 30 minút sa kontroluje, či sa zmenili známky študenta.
+V nastavenom intervale (predvolene každých 30 minút) sa kontroluje, či sa zmenili známky študenta.
 
 ### Mechanizmus
 
-1. Načíta sa aktuálny „snapshot" všetkých známok zo všetkých predmetov
+1. Načíta sa aktuálny „snapshot" všetkých známok zo všetkých predmetov, rokov a semestrov
 2. Porovná sa s predchádzajúcim snapshotom (uloženým v `SharedPreferences` pod kľúčom `grade_snapshot`)
 3. Rozdiely sa identifikujú:
 
@@ -93,49 +118,65 @@ Každých 30 minút sa kontroluje, či sa zmenili známky študenta.
 
 ### Formát snapshotu
 
-Snapshot je JSON objekt serializovaný do stringu, kde kľúče sú `{subjectKey}_{markId}` a hodnoty sú `{grade}`:
+Snapshot je reťazec kľúč-hodnota pármi, kde kľúče sú `{year}/{semester}/{subjectKey}/{markKey}` a hodnoty sú `{grade}|{name}`:
 
-```json
-{
-  "mat1_abc123": "B",
-  "fyz1_def456": "A"
-}
 ```
+2025_2026/zimny/mat1/abc123=B|Test 1;2025_2026/zimny/fyz1/def456=A|Skúška
+```
+
+---
+
+## Detekcia neprítomnosti
+
+Nová funkcia, ktorá kontroluje zmeny v dochádzke študenta. Prebieha súčasne s kontrolou známok.
+
+### Mechanizmus
+
+1. Načítajú sa všetky záznamy dochádzky pre prihláseného študenta
+2. Porovnajú sa s predchádzajúcim snapshotom (`attendance_snapshot`)
+3. Identifikujú sa nové neprítomnosti — záznamy kde `absent = true` a predtým buď neexistovali, alebo mali `absent = false`
+4. Pre každú novú neprítomnosť sa vygeneruje notifikácia s názvom predmetu
+
+Táto funkcia funguje len v online režime (rovnako ako detekcia známok a zrušených hodín).
 
 ---
 
 ## Detekcia zrušených hodín
 
-Rovnako každých 30 minút sa kontrolujú voľné dni.
+V rovnakom intervale ako kontrola známok sa kontrolujú aj voľné dni.
 
 ### Mechanizmus
 
 1. Načítajú sa všetky voľné dni zo všetkých učiteľov
 2. Porovnajú sa s predchádzajúcim snapshotom (`daysoff_snapshot`)
-3. Pre každý nový voľný deň sa skontroluje, či koliduje s rozvrhom
+3. Pre každý nový voľný deň sa skontroluje, či koliduje s rozvrhom na aktuálny deň
 4. Ak áno, vygeneruje sa notifikácia:
 
 ```
 „Hodina zrušená: {predmet} na {dátum}"
 ```
 
+Notifikácia o zrušení hodiny sa zobrazí maximálne raz denne (ochrana proti duplicitám).
+
 ### Kontrola kolízie
 
 Voľný deň koliduje s rozvrhovou hodinou ak:
 - Deň v rozvrhu padne na dátum voľného dňa (alebo do rozsahu dátumov)
 - Ak voľný deň má časový rozsah, kontroluje sa aj prekrytie časov
+- Zohľadňuje sa parita týždňa a aktuálny semester
 
 ---
 
 ## Offline podpora
 
-Celý notifikačný systém funguje aj v offline režime. Namiesto Firebase sa dáta čítajú z `LocalDatabase`:
+Živá notifikácia rozvrhu funguje aj v offline režime. Namiesto Firebase sa dáta čítajú z `LocalDatabase`:
 
 - Rozvrh: `LocalDatabase.getTimetableEntries()`
 - Voľné dni: `LocalDatabase.getDaysOff()`
-- Známky: `LocalDatabase.getMarks()`
 
 UID používateľa v offline režime je konštanta `OfflineMode.LOCAL_USER_UID` (`"local_user"`).
+
+Kontrola zmien známok, neprítomnosti a zrušených hodín (`handleChangesCheck`) je v offline režime vypnutá — prebieha len v online režime, kde sú zmeny vykonávané inými používateľmi.
 
 ---
 
@@ -145,10 +186,10 @@ UID používateľa v offline režime je konštanta `OfflineMode.LOCAL_USER_UID` 
 
 Notifikácie sa plánujú cez `AlarmManager.setRepeating()`:
 
-| Alarm | Request code | Interval | Oneskorenie po spustení |
+| Alarm | Request code | Predvolený interval | Oneskorenie po spustení |
 |---|---|---|---|
-| Next Class | 2001 | 15 minút | 5 sekúnd |
-| Changes Check | 2002 | 30 minút | 10 sekúnd |
+| Next Class | 2001 | 2 minúty (konfigurovateľné: 1–15 min) | 5 sekúnd |
+| Changes Check | 2002 | 30 minút (konfigurovateľné: 15–120 min) | 10 sekúnd |
 
 ### Inicializácia
 
@@ -157,9 +198,13 @@ Alarmy sa nastavujú v `MainActivity.onCreate()`:
 ```kotlin
 NextClassAlarmReceiver.createNotificationChannels(this)
 NextClassAlarmReceiver.triggerNextClassCheck(this)   // Okamžitá kontrola
-NextClassAlarmReceiver.scheduleNextClass(this)       // Každých 15 min
-NextClassAlarmReceiver.scheduleChangesCheck(this)    // Každých 30 min
+NextClassAlarmReceiver.scheduleNextClass(this)       // Podľa nastaveného intervalu
+NextClassAlarmReceiver.scheduleChangesCheck(this)    // Podľa nastaveného intervalu
 ```
+
+### Zapínanie a vypínanie
+
+Každý typ notifikácií (živá aktualizácia aj kontrola zmien) sa dá individuálne zapnúť alebo vypnúť v nastaveniach. Pri vypnutí sa príslušný alarm zruší cez `AlarmManager.cancel()`.
 
 ### Prežitie reštartu
 
@@ -172,11 +217,12 @@ NextClassAlarmReceiver.scheduleChangesCheck(this)    // Každých 30 min
 | Oprávnenie | Prečo |
 |---|---|
 | `POST_NOTIFICATIONS` | Zobrazovanie notifikácií (povinné od Android 13) |
-| `POST_PROMOTED_NOTIFICATIONS` | Rozšírené notifikácie |
+| `POST_PROMOTED_NOTIFICATIONS` | Rozšírené Live Update notifikácie (Android 16) |
 | `FOREGROUND_SERVICE` | Beh notifikačnej služby na pozadí |
 | `RECEIVE_BOOT_COMPLETED` | Plánovanie alarmov po reštarte |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Výnimka z optimalizácie batérie pre spoľahlivé doručovanie |
 
-Pri Android 13+ sa oprávnenie `POST_NOTIFICATIONS` vyžiada runtime dialógom v `MainActivity`.
+Pri Android 13+ sa oprávnenie `POST_NOTIFICATIONS` vyžiada runtime dialógom v `MainActivity`. V nastaveniach je k dispozícii tlačidlo na vypnutie optimalizácie batérie, čo zabraňuje systému obmedziť doručovanie notifikácií.
 
 ---
 

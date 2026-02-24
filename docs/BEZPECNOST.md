@@ -1,0 +1,231 @@
+# 🔒 Bezpečnosť
+
+Tento dokument popisuje bezpečnostný model aplikácie UniTrack — ako je zabezpečená autentifikácia, ochrana dát, komunikácia so serverom a aké odporúčania platia pre produkčné nasadenie.
+
+---
+
+## Prehľad bezpečnostného modelu
+
+UniTrack pracuje v dvoch režimoch, z ktorých každý má odlišný bezpečnostný profil:
+
+| Aspekt | Online režim | Offline režim |
+|---|---|---|
+| **Autentifikácia** | Firebase Auth (email + heslo) | Žiadna (lokálny prístup) |
+| **Úložisko dát** | Firebase Realtime Database (cloud) | Lokálny JSON súbor na zariadení |
+| **Prenos dát** | HTTPS (šifrované cez TLS) | Žiadny prenos — dáta neopúšťajú zariadenie |
+| **Riadenie prístupu** | Firebase Security Rules + admin detekcia | Plný prístup (lokálny používateľ) |
+| **Zálohovanie** | Firebase zabezpečuje redundanciu | Manuálny export do JSON súboru |
+
+---
+
+## Autentifikácia
+
+### Firebase Authentication
+
+V online režime sa autentifikácia rieši cez **Firebase Auth** s metódou email + heslo:
+
+1. Používateľ zadá email a heslo na prihlasovacej obrazovke
+2. `LoginViewModel` validuje formulár (neprázdne polia, platný formát emailu)
+3. `FirebaseAuth.signInWithEmailAndPassword()` odošle požiadavku
+4. Firebase overí prihlasovacie údaje na strane servera
+5. Pri úspechu sa vráti `FirebaseUser` objekt s UID
+6. Token sa automaticky obnoví (Firebase SDK to rieši interne)
+
+### Čo Firebase Auth zabezpečuje
+
+- Heslá sa nikdy neukladajú na zariadení — Firebase ukladá len autentifikačný token
+- Komunikácia prebieha výhradne cez HTTPS
+- Ochrana proti brute-force útokom (rate limiting na strane Firebase)
+- Podpora resetu hesla cez email
+- Automatická obnova tokenov
+
+### Offline režim
+
+V offline režime sa autentifikácia nepoužíva. Používateľ pristupuje k lokálnym dátam priamo bez hesla. Toto je zámerné — offline režim slúži pre individuálneho učiteľa na osobnom zariadení, kde sú dáta chránené samotným zariadením (PIN, odtlačok prsta, šifrovanie úložiska).
+
+---
+
+## Riadenie prístupu
+
+### Role používateľov
+
+UniTrack rozlišuje tri role:
+
+| Rola | Detekcia | Oprávnenia |
+|---|---|---|
+| **Admin** | Firebase cesta `admins/{uid}` existuje | Správa účtov, predmetov, školských rokov |
+| **Učiteľ** | Firebase cesta `teachers/{uid}` existuje | Správa známok, dochádzky, rozvrhu, voľných dní |
+| **Študent** | Žiadna z vyššie uvedených ciest | Zobrazenie vlastných známok a dochádzky |
+
+### Detekcia admin práv
+
+Admin detekcia prebieha asynchrónne pri spustení aplikácie:
+
+```kotlin
+// MainActivity.kt
+db.child("admins").child(uid).get().addOnSuccessListener { snapshot ->
+    if (snapshot.exists()) {
+        // Prebudovanie navigácie s admin tabmi
+    }
+}
+```
+
+Toto je client-side kontrola, ktorá ovplyvňuje zobrazenie UI. Skutočná ochrana dát musí byť zabezpečená na strane Firebase cez Security Rules.
+
+---
+
+## Ochrana dát
+
+### Online režim — Firebase Realtime Database
+
+Dáta uložené vo Firebase sú chránené:
+
+- **Šifrovaním počas prenosu** — všetka komunikácia s Firebase prebieha cez HTTPS/TLS
+- **Šifrovaním v pokoji** — Firebase automaticky šifruje dáta na svojich serveroch
+- **Firebase Security Rules** — pravidlá na strane servera, ktoré definujú kto môže čítať a zapisovať na ktoré cesty
+
+### Odporúčané Firebase Security Rules
+
+Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidlá v Firebase Console:
+
+```json
+{
+  "rules": {
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".validate": "newData.isBoolean()"
+      }
+    },
+
+    "teachers": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".validate": "newData.isString()"
+      }
+    },
+
+    "students": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+    },
+
+    "predmety": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+    },
+
+    "hodnotenia": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+    },
+
+    "pritomnost": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+    },
+
+    "school_years": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    "days_off": {
+      ".read": "auth != null",
+      "$teacherUid": {
+        ".write": "auth != null && ($teacherUid === auth.uid || root.child('admins').child(auth.uid).exists())"
+      }
+    }
+  }
+}
+```
+
+#### Ako pravidlá fungujú
+
+Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní alebo zápise. Pravidlá používajú stromovú štruktúru, kde každá úroveň zodpovedá ceste v databáze. Premenné začínajúce `$` (napr. `$uid`, `$teacherUid`) zachytávajú dynamické segmenty cesty. Pravidlá na vyššej úrovni sa kaskádovo prenášajú na nižšie úrovne — ak rodičovský uzol povolí prístup, potomkovia ho nemôžu odobrať.
+
+#### Čo pravidlá zabezpečujú
+
+- **admins** — Čítať aj zapisovať zoznam adminov môžu len existujúci admini. Jednotlivý používateľ si môže prečítať vlastný admin záznam (`$uid === auth.uid`), čo umožňuje aplikácii zistiť, či je prihlásený používateľ admin. Validácia vynucuje, že hodnota musí byť boolean.
+- **teachers** — Čítať zoznam učiteľov môže každý prihlásený používateľ (potrebné pre výber učiteľa v UI). Zapisovať môžu len admini. Validácia vynucuje, že hodnota musí byť reťazec.
+- **students** — Čítať údaje o študentoch môže každý prihlásený používateľ (potrebné pre rozvrh a zobrazenie zapísaných predmetov). Zapisovať môžu len admini a učitelia.
+- **predmety** — Čítať môže každý prihlásený používateľ. Zapisovať môžu admini a učitelia.
+- **hodnotenia** — Čítať známky môže každý prihlásený používateľ (potrebné pre notifikácie o zmenách známok). Zapisovať môžu len admini a učitelia.
+- **pritomnost** — Čítať dochádzku môže každý prihlásený používateľ (potrebné pre notifikácie o zmenách dochádzky). Zapisovať môžu len admini a učitelia.
+- **school_years** — Čítať môže každý prihlásený používateľ. Vytvárať a upravovať školské roky môžu len admini.
+- **days_off** — Čítať môže každý prihlásený používateľ. Zapisovať voľné dni môže učiteľ len pre seba (`$teacherUid === auth.uid`), alebo admin pre kohokoľvek.
+
+### Offline režim — lokálny JSON súbor
+
+Lokálna databáza (`local_db.json`) je uložená v privátnom úložisku aplikácie:
+
+```
+/data/data/com.marekguran.unitrack/files/local_db.json
+```
+
+- Súbor je prístupný len aplikácii UniTrack (Android sandbox)
+- Na zariadení so šifrovaním úložiska (predvolene od Android 10) sú dáta šifrované aj v pokoji
+- Pri resete aplikácie (z nastavení) sa súbor úplne vymaže
+
+---
+
+## Oprávnenia aplikácie
+
+UniTrack vyžaduje minimálnu sadu Android oprávnení:
+
+| Oprávnenie | Typ | Účel | Riziko |
+|---|---|---|---|
+| `POST_NOTIFICATIONS` | Runtime (od Android 13) | Zobrazovanie notifikácií | Nízke — len informačné notifikácie |
+| `POST_PROMOTED_NOTIFICATIONS` | Normálne | Live Update notifikácie (Android 16) | Nízke |
+| `FOREGROUND_SERVICE` | Normálne | Beh notifikačnej služby na pozadí | Nízke |
+| `RECEIVE_BOOT_COMPLETED` | Normálne | Plánovanie alarmov po reštarte | Nízke |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Špeciálne | Výnimka z optimalizácie batérie | Stredné — zvýšená spotreba batérie |
+
+Aplikácia **nevyžaduje** prístup ku kontaktom, fotoaparátu, mikrofónu, polohe ani iným citlivým zdrojom.
+
+---
+
+## Konfigurácia Firebase projektu
+
+### google-services.json
+
+Súbor `google-services.json` obsahuje konfiguráciu Firebase projektu (ID projektu, API kľúč, URL databázy). Nie je to tajný kľúč v pravom slova zmysle — API kľúč v tomto súbore slúži na identifikáciu projektu, nie na autorizáciu.
+
+Napriek tomu sa odporúča:
+- Neukladať `google-services.json` do verejných repozitárov
+- Obmedziť API kľúč v Google Cloud Console na konkrétne Android aplikácie (package name + SHA-1)
+- Nastaviť Firebase Security Rules (nie spoliehať sa len na client-side ochranu)
+
+### Čo NIE je v repozitári
+
+Repozitár neobsahuje:
+- `google-services.json` — konfigurácia Firebase projektu
+- Firebase Security Rules — tieto sa nastavujú priamo vo Firebase Console
+- Žiadne prihlasovacie údaje ani tokeny
+
+---
+
+## Bezpečnostné odporúčania pre nasadenie
+
+### Pre administrátorov
+
+1. **Nastaviť Firebase Security Rules** podľa odporúčaní vyššie
+2. **Zapnúť App Check** vo Firebase Console — ochrana proti neoprávneným API volaniam
+3. **Obmedziť API kľúč** v Google Cloud Console na konkrétny package name a SHA-1 certifikát
+4. **Pravidelne kontrolovať** Firebase Authentication konzolu — odstraňovať neaktívne účty
+5. **Zálohovať dáta** cez Firebase automatické zálohy
+
+### Pre používateľov
+
+1. **Používať silné heslo** pri registrácii
+2. **Zabezpečiť zariadenie** PINom, odtlačkom prsta alebo face ID
+3. **V offline režime** pravidelne exportovať zálohy databázy
+4. **Nepostupovať zálohy** (JSON export) tretím stranám — obsahujú kompletné dáta
+
+---
+
+[← Späť na README](../README.md)

@@ -23,6 +23,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase) aj **offline** (
 
 ## ✨ Hlavné funkcie
 
+- **Splash obrazovka** — animovaný vstupný screen s logom a plynulým prechodom do aplikácie
 - **Prihlásenie a autentifikácia** — Firebase Auth s emailom a heslom, alebo offline režim bez prihlásenia
 - **Evidencia známok** — pridávanie, úprava a mazanie hodnotení (A až Fx) s názvom, popisom a váhou
 - **Sledovanie dochádzky** — zaznamenávanie prítomnosti/neprítomnosti študentov podľa dátumu
@@ -30,9 +31,12 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase) aj **offline** (
 - **Správa predmetov** — vytváranie, editácia a priradenie predmetov k semestrom (zimný/letný/obidva)
 - **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent)
 - **Akademická analytika** — priemery známok, percentá dochádzky
-- **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa
+- **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa (aplikuje sa už od spustenia)
 - **Export a import databázy** — zálohovanie a obnova celej lokálnej databázy ako JSON súbor
-- **Notifikácie** — upozornenia na ďalšiu hodinu, zrušené hodiny a zmeny známok
+- **Nastaviteľné notifikácie** — živá aktualizácia rozvrhu, upozornenia na zrušené hodiny, zmeny známok a nové neprítomnosti s konfigurovateľnými intervalmi
+- **Android 16 Live Update** — segmentovaný progress bar s farebnými blokmi pre hodiny a prestávky (na podporovaných zariadeniach)
+- **Reset hesla** — možnosť odoslať email na obnovu hesla priamo z nastavení
+- **Meno učiteľa** — v offline režime si učiteľ môže nastaviť a uložiť svoje meno
 - **Responzívny dizajn** — prispôsobený pre telefóny aj tablety s vlastnou pill navigáciou
 
 ---
@@ -47,7 +51,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase) aj **offline** (
 | UI | Material Design 3, AndroidX, View Binding |
 | Architektúra | MVVM (ViewModel + LiveData + Fragmenty) |
 | Navigácia | Android Navigation Component |
-| UI efekty | BlurView (sklenený efekt navigácie) |
+| UI efekty | Vlastný PillNavigationBar s animáciami a tieňovým efektom |
 | Build systém | Gradle (Kotlin DSL) s Version Catalog |
 
 ---
@@ -66,7 +70,7 @@ UniTrack/
 │       │   │   ├── timetable/          # Rozvrh a voľné dni
 │       │   │   ├── subjects/           # Správa predmetov
 │       │   │   ├── students/           # Správa študentov / účtov
-│       │   │   ├── settings/           # Nastavenia (tmavý režim, export, admin)
+│       │   │   ├── settings/           # Nastavenia (tmavý režim, notifikácie, export, admin)
 │       │   │   └── PillNavigationBar.kt  # Vlastná navigačná lišta
 │       │   ├── data/                   # Dátová vrstva
 │       │   │   ├── model/              # Dátové modely (Mark, Student, Timetable...)
@@ -74,9 +78,10 @@ UniTrack/
 │       │   │   ├── LoginDataSource.kt  # Prihlásenie cez Firebase
 │       │   │   ├── LoginRepository.kt  # Repository pre prihlásenie
 │       │   │   └── OfflineMode.kt      # Prepínanie online/offline
-│       │   ├── notification/           # Notifikácie (rozvrh, známky, zrušené hodiny)
+│       │   ├── notification/           # Notifikácie (rozvrh, známky, zrušené hodiny, neprítomnosť)
+│       │   ├── SplashActivity.kt       # Animovaná splash obrazovka (launcher)
 │       │   ├── MainActivity.kt         # Hlavná aktivita s navigáciou
-│       │   └── UniTrackApplication.kt  # Application trieda
+│       │   └── UniTrackApplication.kt  # Application trieda (inicializácia tmavého režimu)
 │       ├── res/                        # Zdroje (layouty, stringy, ikony, farby)
 │       └── AndroidManifest.xml
 ├── build.gradle.kts                    # Root Gradle konfigurácia
@@ -120,6 +125,10 @@ UniTrack/
 
 ## 📱 Obrazovky aplikácie
 
+### 🎬 Splash obrazovka
+
+Po spustení aplikácie sa zobrazí animovaná splash obrazovka s logom, ktorá sa po dvoch sekundách plynulo (fade) presunie na hlavnú obrazovku. Tmavý režim sa aplikuje už počas zobrazenia splashu, takže používateľ nikdy nevidí nesprávnu tému.
+
 ### 🔐 Prihlásenie
 
 Vstupná obrazovka s emailom a heslom. Prihlásenie prebieha cez Firebase Auth. Ak je používateľ už prihlásený, aplikácia ho automaticky presmeruje na domovskú obrazovku. Pre prácu bez internetu je k dispozícii tlačidlo **„Lokálny režim"**.
@@ -152,9 +161,10 @@ Správa predmetov — vytváranie nových, úprava názvu, priradenie učiteľa 
 ### ⚙️ Nastavenia
 
 - **Vzhľad** — prepínanie tmavého režimu
-- **Admin funkcie** — správa akademických rokov, semestrov, zoznam adminov
-- **Offline funkcie** — export/import databázy, vytváranie školských rokov
-- **Účet** — odhlásenie, reset aplikácie
+- **Notifikácie** — zapínanie/vypínanie živej aktualizácie rozvrhu a upozornení na zmeny, nastavenie intervalov kontroly, zobrazenie učebne a nasledujúcej hodiny v notifikácii, konfigurácia počtu minút pred prvou hodinou, optimalizácia batérie
+- **Admin funkcie** — správa akademických rokov a semestrov
+- **Offline funkcie** — export/import databázy, vytváranie školských rokov, nastavenie mena učiteľa
+- **Účet** — odhlásenie, reset hesla (online), reset aplikácie (offline)
 
 ---
 
@@ -166,9 +176,11 @@ UniTrack ponúka plnohodnotný offline režim bez potreby Firebase alebo interne
 
 - Kompletná správa predmetov, študentov a známok
 - Rozvrh a voľné dni
+- Živá notifikácia rozvrhu (s podporou semester-aware filtrovania)
 - Export celej databázy do JSON súboru (záloha)
 - Import databázy zo súboru (obnova)
 - Vytváranie akademických rokov a semestrov
+- Nastavenie mena učiteľa
 
 ### Štruktúra lokálnej databázy:
 
@@ -181,7 +193,8 @@ UniTrack ponúka plnohodnotný offline režim bez potreby Firebase alebo interne
   "teachers": { ... },
   "admins": { ... },
   "days_off": { ... },
-  "school_years": { ... }
+  "school_years": { ... },
+  "settings": { ... }
 }
 ```
 
@@ -191,15 +204,16 @@ UniTrack ponúka plnohodnotný offline režim bez potreby Firebase alebo interne
 
 ## 🔔 Notifikácie
 
-Aplikácia využíva tri notifikačné kanály:
+Aplikácia využíva štyri notifikačné kanály:
 
 | Kanál | Popis | Priorita |
 |---|---|---|
-| **Rozvrh hodín** | Živá aktualizácia — ukazuje aktuálnu/ďalšiu hodinu, prestávku alebo voľno | Tichá (nízka) |
+| **Rozvrh hodín** | Živá aktualizácia — ukazuje aktuálnu/ďalšiu hodinu, prestávku alebo voľno (segmentovaný progress bar na Android 16) | Tichá (nízka) |
 | **Zrušené hodiny** | Upozornenie keď učiteľ označí hodinu ako zrušenú | Vysoká |
 | **Známky** | Nová, upravená alebo odstránená známka | Vysoká |
+| **Neprítomnosť** | Upozornenie na novú zaznamenanú neprítomnosť študenta | Vysoká |
 
-Notifikácie sa kontrolujú pravidelne (každých 15–30 minút) a fungujú aj po reštarte zariadenia.
+Intervaly kontrol sú konfigurovateľné v nastaveniach — živá aktualizácia rozvrhu (predvolene každé 2 minúty) a kontrola zmien známok, neprítomnosti a zrušených hodín (predvolene každých 30 minút). Oba kanály je možné individuálne zapnúť alebo vypnúť. Notifikácie fungujú aj po reštarte zariadenia.
 
 ---
 
@@ -208,8 +222,10 @@ Notifikácie sa kontrolujú pravidelne (každých 15–30 minút) a fungujú aj 
 Aplikácia vyžaduje tieto Android oprávnenia:
 
 - `POST_NOTIFICATIONS` — zobrazovanie notifikácií (Android 13+)
+- `POST_PROMOTED_NOTIFICATIONS` — rozšírené notifikácie (Live Update na Android 16)
 - `FOREGROUND_SERVICE` — beh notifikačnej služby na pozadí
 - `RECEIVE_BOOT_COMPLETED` — plánovanie notifikácií po reštarte zariadenia
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — výnimka z optimalizácie batérie pre spoľahlivé doručovanie notifikácií
 
 ---
 
@@ -219,25 +235,41 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 | Dokument | Obsah |
 |---|---|
-| [Architektúra aplikácie](docs/ARCHITEKTURA.md) | Celková architektúra, MVVM vzor, priebeh dát medzi vrstvami, životný cyklus komponentov |
-| [Databáza a dátová vrstva](docs/DATABAZA.md) | Firebase Realtime Database cesty, lokálna JSON databáza, dátové modely, migrácia semestrov |
+| [Architektúra aplikácie](docs/ARCHITEKTURA.md) | Celková architektúra, MVVM vzor, priebeh dát medzi vrstvami, životný cyklus komponentov, SplashActivity |
+| [Databáza a dátová vrstva](docs/DATABAZA.md) | Firebase Realtime Database cesty, lokálna JSON databáza, dátové modely, convenience metódy, migrácia semestrov |
 | [Navigácia a UI komponenty](docs/NAVIGACIA.md) | Navigation Component, PillNavigationBar, role-based navigácia, fragmenty a adaptéry |
-| [Notifikačný systém](docs/NOTIFIKACIE.md) | Kanály, AlarmManager plánovanie, detekcia zmien známok a zrušených hodín, offline podpora |
+| [Notifikačný systém](docs/NOTIFIKACIE.md) | Kanály, konfigurovateľné intervaly, Android 16 ProgressStyle, detekcia zmien známok, neprítomnosti a zrušených hodín |
+| [Nastavenia aplikácie](docs/NASTAVENIA.md) | Podrobný popis všetkých nastavení — vzhľad, notifikácie, správa účtu, offline funkcie, SharedPreferences kľúče |
+| [Tlač a export dát](docs/TLAC_A_EXPORT.md) | PDF reporty (predmet, študent, učiteľ), export/import lokálnej databázy, formát záloh |
+| [Testovanie](docs/TESTOVANIE.md) | Metodika testovania, testovacie scenáre, matica zariadení, výsledky testovania |
+| [Bezpečnosť](docs/BEZPECNOST.md) | Bezpečnostný model, Firebase autentifikácia, ochrana dát, oprávnenia, odporúčania |
+| [Splnenie cieľa práce](docs/SPLNENIE_CIELA.md) | Mapovanie cieľa diplomovej práce na implementované funkcie, analýza splnenia |
 
 ---
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 2.0.1
-- **Kód verzie (Google):** 21
+- **Verzia aplikácie:** 2.0.2
+- **Kód verzie (Google):** 22
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 
 ---
 
-## 👤 Autor
+## 👤 Autor a školiteľ
 
-Vytvoril **Marek Guran** ako súčasť diplomovej práce na **Katolíckej univerzite v Ružomberku**.
+|  | Meno | Pozícia |
+|---|---|---|
+| **Autor** | Marek Guráň | Študent, odbor jednoodborové učiteľstvo informatiky |
+| **Školiteľ** | doc. Ing. Ján Pillár, PhD. | Vedúci diplomovej práce |
+
+**Katolícka univerzita v Ružomberku**
+
+### Cieľ práce
+
+> Návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov.
+
+Cieľ práce bol naplnený v plnom rozsahu. Aplikácia UniTrack implementuje kompletný systém evidencie prítomnosti (zaznamenávanie, úprava, mazanie, percentuálne prehľady, notifikácie o neprítomnosti) aj hodnotenia študentov (pridávanie známok A–Fx, úprava, mazanie, výpočet priemerov, navrhovaná známka, notifikácie o zmenách). Nad rámec stanoveného cieľa boli realizované ďalšie funkcie — správa rozvrhu, voľných dní, PDF reporty, duálny online/offline režim, nastaviteľné notifikácie s podporou Android 16 Live Update a responzívny dizajn pre telefóny aj tablety.
 
 ---
 

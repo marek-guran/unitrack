@@ -56,8 +56,13 @@ class TimetableFragment : Fragment() {
     // Subject key -> teacher uid mapping
     private val subjectTeacherMap = mutableMapOf<String, String>()
 
+    // Active "My days off" dialog so it can be refreshed after edits/deletes
+    private var myDaysOffDialog: android.app.Dialog? = null
+
     // Filter state: "all", "today", "odd", "even"
     private var currentFilter = "all"
+    // Week offset: 0 = current week, -1 = last week, +1 = next week
+    private var weekOffset = 0
     // Slovak date format DD.MM.YYYY
     private val skDateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
     private val dayOrder = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -83,13 +88,23 @@ class TimetableFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val today = LocalDate.now()
-        val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-        val parityLabel = if (weekNumber % 2 == 0)
-            getString(R.string.timetable_week_even)
-        else
-            getString(R.string.timetable_week_odd)
-        binding.textWeekInfo.text = getString(R.string.timetable_week_label, weekNumber) + " · $parityLabel"
+        updateWeekDisplay()
+
+        binding.btnPrevWeek.setOnClickListener {
+            weekOffset--
+            updateWeekDisplay()
+            buildTimetableGrid()
+        }
+        binding.btnNextWeek.setOnClickListener {
+            weekOffset++
+            updateWeekDisplay()
+            buildTimetableGrid()
+        }
+        binding.btnThisWeek.setOnClickListener {
+            weekOffset = 0
+            updateWeekDisplay()
+            buildTimetableGrid()
+        }
 
         if (isOffline) {
             isAdmin = true
@@ -320,6 +335,37 @@ class TimetableFragment : Fragment() {
         })
     }
 
+    // ── Week navigation ────────────────────────────────────────────────
+
+    private fun getOffsetDate(): LocalDate = LocalDate.now().plusWeeks(weekOffset.toLong())
+
+    private fun updateWeekDisplay() {
+        if (!isAdded || _binding == null) return
+        val targetDate = getOffsetDate()
+        val weekNumber = targetDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+        val parityLabel = if (weekNumber % 2 == 0)
+            getString(R.string.timetable_week_even)
+        else
+            getString(R.string.timetable_week_odd)
+        val weekLabel = getString(R.string.timetable_week_label, weekNumber) + " · $parityLabel"
+        if (weekOffset == 0) {
+            binding.textWeekInfo.text = "📅 $weekLabel"
+            binding.textWeekInfo.setTypeface(binding.textWeekInfo.typeface, android.graphics.Typeface.BOLD)
+            // Filled/tonal Dnes button when on current week
+            binding.btnThisWeek.setBackgroundColor(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer))
+            binding.btnThisWeek.setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSecondaryContainer))
+            binding.btnThisWeek.strokeWidth = 0
+        } else {
+            binding.textWeekInfo.text = weekLabel
+            binding.textWeekInfo.setTypeface(null, android.graphics.Typeface.NORMAL)
+            // Outlined Dnes button when on another week
+            binding.btnThisWeek.setBackgroundColor(Color.TRANSPARENT)
+            binding.btnThisWeek.setTextColor(resolveThemeColor(androidx.appcompat.R.attr.colorPrimary))
+            binding.btnThisWeek.strokeWidth = (1 * resources.displayMetrics.density).toInt()
+            binding.btnThisWeek.strokeColor = android.content.res.ColorStateList.valueOf(resolveThemeColor(com.google.android.material.R.attr.colorOutline))
+        }
+    }
+
     // ── Timetable grid building ─────────────────────────────────────────
 
     private fun buildTimetableGrid() {
@@ -329,21 +375,23 @@ class TimetableFragment : Fragment() {
         grid.removeAllViews()
 
         val today = LocalDate.now()
+        val targetDate = getOffsetDate()
+        val targetDayKey = targetDate.dayOfWeek.toKey()
         val todayDayKey = today.dayOfWeek.toKey()
 
         // Apply parity filter to entries
         val filteredEntries = when (currentFilter) {
             "odd" -> allEntries.filter { it.weekParity == "every" || it.weekParity == "odd" }
             "even" -> allEntries.filter { it.weekParity == "every" || it.weekParity == "even" }
-            "today" -> allEntries.filter { it.day == todayDayKey }
+            "today" -> allEntries.filter { it.day == targetDayKey }
             else -> allEntries // "all" — show everything
         }
 
         // Find which days have entries
         val daysWithEntries = filteredEntries.map { it.day }.toSet()
-        // For "today" mode, only show today; otherwise Mon-Fri + weekends with entries
+        // For "today" mode, only show the target day; otherwise Mon-Fri + weekends with entries
         val daysToShow = if (currentFilter == "today") {
-            listOf(todayDayKey)
+            listOf(targetDayKey)
         } else {
             dayOrder.filter { day ->
                 day in listOf("monday", "tuesday", "wednesday", "thursday", "friday") || day in daysWithEntries
@@ -372,7 +420,8 @@ class TimetableFragment : Fragment() {
         val isTodayFilter = currentFilter == "today"
 
         for (day in daysToShow) {
-            val dayColumn = createDayColumn(day, day == todayDayKey, today, filteredEntries, filterParity, isTodayFilter)
+            val isHighlighted = if (weekOffset == 0) day == todayDayKey else false
+            val dayColumn = createDayColumn(day, isHighlighted, targetDate, filteredEntries, filterParity, isTodayFilter)
             grid.addView(dayColumn)
         }
     }
@@ -413,13 +462,26 @@ class TimetableFragment : Fragment() {
             .filter { it.day == day }
             .sortedBy { it.startTime }
 
+        // Calculate the actual date for this day column in the viewed week
+        val dayOfWeek = when (day) {
+            "monday" -> DayOfWeek.MONDAY
+            "tuesday" -> DayOfWeek.TUESDAY
+            "wednesday" -> DayOfWeek.WEDNESDAY
+            "thursday" -> DayOfWeek.THURSDAY
+            "friday" -> DayOfWeek.FRIDAY
+            "saturday" -> DayOfWeek.SATURDAY
+            "sunday" -> DayOfWeek.SUNDAY
+            else -> today.dayOfWeek
+        }
+        val columnDate = today.with(dayOfWeek)
+
         // When a parity filter is active, use that as context so entries matching the filter
         // are shown at full opacity (not grayed out for parity mismatch)
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = filterParity ?: if (weekNumber % 2 == 0) "even" else "odd"
 
         for (entry in dayEntries) {
-            val card = createEntryCard(entry, today, currentParity)
+            val card = createEntryCard(entry, columnDate, currentParity)
             column.addView(card)
         }
 
@@ -646,10 +708,10 @@ class TimetableFragment : Fragment() {
         btnSave.text = "Uložiť"
         btnDelete.visibility = View.VISIBLE
 
-        spinnerDay.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, dayDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
-        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, parityDisplayNames)
-            .also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+        spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         // Pre-fill
         spinnerDay.setSelection(dayKeys.indexOf(entry.day).coerceAtLeast(0))
@@ -811,17 +873,30 @@ class TimetableFragment : Fragment() {
         val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveDayOff)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelDayOff)
 
+        // Auto-fill today's date
+        val today = LocalDate.now()
+        editDate.setText(today.format(skDateFormat))
+
         // Date pickers — DD.MM.YYYY format
-        val dateClickListener = { editText: TextInputEditText ->
-            View.OnClickListener {
-                val cal = Calendar.getInstance()
-                DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                    editText.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-            }
+        editDate.setOnClickListener {
+            val cal = Calendar.getInstance()
+            DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+                editDate.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
+            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
         }
-        editDate.setOnClickListener(dateClickListener(editDate))
-        editDateTo.setOnClickListener(dateClickListener(editDateTo))
+        editDateTo.setOnClickListener {
+            val cal = Calendar.getInstance()
+            val dpd = DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+                editDateTo.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
+            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+            val fromDate = parseDateSk(editDate.text?.toString()?.trim() ?: "")
+            if (fromDate != null) {
+                val minCal = Calendar.getInstance()
+                minCal.set(fromDate.year, fromDate.monthValue - 1, fromDate.dayOfMonth)
+                dpd.datePicker.minDate = minCal.timeInMillis
+            }
+            dpd.show()
+        }
 
         // Time pickers
         val timeClickListener = { editText: TextInputEditText ->
@@ -878,6 +953,7 @@ class TimetableFragment : Fragment() {
         if (isOffline) {
             localDb.addDayOff("offline_admin", dayOffJson)
             loadOfflineTimetable()
+            refreshMyDaysOffDialog()
             Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)}: $label", Snackbar.LENGTH_SHORT).show()
         } else {
             val uid = currentUserUid
@@ -891,6 +967,7 @@ class TimetableFragment : Fragment() {
                 .addOnSuccessListener {
                     if (isAdded) {
                         loadOnlineTimetable()
+                        refreshMyDaysOffDialog()
                         Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)}: $label", Snackbar.LENGTH_SHORT).show()
                     }
                 }
@@ -929,9 +1006,9 @@ class TimetableFragment : Fragment() {
             }
             container.addView(emptyText, messageIndex)
         } else {
-            for (dayOff in myDaysOff.sortedBy { parseDateSk(it.date) }) {
-                val row = createDayOffRow(dayOff, ownerUid)
-                container.addView(row, messageIndex)
+            for ((index, dayOff) in myDaysOff.sortedBy { parseDateSk(it.date) }.withIndex()) {
+                val row = createDayOffRow(dayOff, ownerUid, index)
+                container.addView(row, messageIndex + index)
             }
         }
 
@@ -942,55 +1019,71 @@ class TimetableFragment : Fragment() {
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
 
         cancelBtn.setOnClickListener { dialog.dismiss() }
+        myDaysOffDialog = dialog
+        dialog.setOnDismissListener { myDaysOffDialog = null }
         dialog.show()
     }
 
-    private fun createDayOffRow(dayOff: DayOff, ownerUid: String): LinearLayout {
-        val density = resources.displayMetrics.density
-        val row = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
-        }
+    private fun refreshMyDaysOffDialog() {
+        val dialog = myDaysOffDialog ?: return
+        dialog.setOnDismissListener(null)
+        myDaysOffDialog = null
+        dialog.dismiss()
+        showMyDaysOffDialog()
+    }
 
-        val label = buildString {
+    private fun createDayOffRow(dayOff: DayOff, ownerUid: String, index: Int): View {
+        val view = LayoutInflater.from(requireContext())
+            .inflate(R.layout.item_day_off, null)
+
+        val card = view as MaterialCardView
+        card.layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+
+        // Alternating row color
+        val rowBgAttr = if (index % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val typedValue = android.util.TypedValue()
+        requireContext().theme.resolveAttribute(rowBgAttr, typedValue, true)
+        card.setCardBackgroundColor(typedValue.data)
+
+        // Date label
+        val dateLabel = buildString {
             append(dayOff.date)
-            if (dayOff.timeFrom.isNotBlank()) append(" ${dayOff.timeFrom}")
             if (dayOff.dateTo.isNotBlank()) append(" – ${dayOff.dateTo}")
-            if (dayOff.timeTo.isNotBlank()) append(" ${dayOff.timeTo}")
-            if (dayOff.note.isNotBlank()) append(" (${dayOff.note})")
+        }
+        view.findViewById<TextView>(R.id.textDate).text = dateLabel
+
+        // Time label
+        val timeLabel = buildString {
+            if (dayOff.timeFrom.isNotBlank()) append(dayOff.timeFrom)
+            if (dayOff.timeTo.isNotBlank()) append(" – ${dayOff.timeTo}")
+        }
+        val timeView = view.findViewById<TextView>(R.id.textTime)
+        if (timeLabel.isNotBlank()) {
+            timeView.text = timeLabel
+            timeView.visibility = View.VISIBLE
         }
 
-        val textView = TextView(requireContext()).apply {
-            text = label
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
-            setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurface))
+        // Note
+        val noteView = view.findViewById<TextView>(R.id.textNote)
+        if (dayOff.note.isNotBlank()) {
+            noteView.text = dayOff.note
+            noteView.visibility = View.VISIBLE
         }
 
-        val editBtn = com.google.android.material.button.MaterialButton(
-            requireContext(), null, com.google.android.material.R.attr.materialIconButtonStyle
-        ).apply {
-            text = "✎"
-            setOnClickListener {
-                showEditDayOffDialog(dayOff, ownerUid)
-            }
-        }
+        // Buttons
+        view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnEdit)
+            .setOnClickListener { showEditDayOffDialog(dayOff, ownerUid) }
+        view.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDelete)
+            .setOnClickListener { showDeleteDayOffConfirmation(dayOff, ownerUid) }
 
-        val deleteBtn = com.google.android.material.button.MaterialButton(
-            requireContext(), null, com.google.android.material.R.attr.materialIconButtonStyle
-        ).apply {
-            text = "✕"
-            setTextColor(resolveThemeColor(android.R.attr.colorError))
-            setOnClickListener {
-                showDeleteDayOffConfirmation(dayOff, ownerUid)
-            }
-        }
-
-        row.addView(textView)
-        row.addView(editBtn)
-        row.addView(deleteBtn)
-        return row
+        return view
     }
 
     private fun showEditDayOffDialog(dayOff: DayOff, ownerUid: String) {
@@ -1017,16 +1110,25 @@ class TimetableFragment : Fragment() {
         editNote.setText(dayOff.note)
 
         // Date pickers
-        val dateClickListener = { editText: TextInputEditText ->
-            View.OnClickListener {
-                val cal = Calendar.getInstance()
-                DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                    editText.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-            }
+        editDate.setOnClickListener {
+            val cal = Calendar.getInstance()
+            DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+                editDate.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
+            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
         }
-        editDate.setOnClickListener(dateClickListener(editDate))
-        editDateTo.setOnClickListener(dateClickListener(editDateTo))
+        editDateTo.setOnClickListener {
+            val cal = Calendar.getInstance()
+            val dpd = DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
+                editDateTo.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
+            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+            val fromDate = parseDateSk(editDate.text?.toString()?.trim() ?: "")
+            if (fromDate != null) {
+                val minCal = Calendar.getInstance()
+                minCal.set(fromDate.year, fromDate.monthValue - 1, fromDate.dayOfMonth)
+                dpd.datePicker.minDate = minCal.timeInMillis
+            }
+            dpd.show()
+        }
 
         val timeClickListener = { editText: TextInputEditText ->
             View.OnClickListener {
@@ -1075,6 +1177,7 @@ class TimetableFragment : Fragment() {
             localDb.removeDayOff(ownerUid, dayOff.key)
             localDb.addDayOff(ownerUid, newJson)
             loadOfflineTimetable()
+            refreshMyDaysOffDialog()
             Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)} aktualizovaná", Snackbar.LENGTH_SHORT).show()
         } else {
             val map = mutableMapOf<String, Any>("date" to date)
@@ -1086,6 +1189,7 @@ class TimetableFragment : Fragment() {
                 .addOnSuccessListener {
                     if (isAdded) {
                         loadOnlineTimetable()
+                        refreshMyDaysOffDialog()
                         Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)} aktualizovaná", Snackbar.LENGTH_SHORT).show()
                     }
                 }
@@ -1122,12 +1226,14 @@ class TimetableFragment : Fragment() {
         if (isOffline) {
             localDb.removeDayOff(ownerUid, dayOff.key)
             loadOfflineTimetable()
+            refreshMyDaysOffDialog()
             Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)} odstránená", Snackbar.LENGTH_SHORT).show()
         } else {
             db.child("days_off").child(ownerUid).child(dayOff.key).removeValue()
                 .addOnSuccessListener {
                     if (isAdded) {
                         loadOnlineTimetable()
+                        refreshMyDaysOffDialog()
                         Snackbar.make(binding.root, "${getString(R.string.timetable_day_off_label)} odstránená", Snackbar.LENGTH_SHORT).show()
                     }
                 }

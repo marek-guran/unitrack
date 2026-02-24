@@ -87,7 +87,7 @@ root/
 │                       └── absent: true
 │
 ├── teachers/
-│   └── {uid}: "ucitel@uni.sk"               # Email učiteľa
+│   └── {uid}: "ucitel@uni.sk, Meno Učiteľa" # Email a meno učiteľa
 │
 └── days_off/                                # Voľné dni
     └── {teacherUid}/
@@ -130,7 +130,9 @@ val db = LocalDatabase.getInstance(context)
 
 // Čítanie
 db.getJson("predmety/mat1")              // → JSONObject alebo null
+db.getJsonArray("predmety/mat1/subjects") // → JSONArray alebo null
 db.getString("predmety/mat1/name")        // → "Matematika 1" alebo null
+db.getAny("predmety/mat1/semester")       // → Any alebo null
 db.exists("admins/local_user")            // → true/false
 db.getChildren("predmety")               // → List<String> kľúčov
 
@@ -142,6 +144,62 @@ db.push("hodnotenia/2025_2026/zimny/mat1/uid1")  // Vygeneruje UUID kľúč
 // Export / Import
 db.exportToStream(outputStream)
 db.importFromStream(inputStream)
+db.exportToJson()                   // → String (JSON)
+db.importFromJson(jsonString)       // Importuje z reťazca
+```
+
+### Convenience metódy
+
+Pre bežné operácie poskytuje `LocalDatabase` vyššiu úroveň abstrakcie:
+
+```kotlin
+// Predmety
+db.getSubjects()                           // → Map<String, JSONObject>
+db.addSubject(key, name, teacherEmail, semester)
+db.removeSubject(key)
+
+// Študenti
+db.getStudents(year)                       // → Map<String, JSONObject>
+db.addStudent(year, uid, email, name, subjects)
+db.removeStudent(year, uid)
+db.updateStudentName(year, uid, name)
+db.updateStudentSubjects(year, uid, semester, subjectKeys)
+
+// Známky
+db.addMark(year, semester, subjectKey, studentUid, mark)  // → markId
+db.updateMark(year, semester, subjectKey, studentUid, markId, mark)
+db.removeMark(year, semester, subjectKey, studentUid, markId)
+db.getMarks(year, semester, subjectKey, studentUid)  // → Map<String, JSONObject>
+
+// Dochádzka
+db.setAttendance(year, semester, subjectKey, studentUid, date, entry)
+db.removeAttendance(year, semester, subjectKey, studentUid, date)
+db.getAttendance(year, semester, subjectKey, studentUid)  // → Map<String, JSONObject>
+
+// Rozvrh
+db.getTimetableEntries(subjectKey)         // → Map<String, JSONObject>
+db.addTimetableEntry(subjectKey, entry)    // → entryId
+db.removeTimetableEntry(subjectKey, entryKey)
+
+// Voľné dni
+db.getDaysOff(teacherUid)                  // → Map<String, JSONObject>
+db.addDayOff(teacherUid, dayOff)           // → key
+db.removeDayOff(teacherUid, key)
+
+// Školské roky
+db.getSchoolYears()                        // → Map<String, String>
+db.addSchoolYear(key, name)
+
+// Učitelia
+db.addTeacher(uid, info)
+db.getTeachers()                           // → Map<String, String>
+
+// Meno učiteľa (offline)
+db.setTeacherName(name)
+db.getTeacherName()                        // → String?
+
+// Ostatné
+db.clearAll()                              // Vymaže a vytvorí predvolenú databázu
 ```
 
 ### Thread safety
@@ -235,7 +293,8 @@ data class TeacherSubjectSummary(
     val subjectKey: String,
     val subjectName: String,
     val studentCount: Int,
-    val averageMark: String      // Priemerná známka predmetu
+    val averageMark: String,          // Priemerná známka predmetu
+    val averageAttendance: String = "-"  // Priemerná dochádzka predmetu
 )
 ```
 

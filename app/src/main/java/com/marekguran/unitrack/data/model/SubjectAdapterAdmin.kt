@@ -28,6 +28,17 @@ class SubjectAdapterAdmin(
         val subject = subjects[position]
         holder.subjectName.text = subject.name
         holder.editBtn.setOnClickListener { onEditClick(subject) }
+
+        // Alternating row color
+        val rowBgAttr = if (position % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val typedValue = android.util.TypedValue()
+        holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+        (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+            ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
     }
 
     override fun getItemCount() = subjects.size

@@ -67,6 +67,17 @@ class MarkAdapter(
         holder.markTimestamp.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(mark.timestamp))
         holder.editMarkBtn.setOnClickListener { onEdit(markWithKey) }
         holder.removeMarkBtn.setOnClickListener { onRemove(markWithKey) }
+
+        // Alternating row color
+        val rowBgAttr = if (position % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val typedValue = android.util.TypedValue()
+        holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+        (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+            ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
     }
 
     companion object {

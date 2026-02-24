@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="24dp">
+    android:padding="14dp">
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
@@ -43,29 +43,31 @@
         <TextView
             android:id="@+id/inputDate"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="52dp"
             android:gravity="center_vertical"
             android:hint="Vybrať dátum"
-            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
             android:textColor="?attr/colorOnSurface"
             android:background="@drawable/bg_pill_chip"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:focusable="false"
+            android:clickable="true"
+            android:focusable="true"
             android:layout_marginBottom="8dp" />
 
         <TextView
             android:id="@+id/inputTime"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="52dp"
             android:gravity="center_vertical"
             android:hint="Vybrať čas"
-            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
             android:textColor="?attr/colorOnSurface"
             android:background="@drawable/bg_pill_chip"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:focusable="false"
+            android:clickable="true"
+            android:focusable="true"
             android:layout_marginBottom="12dp" />
 
         <com.google.android.material.textfield.TextInputLayout

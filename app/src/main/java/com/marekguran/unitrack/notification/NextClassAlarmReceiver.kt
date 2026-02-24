@@ -35,18 +35,23 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         const val CHANNEL_ID = "next_class_channel"
         const val CHANNEL_CANCELLED_ID = "class_cancelled_channel"
         const val CHANNEL_GRADES_ID = "grades_channel"
+        const val CHANNEL_ABSENCE_ID = "absence_channel"
         const val NOTIFICATION_ID = 1001
         const val NOTIFICATION_CANCELLED_ID = 1002
         const val NOTIFICATION_GRADE_BASE_ID = 2000
+        const val NOTIFICATION_ABSENCE_ID = 3000
         private const val REQUEST_CODE_NEXT_CLASS = 2001
         private const val REQUEST_CODE_CHANGES = 2002
         private const val PREFS_NAME = "notif_state_prefs"
         private const val KEY_LAST_CANCELLED_DATE = "last_cancelled_date"
         private const val KEY_GRADE_SNAPSHOT = "grade_snapshot"
         private const val KEY_DAYSOFF_SNAPSHOT = "daysoff_snapshot"
+        private const val KEY_ATTENDANCE_SNAPSHOT = "attendance_snapshot"
 
-        /** Schedule the silent next-class Live Update check (every 2 min). */
+        /** Schedule the silent next-class Live Update check. */
         fun scheduleNextClass(context: Context) {
+            val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("notif_enabled_live", true)
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NextClassAlarmReceiver::class.java).apply {
                 action = "ACTION_NEXT_CLASS"
@@ -55,16 +60,23 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 context, REQUEST_CODE_NEXT_CLASS, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            if (!enabled) {
+                alarmManager.cancel(pendingIntent)
+                return
+            }
+            val intervalMinutes = prefs.getInt("notif_interval_live", 2)
             alarmManager.setRepeating(
                 AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + 5000,
-                2 * 60 * 1000L, // Aktualizuj sa kazde 2 minuty
+                intervalMinutes * 60 * 1000L,
                 pendingIntent
             )
         }
 
-        /** Schedule the loud changes check (grades + cancellations, every 30 min). */
+        /** Schedule the loud changes check (grades + cancellations). */
         fun scheduleChangesCheck(context: Context) {
+            val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            val enabled = prefs.getBoolean("notif_enabled_changes", true)
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(context, NextClassAlarmReceiver::class.java).apply {
                 action = "ACTION_CHECK_CHANGES"
@@ -73,10 +85,15 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 context, REQUEST_CODE_CHANGES, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            if (!enabled) {
+                alarmManager.cancel(pendingIntent)
+                return
+            }
+            val intervalMinutes = prefs.getInt("notif_interval_changes", 30)
             alarmManager.setRepeating(
                 AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + 10000,
-                30 * 60 * 1000L,
+                intervalMinutes * 60 * 1000L,
                 pendingIntent
             )
         }
@@ -134,6 +151,16 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 description = context.getString(R.string.notification_grade_change_desc)
             }
             nm.createNotificationChannel(gradesChannel)
+
+            // Channel for absence notifications
+            val absenceChannel = NotificationChannel(
+                CHANNEL_ABSENCE_ID,
+                context.getString(R.string.notification_channel_absence),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.notification_absence_desc)
+            }
+            nm.createNotificationChannel(absenceChannel)
         }
     }
 
@@ -271,8 +298,22 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        val appPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val showClassroom = appPrefs.getBoolean("notif_show_classroom", true)
+        val showUpcoming = appPrefs.getBoolean("notif_show_upcoming", true)
+        val minutesBeforePref = appPrefs.getInt("notif_minutes_before", 30)
+
         val firstStart = schedule.first().startTime
         val lastEnd = schedule.last().endTime
+
+        // If before first class and outside the configured window, dismiss
+        if (now.isBefore(firstStart)) {
+            val minsUntilStart = java.time.Duration.between(now, firstStart).toMinutes().toInt()
+            if (minsUntilStart > minutesBeforePref) {
+                dismissNextClassNotification(context)
+                return
+            }
+        }
 
         if (!now.isBefore(lastEnd)) {
             dismissNextClassNotification(context)
@@ -285,10 +326,12 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             val nextSlot = if (i + 1 < schedule.size) schedule[i + 1] else null
 
             val slotMins = java.time.Duration.between(slot.startTime, slot.endTime).toMinutes().toInt()
-            val roomStr = if (slot.classroom.isNotBlank()) " (${slot.classroom})" else ""
+            val roomStr = if (showClassroom && slot.classroom.isNotBlank()) " (${slot.classroom})" else ""
             val classTitle = slot.name + roomStr
-            val classText = if (nextSlot != null) {
+            val classText = if (nextSlot != null && showUpcoming) {
                 "Ďalej: ${nextSlot.name} • Koniec ${formatTime(slot.endTime)}"
+            } else if (nextSlot != null) {
+                "Koniec ${formatTime(slot.endTime)}"
             } else {
                 "Posledná hodina • Koniec ${formatTime(slot.endTime)}"
             }
@@ -299,7 +342,11 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             if (nextSlot != null && slot.endTime.isBefore(nextSlot.startTime)) {
                 val gapMins = java.time.Duration.between(slot.endTime, nextSlot.startTime).toMinutes().toInt()
                 val breakTitle = if (gapMins > 30) "Voľno" else "Prestávka"
-                val breakText = "Ďalej: ${nextSlot.name} • Štart ${formatTime(nextSlot.startTime)}"
+                val breakText = if (showUpcoming) {
+                    "Ďalej: ${nextSlot.name} • Štart ${formatTime(nextSlot.startTime)}"
+                } else {
+                    "Štart ďalšej: ${formatTime(nextSlot.startTime)}"
+                }
                 timeline.add(TimelineEvent(breakTitle, breakText, slot.endTime, nextSlot.startTime, true, gapMins))
             }
         }
@@ -311,7 +358,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         if (now.isBefore(firstStart)) {
             val firstClass = schedule.first()
             currentTitle = "Vyučovanie začína čoskoro"
-            val roomStr = if (firstClass.classroom.isNotBlank()) " (${firstClass.classroom})" else ""
+            val roomStr = if (showClassroom && firstClass.classroom.isNotBlank()) " (${firstClass.classroom})" else ""
             currentText = "${firstClass.name}$roomStr • Štart ${formatTime(firstClass.startTime)}"
             isCurrentlyBreak = true
         } else {
@@ -464,6 +511,9 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
         // Check grade changes
         checkGradeChanges(context, db, prefs, user.uid)
+
+        // Check absence changes
+        checkAbsenceChanges(context, db, prefs, user.uid)
     }
 
     // ── Cancellation detection ──────────────────────────────────────────
@@ -649,7 +699,104 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         })
     }
 
-    // ── Loud notification builders ──────────────────────────────────────
+    // ── Absence detection ───────────────────────────────────────────────
+
+    private fun checkAbsenceChanges(context: Context, db: com.google.firebase.database.DatabaseReference, prefs: android.content.SharedPreferences, userUid: String) {
+        db.child("pritomnost").addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                // Build a fingerprint of all absence entries for this student
+                val currentAbsences = mutableMapOf<String, Boolean>() // "year/sem/subject/date" -> absent
+                val subjectKeys = mutableSetOf<String>()
+
+                for (yearSnap in snapshot.children) {
+                    val year = yearSnap.key ?: continue
+                    for (semSnap in yearSnap.children) {
+                        val sem = semSnap.key ?: continue
+                        for (subjSnap in semSnap.children) {
+                            val subjectKey = subjSnap.key ?: continue
+                            val studentSnap = subjSnap.child(userUid)
+                            if (!studentSnap.exists()) continue
+                            for (dateSnap in studentSnap.children) {
+                                val dateKey = dateSnap.key ?: continue
+                                val absent = dateSnap.child("absent").getValue(Boolean::class.java) ?: false
+                                currentAbsences["$year/$sem/$subjectKey/$dateKey"] = absent
+                                if (absent) subjectKeys.add(subjectKey)
+                            }
+                        }
+                    }
+                }
+
+                val currentSnapshot = currentAbsences.entries.sortedBy { it.key }
+                    .joinToString(";") { "${it.key}=${it.value}" }
+
+                val previousSnapshot = prefs.getString(KEY_ATTENDANCE_SNAPSHOT, "") ?: ""
+                if (currentSnapshot == previousSnapshot) return
+                prefs.edit().putString(KEY_ATTENDANCE_SNAPSHOT, currentSnapshot).apply()
+
+                // First run — just save, don't notify
+                if (previousSnapshot.isEmpty()) return
+
+                // Parse previous absences
+                val previousAbsences = mutableMapOf<String, Boolean>()
+                if (previousSnapshot.isNotBlank()) {
+                    for (entry in previousSnapshot.split(";")) {
+                        val parts = entry.split("=", limit = 2)
+                        if (parts.size == 2) previousAbsences[parts[0]] = parts[1].toBoolean()
+                    }
+                }
+
+                // Detect new absences (entries that are absent=true and either didn't exist or were absent=false)
+                val newAbsenceKeys = currentAbsences.filter { (key, absent) ->
+                    absent && (previousAbsences[key] != true)
+                }.keys
+
+                if (newAbsenceKeys.isEmpty()) return
+
+                // Resolve subject names
+                val absentSubjectKeys = newAbsenceKeys.map { it.split("/").getOrNull(2) ?: "" }.toSet()
+                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(predmetySnap: DataSnapshot) {
+                        val subjectNameMap = mutableMapOf<String, String>()
+                        for (subjSnap in predmetySnap.children) {
+                            subjectNameMap[subjSnap.key ?: ""] =
+                                subjSnap.child("name").getValue(String::class.java) ?: subjSnap.key ?: ""
+                        }
+
+                        val absentSubjectNames = absentSubjectKeys.mapNotNull { subjectNameMap[it] }.distinct()
+                        if (absentSubjectNames.isNotEmpty()) {
+                            showAbsenceNotification(context, absentSubjectNames)
+                        }
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                })
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    private fun showAbsenceNotification(context: Context, subjectNames: List<String>) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val contentIntent = Intent(context, MainActivity::class.java)
+        val pendingContentIntent = PendingIntent.getActivity(
+            context, 3, contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val title = context.getString(R.string.notification_absence_title)
+        val contentText = subjectNames.joinToString(", ")
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ABSENCE_ID)
+            .setSmallIcon(R.drawable.ic_timetable)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+            .setContentIntent(pendingContentIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+
+        nm.notify(NOTIFICATION_ABSENCE_ID, builder.build())
+    }
 
     private fun showCancelledNotification(context: Context, cancelledSubjects: List<String>, todayDate: String) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

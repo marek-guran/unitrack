@@ -5,11 +5,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.marekguran.unitrack.R
-import com.marekguran.unitrack.ui.home.AttendanceAdapter
 
 class TeacherStudentAdapter(
     private val students: List<StudentDetail>,
@@ -23,10 +21,8 @@ class TeacherStudentAdapter(
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val studentName: TextView = view.findViewById(R.id.studentName)
         val viewDetailsBtn: Button = view.findViewById(R.id.viewDetailsBtn)
-        val addAttendanceBtn: Button = view.findViewById(R.id.addAttendanceBtn)
         val addMarkBtn: Button = view.findViewById(R.id.addMarkBtn)
         val attendanceChip: Chip = view.findViewById(R.id.attendanceChip)
-        val showAttendanceBtn: Button = view.findViewById(R.id.showAttendanceBtn)
         val avgMarkChip: Chip = view.findViewById(R.id.avgMarkChip)
     }
 
@@ -44,13 +40,25 @@ class TeacherStudentAdapter(
         holder.attendanceChip.text = "Prítomnosť: $presentCount/$totalCount"
         holder.avgMarkChip.text = "Priemer: ${student.average}"
 
-        // Set up attendance RecyclerView (list of attended days)
-        holder.showAttendanceBtn.setOnClickListener {
-            onShowAttendanceDetails(student)
-        }
         holder.viewDetailsBtn.setOnClickListener { onViewDetails(student) }
-        holder.addAttendanceBtn.setOnClickListener { onAddAttendance(student) }
         holder.addMarkBtn.setOnClickListener { onAddMark(student) }
+        holder.attendanceChip.setOnClickListener { onAddAttendance(student) }
+        holder.attendanceChip.setOnLongClickListener {
+            onShowAttendanceDetails(student)
+            true
+        }
+        holder.attendanceChip.tooltipText = "Podržte pre detail dochádzky"
+
+        // Alternating row color
+        val rowBgAttr = if (position % 2 == 0) {
+            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        } else {
+            com.google.android.material.R.attr.colorSurfaceContainer
+        }
+        val typedValue = android.util.TypedValue()
+        holder.itemView.context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+        (holder.itemView as? com.google.android.material.card.MaterialCardView)?.setCardBackgroundColor(typedValue.data)
+            ?: run { holder.itemView.setBackgroundColor(typedValue.data) }
     }
 
     override fun getItemCount() = students.size

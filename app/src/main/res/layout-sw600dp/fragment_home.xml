@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="100dp"
+    android:paddingTop="48dp"
     android:background="?attr/colorSurface"
     tools:context=".ui.home.HomeFragment">
 
@@ -14,6 +14,17 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:visibility="gone" />
+
+    <!-- App name label -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+        android:textColor="?attr/colorPrimary"
+        android:letterSpacing="0.1"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp" />
 
     <TextView
         android:id="@+id/titleName"
@@ -25,7 +36,7 @@
         android:textColor="?attr/colorOnSurface"
         android:paddingStart="40dp"
         android:paddingEnd="40dp"
-        android:paddingTop="8dp"
+        android:paddingTop="4dp"
         android:paddingBottom="8dp" />
 
     <LinearLayout
@@ -87,4 +98,18 @@
         app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
         app:spanCount="2"
         tools:listitem="@layout/item_subject" />
+
+    <!-- Export button (visible only for students) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/exportStudentResultsBtn"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginStart="40dp"
+        android:layout_marginEnd="40dp"
+        android:layout_marginBottom="100dp"
+        android:text="Exportovať výsledky"
+        android:visibility="gone"
+        app:cornerRadius="12dp" />
 </LinearLayout>
