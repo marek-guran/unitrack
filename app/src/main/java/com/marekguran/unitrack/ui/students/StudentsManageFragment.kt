@@ -89,15 +89,22 @@ class StudentsManageFragment : Fragment() {
             isOffline = isOffline,
             onClick = { student -> showStudentOptionsDialog(student) },
             onAction = { student, actionIndex ->
-                when (actionIndex) {
-                    0 -> {
-                        if (student.isTeacher) showTeacherSubjectsDialog(student)
-                        else showEnrollDialog(student)
+                if (isOffline) {
+                    when (actionIndex) {
+                        0 -> {
+                            if (student.isTeacher) showTeacherSubjectsDialog(student)
+                            else showEnrollDialog(student)
+                        }
+                        1 -> showRenameDialog(student)
+                        2 -> confirmDeleteStudent(student)
                     }
-                    1 -> showRenameDialog(student)
-                    2 -> {
-                        if (isOffline) confirmDeleteStudent(student)
-                        else showEditAccountDialog(student)
+                } else {
+                    when (actionIndex) {
+                        0 -> {
+                            if (student.isTeacher) showTeacherSubjectsDialog(student)
+                            else showEnrollDialog(student)
+                        }
+                        1 -> showEditAccountDialog(student)
                     }
                 }
             }
@@ -127,9 +134,9 @@ class StudentsManageFragment : Fragment() {
         })
 
         // Setup filter chips (online only)
-        val chipGroup = view.findViewById<ChipGroup>(R.id.chipGroupFilter)
+        val chipGroupScroll = view.findViewById<android.widget.HorizontalScrollView>(R.id.chipGroupScroll)
         if (!isOffline) {
-            chipGroup.visibility = View.VISIBLE
+            chipGroupScroll.visibility = View.VISIBLE
             view.findViewById<Chip>(R.id.chipAll).setOnClickListener { currentRoleFilter = RoleFilter.ALL; applyFilters() }
             view.findViewById<Chip>(R.id.chipStudents).setOnClickListener { currentRoleFilter = RoleFilter.STUDENTS; applyFilters() }
             view.findViewById<Chip>(R.id.chipTeachers).setOnClickListener { currentRoleFilter = RoleFilter.TEACHERS; applyFilters() }
@@ -609,7 +616,7 @@ class StudentsManageFragment : Fragment() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.let { window ->
             val margin = (10 * resources.displayMetrics.density).toInt()
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             window.decorView.setPadding(margin, margin, margin, margin)
         }
 
@@ -676,7 +683,7 @@ class StudentsManageFragment : Fragment() {
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.let { window ->
                 val margin = (10 * resources.displayMetrics.density).toInt()
-                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 window.decorView.setPadding(margin, margin, margin, margin)
             }
 
@@ -959,21 +966,28 @@ class StudentsManageFragment : Fragment() {
         val options = if (isOffline) {
             arrayOf("Predmety", "Premenovať", "Odstrániť")
         } else {
-            arrayOf("Predmety", "Premenovať", "Upraviť")
+            arrayOf("Predmety", "Upraviť")
         }
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(student.name)
             .setItems(options) { _, which ->
-                when (which) {
-                    0 -> {
-                        if (student.isTeacher) showTeacherSubjectsDialog(student)
-                        else showEnrollDialog(student)
+                if (isOffline) {
+                    when (which) {
+                        0 -> {
+                            if (student.isTeacher) showTeacherSubjectsDialog(student)
+                            else showEnrollDialog(student)
+                        }
+                        1 -> showRenameDialog(student)
+                        2 -> confirmDeleteStudent(student)
                     }
-                    1 -> showRenameDialog(student)
-                    2 -> {
-                        if (isOffline) confirmDeleteStudent(student)
-                        else showEditAccountDialog(student)
+                } else {
+                    when (which) {
+                        0 -> {
+                            if (student.isTeacher) showTeacherSubjectsDialog(student)
+                            else showEnrollDialog(student)
+                        }
+                        1 -> showEditAccountDialog(student)
                     }
                 }
             }
@@ -1139,7 +1153,7 @@ class StudentsManageFragment : Fragment() {
                 val options = if (isOffline) {
                     listOf("Predmety", "Premenovať", "Odstrániť")
                 } else {
-                    listOf("Predmety", "Premenovať", "Upraviť")
+                    listOf("Predmety", "Upraviť")
                 }
                 for ((index, option) in options.withIndex()) {
                     val btn = MaterialButton(ctx, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {

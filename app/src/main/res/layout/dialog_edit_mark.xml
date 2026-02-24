@@ -2,12 +2,12 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:padding="14dp">
 
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         app:cardCornerRadius="20dp"
         app:cardElevation="0dp"
         app:strokeWidth="1dp"
@@ -16,9 +16,20 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
         android:padding="24dp">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
         <TextView
             android:id="@+id/editMarkTitle"
@@ -32,14 +43,22 @@
 
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Vyberte známku" android:textAppearance="@style/TextAppearance.Material3.LabelLarge" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="10dp" />
 
-        <com.google.android.material.chip.ChipGroup android:id="@+id/gradeChipGroup" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="20dp" app:singleSelection="true" app:selectionRequired="false" app:chipSpacingHorizontal="8dp" app:chipSpacingVertical="8dp">
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeA" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  A  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeB" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  B  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeC" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  C  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeD" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  D  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeE" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  E  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-            <com.google.android.material.chip.Chip android:id="@+id/chipGradeFx" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  Fx  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
-        </com.google.android.material.chip.ChipGroup>
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:scrollbars="none"
+            android:clipToPadding="false">
+
+            <com.google.android.material.chip.ChipGroup android:id="@+id/gradeChipGroup" android:layout_width="wrap_content" android:layout_height="wrap_content" app:singleSelection="true" app:selectionRequired="false" app:chipSpacingHorizontal="8dp" app:chipSpacingVertical="8dp">
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeA" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  A  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeB" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  B  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeC" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  C  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeD" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  D  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeE" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  E  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipGradeFx" style="@style/Widget.UniTrack.GradeChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="  Fx  " app:chipStrokeWidth="1dp" app:chipStrokeColor="@color/grade_chip_stroke" app:chipBackgroundColor="@color/grade_chip_bg" android:textColor="@color/grade_chip_text" />
+            </com.google.android.material.chip.ChipGroup>
+        </HorizontalScrollView>
 
         <EditText android:id="@+id/inputGrade" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" android:importantForAccessibility="no" />
 
@@ -59,6 +78,9 @@
             <TextView android:id="@+id/inputDateLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Dátum:" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurfaceVariant" />
             <TextView android:id="@+id/inputDate" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Vyberte Dátum" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:paddingStart="12dp" android:paddingEnd="8dp" android:clickable="true" android:focusable="true" />
         </LinearLayout>
+
+        </LinearLayout>
+        </ScrollView>
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end">
             <com.google.android.material.button.MaterialButton android:id="@+id/cancelButton" style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Zrušiť" android:layout_marginEnd="8dp" />

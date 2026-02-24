@@ -90,50 +90,58 @@
             android:spinnerMode="dropdown" />
     </FrameLayout>
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/chipGroupFilter"
+    <HorizontalScrollView
+        android:id="@+id/chipGroupScroll"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:paddingStart="40dp"
-        android:paddingEnd="40dp"
         android:layout_marginBottom="8dp"
+        android:scrollbars="none"
+        android:clipToPadding="false"
         android:visibility="gone"
-        app:singleSelection="true"
-        app:selectionRequired="true"
         app:layout_constraintTop_toBottomOf="@id/subjectFilterContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintWidth_max="720dp">
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipAll"
-            style="@style/Widget.Material3.Chip.Filter"
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupFilter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Všetci"
-            android:checked="true" />
+            android:paddingStart="40dp"
+            android:paddingEnd="40dp"
+            app:singleSelection="true"
+            app:selectionRequired="true">
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipStudents"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Študenti" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAll"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Všetci"
+                android:checked="true" />
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipTeachers"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Učitelia" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipStudents"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Študenti" />
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipAdmins"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Admini" />
-    </com.google.android.material.chip.ChipGroup>
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipTeachers"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Učitelia" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAdmins"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Admini" />
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
 
     <TextView
         android:id="@+id/textEmptyStudents"
@@ -145,7 +153,7 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:padding="48dp"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/chipGroupFilter"
+        app:layout_constraintTop_toBottomOf="@id/chipGroupScroll"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -161,7 +169,7 @@
         android:paddingBottom="32dp"
         android:clipToPadding="false"
         android:layoutAnimation="@anim/layout_animation_slide_up"
-        app:layout_constraintTop_toBottomOf="@id/chipGroupFilter"
+        app:layout_constraintTop_toBottomOf="@id/chipGroupScroll"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

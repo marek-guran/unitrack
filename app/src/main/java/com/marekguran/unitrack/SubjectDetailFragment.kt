@@ -441,6 +441,7 @@ class SubjectDetailFragment : Fragment() {
                         binding.enrollStudentsButton.visibility = View.GONE
                         updateMarksButtonAppearance()
                         updateStudentsButtonAppearance()
+                        showMainMarksTable()
                     }
                     1 -> { // Attendance tab
                         showMarkAttendanceDialog(
@@ -829,7 +830,7 @@ class SubjectDetailFragment : Fragment() {
                 val margin = (10 * resources.displayMetrics.density).toInt()
                 window.setLayout(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+                    ViewGroup.LayoutParams.MATCH_PARENT
                 )
                 window.decorView.setPadding(margin, margin, margin, margin)
             }
@@ -924,7 +925,7 @@ class SubjectDetailFragment : Fragment() {
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
             val margin = (10 * resources.displayMetrics.density).toInt()
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             window.decorView.setPadding(margin, margin, margin, margin)
         }
 
@@ -1256,7 +1257,7 @@ class SubjectDetailFragment : Fragment() {
             val margin = (10 * resources.displayMetrics.density).toInt()
             window.setLayout(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
             window.decorView.setPadding(margin, margin, margin, margin)
         }
@@ -1361,7 +1362,7 @@ class SubjectDetailFragment : Fragment() {
             val margin = (10 * resources.displayMetrics.density).toInt()
             window.setLayout(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
             window.decorView.setPadding(margin, margin, margin, margin)
         }
@@ -2099,18 +2100,27 @@ class SubjectDetailFragment : Fragment() {
             }
         }
         removeBtn.setOnClickListener {
-            AlertDialog.Builder(requireContext())
-                .setTitle("Odstrániť známku")
-                .setMessage("Ste si istý, že chcete zmazať známku?")
-                .setPositiveButton("Odstrániť") { _, _ ->
-                    dialog.dismiss()
-                    removeMark(student, markWithKey) {
-                        refreshFragmentView()
-                        closeAllDialogs()
-                    }
+            val confirmView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
+            confirmView.findViewById<TextView>(R.id.dialogTitle).text = "Odstrániť známku"
+            confirmView.findViewById<TextView>(R.id.dialogMessage).text =
+                "Ste si istý, že chcete zmazať známku?"
+            val confirmBtn = confirmView.findViewById<MaterialButton>(R.id.confirmButton)
+            confirmBtn.text = "Odstrániť"
+            val confirmDialog = AlertDialog.Builder(requireContext())
+                .setView(confirmView)
+                .create()
+            confirmDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            confirmView.findViewById<MaterialButton>(R.id.cancelButton)
+                .setOnClickListener { confirmDialog.dismiss() }
+            confirmBtn.setOnClickListener {
+                confirmDialog.dismiss()
+                dialog.dismiss()
+                removeMark(student, markWithKey) {
+                    refreshFragmentView()
+                    closeAllDialogs()
                 }
-                .setNegativeButton("Zrušiť", null)
-                .show()
+            }
+            confirmDialog.show()
         }
         closeBtn.setOnClickListener {
             dialog.dismiss()
