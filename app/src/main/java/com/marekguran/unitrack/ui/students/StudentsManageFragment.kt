@@ -729,8 +729,28 @@ class StudentsManageFragment : Fragment() {
         val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
         spinnerSemester.setSelection(semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it })
 
+        val enrollFilterChipGroup = dialogView.findViewById<ChipGroup>(R.id.enrollFilterChipGroup)
+        val chipEnrollAll = dialogView.findViewById<Chip>(R.id.chipEnrollAll)
+        val chipEnrollEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollEnrolled)
+        val chipEnrollNotEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollNotEnrolled)
+
         val items = mutableListOf<SubjectEnrollItem>()
         var filtered = mutableListOf<SubjectEnrollItem>()
+
+        fun applyEnrollFilters() {
+            val query = searchEdit.text?.toString()?.lowercase() ?: ""
+            val checkedId = enrollFilterChipGroup.checkedChipId
+            filtered = items.filter { item ->
+                val matchesSearch = query.isEmpty() || item.name.lowercase().contains(query)
+                val matchesChip = when (checkedId) {
+                    R.id.chipEnrollEnrolled -> item.enrolled
+                    R.id.chipEnrollNotEnrolled -> !item.enrolled
+                    else -> true
+                }
+                matchesSearch && matchesChip
+            }.toMutableList()
+            recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+        }
 
         fun loadEnrollmentData() {
             val yearIdx = spinnerYear.selectedItemPosition
@@ -754,8 +774,7 @@ class StudentsManageFragment : Fragment() {
                 if (subjectSemester != "both" && subjectSemester != semester) continue
                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
             }
-            filtered = items.toMutableList()
-            recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+            applyEnrollFilters()
         }
 
         val spinnerListener = object : AdapterView.OnItemSelectedListener {
@@ -768,12 +787,12 @@ class StudentsManageFragment : Fragment() {
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         loadEnrollmentData()
 
+        chipEnrollAll.setOnClickListener { applyEnrollFilters() }
+        chipEnrollEnrolled.setOnClickListener { applyEnrollFilters() }
+        chipEnrollNotEnrolled.setOnClickListener { applyEnrollFilters() }
+
         searchEdit.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                val query = s?.toString()?.lowercase() ?: ""
-                filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
-                recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
-            }
+            override fun afterTextChanged(s: Editable?) { applyEnrollFilters() }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
@@ -835,8 +854,28 @@ class StudentsManageFragment : Fragment() {
             val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
             spinnerSemester.setSelection(semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it })
 
+            val enrollFilterChipGroup = dialogView.findViewById<ChipGroup>(R.id.enrollFilterChipGroup)
+            val chipEnrollAll = dialogView.findViewById<Chip>(R.id.chipEnrollAll)
+            val chipEnrollEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollEnrolled)
+            val chipEnrollNotEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollNotEnrolled)
+
             val items = mutableListOf<SubjectEnrollItem>()
             var filtered = mutableListOf<SubjectEnrollItem>()
+
+            fun applyEnrollFilters() {
+                val query = searchEdit.text?.toString()?.lowercase() ?: ""
+                val checkedId = enrollFilterChipGroup.checkedChipId
+                filtered = items.filter { item ->
+                    val matchesSearch = query.isEmpty() || item.name.lowercase().contains(query)
+                    val matchesChip = when (checkedId) {
+                        R.id.chipEnrollEnrolled -> item.enrolled
+                        R.id.chipEnrollNotEnrolled -> !item.enrolled
+                        else -> true
+                    }
+                    matchesSearch && matchesChip
+                }.toMutableList()
+                recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+            }
 
             fun loadEnrollmentData() {
                 val yearIdx = spinnerYear.selectedItemPosition
@@ -862,8 +901,7 @@ class StudentsManageFragment : Fragment() {
                                 if (subjectSemester != "both" && subjectSemester != semester) continue
                                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
                             }
-                            filtered = items.toMutableList()
-                            recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+                            applyEnrollFilters()
                         }
                 }
             }
@@ -878,12 +916,12 @@ class StudentsManageFragment : Fragment() {
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
             loadEnrollmentData()
 
+            chipEnrollAll.setOnClickListener { applyEnrollFilters() }
+            chipEnrollEnrolled.setOnClickListener { applyEnrollFilters() }
+            chipEnrollNotEnrolled.setOnClickListener { applyEnrollFilters() }
+
             searchEdit.addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) {
-                    val query = s?.toString()?.lowercase() ?: ""
-                    filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
-                    recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
-                }
+                override fun afterTextChanged(s: Editable?) { applyEnrollFilters() }
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             })
