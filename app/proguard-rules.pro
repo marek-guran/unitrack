@@ -19,7 +19,16 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
-# Keep all model classes and their constructors (adjust your package!)
--keepclassmembers class com.marekguran.unitrack.** { <init>(...); }
--keep class com.your.package.models.** { *; }
--keepclassmembers class * { public <init>(); }
+# Keep all model classes used by Firebase Realtime Database reflection
+-keep class com.marekguran.unitrack.data.model.** { *; }
+
+# Keep inner model classes used by Firebase (e.g. StudentDbModel)
+-keepclassmembers class com.marekguran.unitrack.** {
+    static final % *;
+    <init>(...);
+}
+-keep class com.marekguran.unitrack.**$StudentDbModel { *; }
+
+# Firebase Auth
+-keep class com.google.firebase.auth.** { *; }
+-dontwarn com.google.firebase.auth.**
