@@ -146,8 +146,12 @@
         android:layout_marginEnd="24dp"
         android:layout_marginBottom="100dp"
         android:contentDescription="@string/add_subject_title"
-        android:src="@android:drawable/ic_input_add"
+        android:src="@drawable/ic_add"
         app:fabSize="normal"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.UniTrack.SmallComponent"
+        app:backgroundTint="?attr/colorPrimary"
+        app:tint="?attr/colorOnPrimary"
+        app:elevation="2dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

@@ -38,6 +38,12 @@
         <!-- Outline -->
         <item name="colorOutline">@color/md_theme_light_outline</item>
         <item name="colorOutlineVariant">@color/md_theme_light_outlineVariant</item>
+
+        <!-- Surface container tones -->
+        <item name="colorSurfaceContainerLowest">@color/surfaceContainerLowest</item>
+        <item name="colorSurfaceContainerLow">@color/surfaceContainerLow</item>
+        <item name="colorSurfaceContainer">@color/surfaceContainer</item>
+        <item name="colorSurfaceContainerHigh">@color/surfaceContainerHigh</item>
         
         <!-- Status bar -->
         <item name="android:windowLightStatusBar">true</item>
@@ -101,7 +107,7 @@
     </style>
 
     <!-- Clean card style with subtle outline -->
-    <style name="Widget.UniTrack.CardView" parent="Widget.Material3.CardView.Filled">
+    <style name="Widget.UniTrack.CardView" parent="Widget.Material3.CardView.Outlined">
         <item name="cardCornerRadius">16dp</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeWidth">1dp</item>

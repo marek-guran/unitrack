@@ -316,7 +316,8 @@ class StudentsManageFragment : Fragment() {
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
         dialog.show()
 
@@ -363,7 +364,8 @@ class StudentsManageFragment : Fragment() {
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
         dialog.show()
 
@@ -411,7 +413,8 @@ class StudentsManageFragment : Fragment() {
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
         dialog.show()
 
@@ -553,7 +556,8 @@ class StudentsManageFragment : Fragment() {
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
         dialog.show()
 
@@ -809,9 +813,8 @@ class StudentsManageFragment : Fragment() {
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.let { window ->
-            val margin = (10 * resources.displayMetrics.density).toInt()
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            window.decorView.setPadding(margin, margin, margin, margin)
+            val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+            window.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
 
         dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }
@@ -938,9 +941,8 @@ class StudentsManageFragment : Fragment() {
             dialog.show()
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
             dialog.window?.let { window ->
-                val margin = (10 * resources.displayMetrics.density).toInt()
-                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                window.decorView.setPadding(margin, margin, margin, margin)
+                val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+                window.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
 
             dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }

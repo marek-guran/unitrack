@@ -69,13 +69,15 @@
     <string name="timetable_edit_entry">Upraviť čas</string>
     <string name="timetable_delete_entry_confirm">Naozaj chcete odstrániť tento čas z rozvrhu?</string>
     <string name="timetable_time_conflict">Časový konflikt: %1$s je v rovnakom čase (%2$s %3$s-%4$s). Zvoľte iný čas.</string>
-    <string name="timetable_add_day_off">Voľno</string>
+    <string name="timetable_add_day_off">Pridať voľno</string>
+    <string name="timetable_actions_title">Akcie rozvrhu</string>
     <string name="timetable_day_off_date_from">Od (napr. 23.02.2026)</string>
     <string name="timetable_day_off_date_to">Do (voliteľné, napr. 04.03.2026)</string>
     <string name="timetable_day_off_time_from">Od času (voliteľné, napr. 12:00)</string>
     <string name="timetable_day_off_time_to">Do času (voliteľné, napr. 14:00)</string>
     <string name="timetable_day_off_note">Dôvod (voliteľné)</string>
     <string name="timetable_no_classes">Žiadne hodiny</string>
+    <string name="timetable_free_day">Dnes máš voľno, užívaj si!</string>
     <string name="timetable_day_off_label">Voľno</string>
     <string name="timetable_my_days_off">Moje Voľno</string>
     <string name="timetable_no_days_off">Žiadne naplánované voľno</string>

@@ -17,7 +17,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.marekguran.unitrack.databinding.ActivityMainBinding
@@ -72,6 +74,15 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Handle navigation bar inset for the pill nav so it sits above the system nav bar
+        ViewCompat.setOnApplyWindowInsetsListener(binding.pillNavBar) { view, insets ->
+            val navBarInset = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val lp = view.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            lp.bottomMargin = navBarInset + (4 * resources.displayMetrics.density).toInt()
+            view.layoutParams = lp
+            insets
+        }
 
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment_activity_main) as NavHostFragment

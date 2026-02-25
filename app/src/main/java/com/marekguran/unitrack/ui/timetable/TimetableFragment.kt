@@ -3,10 +3,13 @@ package com.marekguran.unitrack.ui.timetable
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Bundle
-import android.view.Gravity
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
@@ -14,8 +17,12 @@ import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
-import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
@@ -34,6 +41,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.IsoFields
 import java.util.Calendar
+import kotlin.math.abs
 
 class TimetableFragment : Fragment() {
 
@@ -55,17 +63,47 @@ class TimetableFragment : Fragment() {
     private val daysOffMap = mutableMapOf<String, MutableList<DayOff>>()
     // Subject key -> teacher uid mapping
     private val subjectTeacherMap = mutableMapOf<String, String>()
+    // Teacher email -> display name cache
+    private val teacherNameCache = mutableMapOf<String, String>()
 
     // Active "My days off" dialog so it can be refreshed after edits/deletes
     private var myDaysOffDialog: android.app.Dialog? = null
 
-    // Filter state: "all", "today", "odd", "even"
-    private var currentFilter = "all"
-    // Week offset: 0 = current week, -1 = last week, +1 = next week
-    private var weekOffset = 0
+    // Handler for periodic progress updates of CURRENT class cards
+    private val progressHandler = Handler(Looper.getMainLooper())
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            updateCurrentClassProgress()
+            progressHandler.postDelayed(this, 5_000) // update every 5s
+        }
+    }
+
+    // Handler for updating the glassmorphic box clock
+    private val clockHandler = Handler(Looper.getMainLooper())
+    private val clockRunnable = object : Runnable {
+        override fun run() {
+            updateGlassmorphicBox()
+            clockHandler.postDelayed(this, 30_000)
+        }
+    }
+
+    // Currently selected date
+    private var selectedDate: LocalDate = LocalDate.now()
+    // Adapters for the new RecyclerView-based UI
+    private lateinit var dayChipAdapter: DayChipAdapter
+    private lateinit var scheduleAdapter: ScheduleAdapter
+
+    // Bounce animator for the empty-state emoji (cancelled on navigation / destroy)
+    private var emojiBounceAnimator: android.animation.ObjectAnimator? = null
+
+    // Number of weeks to generate forward for infinite scroll (capped to prevent OOM)
+    private var weeksForward = 12
+    private val maxWeeksForward = 104 // ~2 years max
+    private var isExpandingChips = false
     // Slovak date format DD.MM.YYYY
     private val skDateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
     private val dayOrder = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    private val shortDayNames = listOf("Pon", "Uto", "Str", "Štv", "Pia", "Sob", "Ned")
     private val dayNames by lazy {
         mapOf(
             "monday" to getString(R.string.day_monday),
@@ -88,22 +126,78 @@ class TimetableFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        updateWeekDisplay()
+        // Initialize selected day to today (or next Monday if weekend with no classes)
+        selectedDate = LocalDate.now()
 
-        binding.btnPrevWeek.setOnClickListener {
-            weekOffset--
-            updateWeekDisplay()
-            buildTimetableGrid()
+        // Extend header behind the status bar (edge-to-edge)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.headerContainer) { headerView, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            headerView.setPadding(
+                headerView.paddingLeft,
+                statusBarHeight + (16 * resources.displayMetrics.density).toInt(),
+                headerView.paddingRight,
+                headerView.paddingBottom
+            )
+            insets
         }
-        binding.btnNextWeek.setOnClickListener {
-            weekOffset++
-            updateWeekDisplay()
-            buildTimetableGrid()
+
+        // Set up day chip navigator
+        dayChipAdapter = DayChipAdapter(emptyList()) { date ->
+            navigateToDay(date)
         }
+        binding.recyclerDaysNav.layoutManager =
+            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        binding.recyclerDaysNav.adapter = dayChipAdapter
+
+        // Infinite scroll: load more weeks when reaching the right edge
+        binding.recyclerDaysNav.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (isExpandingChips) return
+                if (weeksForward >= maxWeeksForward) return
+                val lm = recyclerView.layoutManager as LinearLayoutManager
+                val totalItems = dayChipAdapter.itemCount
+                if (totalItems == 0) return
+                if (lm.findLastVisibleItemPosition() >= totalItems - 3) {
+                    isExpandingChips = true
+                    weeksForward = (weeksForward + 8).coerceAtMost(maxWeeksForward)
+                    expandDayChips()
+                    isExpandingChips = false
+                }
+            }
+        })
+
+        // Set up schedule RecyclerView
+        scheduleAdapter = ScheduleAdapter(emptyList()) { entry, isDayOff ->
+            if (isAdmin || isTeacher) {
+                showEntryDetailDialog(entry, isDayOff)
+            }
+        }
+        binding.recyclerSchedule.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerSchedule.adapter = scheduleAdapter
+
+        // Swipe left/right on schedule list to navigate days
+        setupSwipeGesture()
+
+        // Position schedule list and empty state below the gradient header
+        binding.headerContainer.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                binding.headerContainer.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                val topMargin = binding.headerContainer.bottom
+                val lp = binding.recyclerSchedule.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+                lp.topMargin = topMargin
+                binding.recyclerSchedule.layoutParams = lp
+                val elp = binding.emptyStateContainer.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+                elp.topMargin = topMargin
+                binding.emptyStateContainer.layoutParams = elp
+            }
+        })
+
+        updateHeader()
+        buildDayChips()
+
+        // "Dnes" button resets to today
         binding.btnThisWeek.setOnClickListener {
-            weekOffset = 0
-            updateWeekDisplay()
-            buildTimetableGrid()
+            navigateToDay(LocalDate.now(), scrollToChip = true)
         }
 
         if (isOffline) {
@@ -119,49 +213,429 @@ class TimetableFragment : Fragment() {
             }
         }
 
-        binding.btnAddDayOff.setOnClickListener { showAddDayOffDialog() }
-        binding.btnViewDaysOff.setOnClickListener { showMyDaysOffDialog() }
+        // FAB bottom sheet for teacher/admin day-off actions
+        binding.fabTeacherActions.setOnClickListener {
+            val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext())
+            val sheetView = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_timetable_actions, null)
+            bottomSheet.setContentView(sheetView)
 
-        // Filter chip listeners
-        binding.chipGroupFilter.setOnCheckedStateChangeListener { _, checkedIds ->
-            val newFilter = when {
-                checkedIds.contains(R.id.chipToday) -> "today"
-                checkedIds.contains(R.id.chipOdd) -> "odd"
-                checkedIds.contains(R.id.chipEven) -> "even"
-                else -> "all"
+            sheetView.findViewById<View>(R.id.actionAddDayOff).setOnClickListener {
+                bottomSheet.dismiss()
+                showAddDayOffDialog()
             }
-            if (newFilter != currentFilter) {
-                currentFilter = newFilter
-                buildTimetableGrid()
+            sheetView.findViewById<View>(R.id.actionViewDaysOff).setOnClickListener {
+                bottomSheet.dismiss()
+                showMyDaysOffDialog()
             }
+
+            bottomSheet.show()
         }
 
         animateEntrance()
+
+        // Start clock updates for the glassmorphic box
+        clockHandler.postDelayed(clockRunnable, 30_000)
     }
 
-    // ── Role detection ──────────────────────────────────────────────────
+    // ── Day navigation ──────────────────────────────────────────────────────────
+
+    /**
+     * Central navigation method: updates selected date, chip highlight,
+     * header, glassmorphic box, and schedule in one place.
+     * @param slideDirection -1 = slide from left (previous day), 1 = slide from right (next day), 0 = no animation
+     */
+    private fun navigateToDay(date: LocalDate, scrollToChip: Boolean = false, slideDirection: Int = 0) {
+        selectedDate = date
+        updateHeader()
+        updateGlassmorphicBox()
+
+        if (!dayChipAdapter.selectDate(date)) {
+            buildDayChips()
+        } else if (scrollToChip) {
+            val selectedPos = dayChipAdapter.getSelectedPosition()
+            if (selectedPos >= 0) {
+                binding.recyclerDaysNav.post {
+                    (binding.recyclerDaysNav.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(selectedPos, binding.recyclerDaysNav.width / 3)
+                }
+            }
+        }
+
+        if (slideDirection != 0) {
+            val recycler = binding.recyclerSchedule
+            val emptyState = binding.emptyStateContainer
+            // Cancel any pending animation from a previous navigation
+            recycler.animate().cancel()
+            emptyState.animate().cancel()
+            val slideOutX = if (slideDirection > 0) -recycler.width.toFloat() else recycler.width.toFloat()
+            val slideInX = -slideOutX
+
+            // Slide out both containers (only one is visible at a time)
+            val slideOutDuration = 150L
+            emptyState.animate().translationX(slideOutX).alpha(0f).setDuration(slideOutDuration).start()
+            recycler.animate()
+                .translationX(slideOutX)
+                .alpha(0f)
+                .setDuration(slideOutDuration)
+                .withEndAction {
+                    buildSchedule()
+                    // Position off-screen on the incoming side
+                    recycler.translationX = slideInX
+                    recycler.alpha = 1f
+                    emptyState.translationX = slideInX
+                    emptyState.alpha = 1f
+                    // Slide in new content
+                    val slideInDuration = 200L
+                    val interp = DecelerateInterpolator(1.5f)
+                    emptyState.animate().translationX(0f).setDuration(slideInDuration).setInterpolator(interp).start()
+                    recycler.animate()
+                        .translationX(0f)
+                        .setDuration(slideInDuration)
+                        .setInterpolator(interp)
+                        .withEndAction {
+                            // Safety net: force a full rebind after the animation
+                            // so MaterialCardView strokes render on a clean pass.
+                            if (isAdded && _binding != null) {
+                                scheduleAdapter.notifyDataSetChanged()
+                            }
+                        }
+                        .start()
+                }
+                .start()
+        } else {
+            buildSchedule()
+        }
+    }
+
+    /** Navigate to the next allowed day in the chip list. */
+    private fun navigateToNextDay() {
+        val chips = generateDayChipList()
+        val currentIdx = chips.indexOfFirst { it.date == selectedDate }
+        val nextIdx = if (currentIdx >= 0 && currentIdx < chips.size - 1) currentIdx + 1 else -1
+        if (nextIdx >= 0) {
+            navigateToDay(chips[nextIdx].date, scrollToChip = true, slideDirection = 1)
+        }
+    }
+
+    /** Navigate to the previous allowed day in the chip list. */
+    private fun navigateToPreviousDay() {
+        val chips = generateDayChipList()
+        val currentIdx = chips.indexOfFirst { it.date == selectedDate }
+        val prevIdx = if (currentIdx > 0) currentIdx - 1 else -1
+        if (prevIdx >= 0) {
+            navigateToDay(chips[prevIdx].date, scrollToChip = true, slideDirection = -1)
+        }
+    }
+
+    /**
+     * Attach a horizontal swipe/peek gesture to the schedule RecyclerView.
+     * During a horizontal drag the list slides to reveal the direction of travel.
+     * On release, if the drag exceeds a threshold (or the fling is fast enough),
+     * the navigation commits to the next/previous day; otherwise it snaps back.
+     */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setupSwipeGesture() {
+        val commitThresholdFraction = 0.25f // 25% of width to commit
+        val minDragThresholdPx = 30
+        val dragDampingFactor = 0.4f
+        var isDraggingHorizontally = false
+        var startX = 0f
+        var startY = 0f
+
+        val swipeTouchListener = View.OnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.rawX
+                    startY = event.rawY
+                    isDraggingHorizontally = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - startX
+                    val dy = event.rawY - startY
+                    if (!isDraggingHorizontally && abs(dx) > abs(dy) * 1.5f && abs(dx) > minDragThresholdPx) {
+                        isDraggingHorizontally = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (isDraggingHorizontally) {
+                        v.translationX = dx * dragDampingFactor
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDraggingHorizontally) {
+                        isDraggingHorizontally = false
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                        val totalDx = event.rawX - startX
+                        val width = v.width.toFloat().coerceAtLeast(1f)
+
+                        if (abs(totalDx) > width * commitThresholdFraction) {
+                            if (totalDx < 0) navigateToNextDay() else navigateToPreviousDay()
+                        } else {
+                            v.animate()
+                                .translationX(0f)
+                                .setDuration(200)
+                                .setInterpolator(DecelerateInterpolator(1.5f))
+                                .start()
+                        }
+                    }
+                }
+            }
+            isDraggingHorizontally
+        }
+
+        binding.recyclerSchedule.setOnTouchListener(swipeTouchListener)
+        binding.emptyStateContainer.setOnTouchListener(swipeTouchListener)
+    }
+
+    // ── Header ──────────────────────────────────────────────────────────────────
+
+    private fun updateHeader() {
+        if (!isAdded || _binding == null) return
+        val weekNumber = selectedDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+        val parityLabel = if (weekNumber % 2 == 0)
+            getString(R.string.timetable_week_even)
+        else
+            getString(R.string.timetable_week_odd)
+        binding.textDateOrWeek.text = "TÝŽDEŇ $weekNumber • $parityLabel"
+
+        val hour = LocalTime.now().hour
+        when {
+            hour in 5..11 -> binding.greetingText.text = "Dobré ráno!"
+            hour in 12..16 -> binding.greetingText.text = "Dobré popoludnie!"
+            hour in 17..20 -> binding.greetingText.text = "Dobrý večer!"
+            else -> binding.greetingText.text = "Dobrú noc!"
+        }
+
+        updateGlassmorphicBox()
+    }
+
+    private fun updateGlassmorphicBox() {
+        if (!isAdded || _binding == null) return
+        val isViewingToday = selectedDate == LocalDate.now()
+        if (isViewingToday) {
+            binding.textBoxLabel.text = "Aktuálny čas"
+            binding.textBoxValue.text = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        } else {
+            binding.textBoxLabel.text = "Späť na"
+            binding.textBoxValue.text = "Dnes"
+        }
+    }
+
+    // ── Day chip navigation ─────────────────────────────────────────────────────
+
+    private fun buildDayChips(scrollToSelected: Boolean = true) {
+        if (!isAdded || _binding == null) return
+
+        val chips = generateDayChipList()
+        dayChipAdapter.updateItems(chips)
+
+        if (scrollToSelected) {
+            val selectedPos = dayChipAdapter.getSelectedPosition()
+            if (selectedPos >= 0) {
+                binding.recyclerDaysNav.post {
+                    (binding.recyclerDaysNav.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(selectedPos, binding.recyclerDaysNav.width / 3)
+                }
+            }
+        }
+    }
+
+    /** Regenerate chip list for infinite scroll — safe full update. */
+    private fun expandDayChips() {
+        if (!isAdded || _binding == null) return
+        val lm = binding.recyclerDaysNav.layoutManager as? LinearLayoutManager
+        // Remember current scroll position so we can restore after update
+        val firstVisible = lm?.findFirstVisibleItemPosition() ?: 0
+        val firstView = lm?.findViewByPosition(firstVisible)
+        val offset = firstView?.left ?: 0
+
+        val chips = generateDayChipList()
+        dayChipAdapter.updateItems(chips)
+
+        // Restore scroll: the old items are at the same indices (we only append)
+        if (firstVisible in 0 until chips.size) {
+            lm?.scrollToPositionWithOffset(firstVisible, offset)
+        }
+    }
+
+    /** Only update the isSelected flag on existing chips (no full rebuild). */
+    private fun refreshDayChipSelection() {
+        if (!isAdded || _binding == null) return
+        // Use targeted update — only notifies old+new positions
+        if (!dayChipAdapter.selectDate(selectedDate)) {
+            // Fallback: rebuild the entire list if the date isn't in the current chip list
+            val chips = generateDayChipList()
+            dayChipAdapter.updateItems(chips)
+        }
+    }
+
+    /** Build the full list of DayChipItems based on current settings. */
+    private fun generateDayChipList(): List<DayChipItem> {
+        val today = LocalDate.now()
+        // Start from Monday of the current week (no past weeks)
+        val startDate = today.with(DayOfWeek.MONDAY)
+        val endDate = today.plusWeeks(weeksForward.toLong())
+
+        val daysOfWeekWithClasses = dayOrder.filter { dayKey ->
+            allEntries.any { it.day == dayKey }
+        }.toSet()
+
+        val allowedDayIndices = if (daysOfWeekWithClasses.isEmpty()) {
+            (0..4).toSet()
+        } else {
+            val firstIdx = dayOrder.indexOfFirst { it in daysOfWeekWithClasses }
+            val lastIdx = dayOrder.indexOfLast { it in daysOfWeekWithClasses }
+            (firstIdx..lastIdx).toSet()
+        }
+
+        val chips = mutableListOf<DayChipItem>()
+        var date = startDate
+        while (!date.isAfter(endDate)) {
+            val dayIdx = date.dayOfWeek.value - 1
+            if (dayIdx in allowedDayIndices) {
+                chips.add(DayChipItem(
+                    dayKey = dayOrder[dayIdx],
+                    shortName = if (date == today) "Dnes" else shortDayNames[dayIdx],
+                    date = date,
+                    isSelected = date == selectedDate
+                ))
+            }
+            date = date.plusDays(1)
+        }
+        return chips
+    }
+
+    // ── Schedule building ───────────────────────────────────────────────────────
+
+    private fun buildSchedule() {
+        if (!isAdded || _binding == null) return
+
+        progressHandler.removeCallbacks(progressRunnable)
+
+        val columnDate = selectedDate
+        val selectedDayKey = columnDate.dayOfWeek.toKey()
+
+        val weekNumber = columnDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+        val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
+
+        val dayEntries = allEntries
+            .filter { it.day == selectedDayKey }
+            .sortedBy { it.startTime }
+
+        val today = LocalDate.now()
+        val isCurrentDay = columnDate == today
+
+        val items = dayEntries.map { entry ->
+            val isDayOff = isDayOffForEntry(entry, columnDate)
+            val isWrongParity = entry.weekParity != "every" && entry.weekParity != currentParity
+
+            val state = if (isCurrentDay && !isDayOff && !isWrongParity) {
+                determineClassState(entry, columnDate, currentParity)
+            } else if (isDayOff || isWrongParity) {
+                ScheduleCardState.PAST
+            } else {
+                ScheduleCardState.FUTURE
+            }
+
+            val teacherName = if (!isOffline) {
+                val teacherEmail = subjectTeacherMap[entry.subjectKey]
+                if (!teacherEmail.isNullOrBlank()) {
+                    teacherNameCache[teacherEmail.lowercase()] ?: teacherEmail
+                } else null
+            } else null
+
+            ScheduleCardItem(entry, state, isDayOff, isWrongParity, teacherName)
+        }
+
+        scheduleAdapter.updateItems(items)
+
+        // Show/hide empty state
+        if (items.isEmpty()) {
+            binding.recyclerSchedule.visibility = View.GONE
+            binding.emptyStateContainer.visibility = View.VISIBLE
+            animateEmptyEmoji()
+        } else {
+            binding.emptyStateContainer.visibility = View.GONE
+            binding.recyclerSchedule.visibility = View.VISIBLE
+        }
+
+        if (items.any { it.state == ScheduleCardState.CURRENT }) {
+            progressHandler.postDelayed(progressRunnable, 5_000)
+        }
+    }
+
+    private fun animateEmptyEmoji() {
+        if (!isAdded || _binding == null) return
+        emojiBounceAnimator?.cancel()
+        emojiBounceAnimator = null
+        val emoji = binding.textEmptyEmoji
+        emoji.translationY = 0f
+        emoji.scaleX = 0f
+        emoji.scaleY = 0f
+        emoji.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(500)
+            .setInterpolator(android.view.animation.OvershootInterpolator(2f))
+            .withEndAction {
+                // Continuous gentle bounce
+                val bounce = android.animation.ObjectAnimator.ofFloat(emoji, "translationY", 0f, -24f, 0f)
+                bounce.duration = 1000
+                bounce.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                bounce.repeatCount = android.animation.ObjectAnimator.INFINITE
+                bounce.start()
+                emojiBounceAnimator = bounce
+            }
+            .start()
+    }
+
+    private fun determineClassState(entry: TimetableEntry, columnDate: LocalDate, currentParity: String): ScheduleCardState {
+        val now = LocalTime.now()
+        val start = parseTime(entry.startTime) ?: return ScheduleCardState.FUTURE
+        val end = parseTime(entry.endTime) ?: return ScheduleCardState.FUTURE
+
+        return when {
+            now.isAfter(end) || now == end -> ScheduleCardState.PAST
+            (now == start || now.isAfter(start)) && now.isBefore(end) -> ScheduleCardState.CURRENT
+            else -> {
+                // Check if this is the NEXT class (first upcoming active class today)
+                val todayEntries = allEntries
+                    .filter { it.day == entry.day }
+                    .filter { e ->
+                        val wrongParity = e.weekParity != "every" && e.weekParity != currentParity
+                        val dayOff = isDayOffForEntry(e, columnDate)
+                        !wrongParity && !dayOff
+                    }
+                    .sortedBy { it.startTime }
+                val firstUpcoming = todayEntries.firstOrNull { e ->
+                    val eStart = parseTime(e.startTime)
+                    eStart != null && eStart.isAfter(now)
+                }
+                if (firstUpcoming?.key == entry.key) ScheduleCardState.NEXT else ScheduleCardState.FUTURE
+            }
+        }
+    }
+
+    // ── Role detection ────────────────────────────────────────────────────────
 
     private fun checkUserRoleAndLoad() {
         // Check if teacher
         db.child("teachers").child(currentUserUid).get().addOnSuccessListener { snap ->
             if (snap.exists()) {
                 isTeacher = true
-                binding.btnAddDayOff.visibility = View.VISIBLE
-                binding.btnViewDaysOff.visibility = View.VISIBLE
+                binding.fabTeacherActions.visibility = View.VISIBLE
             }
             // Check if admin
             db.child("admins").child(currentUserUid).get().addOnSuccessListener { adminSnap ->
                 if (adminSnap.exists()) {
                     isAdmin = true
-                    binding.btnAddDayOff.visibility = View.VISIBLE
-                    binding.btnViewDaysOff.visibility = View.VISIBLE
+                    binding.fabTeacherActions.visibility = View.VISIBLE
                 }
                 loadOnlineTimetable()
             }
         }
     }
 
-    // ── Offline loading ─────────────────────────────────────────────────
+    // ── Offline loading ───────────────────────────────────────────────────────
 
     private fun getCurrentSemester(): String {
         val prefs = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
@@ -172,8 +646,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun loadOfflineTimetable() {
-        binding.btnAddDayOff.visibility = View.VISIBLE
-        binding.btnViewDaysOff.visibility = View.VISIBLE
+        binding.fabTeacherActions.visibility = View.VISIBLE
         allEntries.clear()
         daysOffMap.clear()
 
@@ -206,10 +679,10 @@ class TimetableFragment : Fragment() {
         }
         if (list.isNotEmpty()) daysOffMap[teacherUid] = list
 
-        buildTimetableGrid()
+        buildSchedule()
     }
 
-    // ── Online loading ──────────────────────────────────────────────────
+    // ── Online loading ────────────────────────────────────────────────────────
 
     private fun loadOnlineTimetable() {
         allEntries.clear()
@@ -240,6 +713,7 @@ class TimetableFragment : Fragment() {
                     // Find teacher UID for this subject
                     val timetableSnap = subjectSnap.child("timetable")
                     if (isAdmin || teacherEmail.equals(currentUserEmail, ignoreCase = true)) {
+                        if (teacherEmail.isNotBlank()) subjectTeacherMap[subjectKey] = teacherEmail
                         for (entrySnap in timetableSnap.children) {
                             val entryKey = entrySnap.key ?: continue
                             allEntries.add(parseTimetableEntryFromSnapshot(entryKey, entrySnap, subjectKey, subjectName))
@@ -328,230 +802,36 @@ class TimetableFragment : Fragment() {
                     }
                     if (list.isNotEmpty()) daysOffMap[teacherUid] = list
                 }
-                buildTimetableGrid()
+                loadTeacherNamesAndBuild()
             }
 
             override fun onCancelled(error: DatabaseError) {}
         })
     }
 
-    // ── Week navigation ────────────────────────────────────────────────
-
-    private fun getOffsetDate(): LocalDate = LocalDate.now().plusWeeks(weekOffset.toLong())
-
-    private fun updateWeekDisplay() {
-        if (!isAdded || _binding == null) return
-        val targetDate = getOffsetDate()
-        val weekNumber = targetDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-        val parityLabel = if (weekNumber % 2 == 0)
-            getString(R.string.timetable_week_even)
-        else
-            getString(R.string.timetable_week_odd)
-        val weekLabel = getString(R.string.timetable_week_label, weekNumber) + " · $parityLabel"
-        if (weekOffset == 0) {
-            binding.textWeekInfo.text = "📅 $weekLabel"
-            binding.textWeekInfo.setTypeface(binding.textWeekInfo.typeface, android.graphics.Typeface.BOLD)
-            // Filled/tonal Dnes button when on current week
-            binding.btnThisWeek.setBackgroundColor(resolveThemeColor(com.google.android.material.R.attr.colorSecondaryContainer))
-            binding.btnThisWeek.setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSecondaryContainer))
-            binding.btnThisWeek.strokeWidth = 0
-        } else {
-            binding.textWeekInfo.text = weekLabel
-            binding.textWeekInfo.setTypeface(null, android.graphics.Typeface.NORMAL)
-            // Outlined Dnes button when on another week
-            binding.btnThisWeek.setBackgroundColor(Color.TRANSPARENT)
-            binding.btnThisWeek.setTextColor(resolveThemeColor(androidx.appcompat.R.attr.colorPrimary))
-            binding.btnThisWeek.strokeWidth = (1 * resources.displayMetrics.density).toInt()
-            binding.btnThisWeek.strokeColor = android.content.res.ColorStateList.valueOf(resolveThemeColor(com.google.android.material.R.attr.colorOutline))
-        }
-    }
-
-    // ── Timetable grid building ─────────────────────────────────────────
-
-    private fun buildTimetableGrid() {
-        if (!isAdded || _binding == null) return
-
-        val grid = binding.timetableGrid
-        grid.removeAllViews()
-
-        val today = LocalDate.now()
-        val targetDate = getOffsetDate()
-        val targetDayKey = targetDate.dayOfWeek.toKey()
-        val todayDayKey = today.dayOfWeek.toKey()
-
-        // Apply parity filter to entries
-        val filteredEntries = when (currentFilter) {
-            "odd" -> allEntries.filter { it.weekParity == "every" || it.weekParity == "odd" }
-            "even" -> allEntries.filter { it.weekParity == "every" || it.weekParity == "even" }
-            "today" -> allEntries.filter { it.day == targetDayKey }
-            else -> allEntries // "all" — show everything
-        }
-
-        // Find which days have entries
-        val daysWithEntries = filteredEntries.map { it.day }.toSet()
-        // For "today" mode, only show the target day; otherwise Mon-Fri + weekends with entries
-        val daysToShow = if (currentFilter == "today") {
-            listOf(targetDayKey)
-        } else {
-            dayOrder.filter { day ->
-                day in listOf("monday", "tuesday", "wednesday", "thursday", "friday") || day in daysWithEntries
-            }
-        }
-
-        if (filteredEntries.isEmpty()) {
-            val emptyText = TextView(requireContext()).apply {
-                text = getString(R.string.timetable_no_classes)
-                textSize = 16f
-                setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
-                gravity = Gravity.CENTER
-                setPadding(48, 48, 48, 48)
-            }
-            grid.addView(emptyText)
-            return
-        }
-
-        // Determine parity context for graying out
-        val filterParity = when (currentFilter) {
-            "odd" -> "odd"
-            "even" -> "even"
-            else -> null // use current real-week parity
-        }
-
-        val isTodayFilter = currentFilter == "today"
-
-        for (day in daysToShow) {
-            val isHighlighted = if (weekOffset == 0) day == todayDayKey else false
-            val dayColumn = createDayColumn(day, isHighlighted, targetDate, filteredEntries, filterParity, isTodayFilter)
-            grid.addView(dayColumn)
-        }
-    }
-
-    private fun createDayColumn(day: String, isToday: Boolean, today: LocalDate, filteredEntries: List<TimetableEntry>, filterParity: String?, fullWidth: Boolean): LinearLayout {
-        val context = requireContext()
-        val density = resources.displayMetrics.density
-
-        val column = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = if (fullWidth) {
-                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            } else {
-                val columnWidth = (160 * density).toInt()
-                LinearLayout.LayoutParams(columnWidth, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    marginEnd = (4 * density).toInt()
+    private fun loadTeacherNamesAndBuild() {
+        // Load teacher names to display in timetable detail
+        db.child("teachers").addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (!isAdded) return
+                teacherNameCache.clear()
+                for (child in snapshot.children) {
+                    val value = child.value as? String ?: continue
+                    val parts = value.split(",").map { it.trim() }
+                    val email = parts.getOrElse(0) { "" }
+                    val name = parts.getOrElse(1) { email }
+                    if (email.isNotBlank()) teacherNameCache[email.lowercase()] = name
                 }
+                buildSchedule()
             }
-        }
 
-        // Day header
-        val header = TextView(context).apply {
-            text = dayNames[day] ?: day
-            textSize = 14f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
-            if (isToday) {
-                setTextColor(ContextCompat.getColor(context, com.google.android.material.R.color.design_default_color_primary))
-            } else {
-                setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurface))
+            override fun onCancelled(error: DatabaseError) {
+                if (isAdded) buildSchedule()
             }
-        }
-        column.addView(header)
-
-        // Sort entries by start time
-        val dayEntries = filteredEntries
-            .filter { it.day == day }
-            .sortedBy { it.startTime }
-
-        // Calculate the actual date for this day column in the viewed week
-        val dayOfWeek = when (day) {
-            "monday" -> DayOfWeek.MONDAY
-            "tuesday" -> DayOfWeek.TUESDAY
-            "wednesday" -> DayOfWeek.WEDNESDAY
-            "thursday" -> DayOfWeek.THURSDAY
-            "friday" -> DayOfWeek.FRIDAY
-            "saturday" -> DayOfWeek.SATURDAY
-            "sunday" -> DayOfWeek.SUNDAY
-            else -> today.dayOfWeek
-        }
-        val columnDate = today.with(dayOfWeek)
-
-        // When a parity filter is active, use that as context so entries matching the filter
-        // are shown at full opacity (not grayed out for parity mismatch)
-        val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
-        val currentParity = filterParity ?: if (weekNumber % 2 == 0) "even" else "odd"
-
-        for (entry in dayEntries) {
-            val card = createEntryCard(entry, columnDate, currentParity)
-            column.addView(card)
-        }
-
-        if (dayEntries.isEmpty()) {
-            val emptySlot = TextView(context).apply {
-                text = "—"
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setPadding(0, (24 * density).toInt(), 0, (24 * density).toInt())
-                setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
-            }
-            column.addView(emptySlot)
-        }
-
-        return column
+        })
     }
 
-    private fun createEntryCard(entry: TimetableEntry, today: LocalDate, currentParity: String): View {
-        val view = LayoutInflater.from(requireContext())
-            .inflate(R.layout.item_timetable_entry, null)
-
-        val card = view as MaterialCardView
-        val textName = view.findViewById<TextView>(R.id.textSubjectName)
-        val textTime = view.findViewById<TextView>(R.id.textTime)
-        val textClassroom = view.findViewById<TextView>(R.id.textClassroom)
-        val textWeekParity = view.findViewById<TextView>(R.id.textWeekParity)
-
-        textName.text = entry.subjectName
-        textTime.text = "${entry.startTime} - ${entry.endTime}"
-
-        if (entry.classroom.isNotBlank()) {
-            textClassroom.text = entry.classroom
-            textClassroom.visibility = View.VISIBLE
-        }
-
-        if (entry.weekParity != "every") {
-            textWeekParity.text = when (entry.weekParity) {
-                "odd" -> getString(R.string.timetable_week_odd)
-                "even" -> getString(R.string.timetable_week_even)
-                else -> ""
-            }
-            textWeekParity.visibility = View.VISIBLE
-        }
-
-        // Check if teacher has a day off today for this subject
-        val isDayOff = isDayOffForEntry(entry, today)
-
-        // Gray out if not this week's parity, or teacher is off
-        val isWrongParity = entry.weekParity != "every" && entry.weekParity != currentParity
-        if (isDayOff || isWrongParity) {
-            card.alpha = 0.4f
-            if (isDayOff) {
-                textName.paintFlags = textName.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
-            }
-        }
-
-        // On tap: show detail dialog with note
-        card.setOnClickListener { showEntryDetailDialog(entry, isDayOff) }
-
-        val density = resources.displayMetrics.density
-        val params = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            bottomMargin = (4 * density).toInt()
-        }
-        card.layoutParams = params
-
-        return card
-    }
+    // ── Day-off helpers ───────────────────────────────────────────────────────
 
     private fun isDayOffForEntry(entry: TimetableEntry, date: LocalDate): Boolean {
         // Check if the entry's day matches the given date's day of week
@@ -604,7 +884,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── Detail dialog (note visible only on tap) ────────────────────────
+    // ── Detail dialog (note visible only on tap) ──────────────────────────────────
 
     private fun showEntryDetailDialog(entry: TimetableEntry, isDayOff: Boolean) {
         val dialogView = LayoutInflater.from(requireContext())
@@ -618,6 +898,18 @@ class TimetableFragment : Fragment() {
             dialogView.findViewById<TextView>(R.id.textDetailClassroom).apply {
                 text = "${getString(R.string.timetable_classroom).replace(" (napr. A402)", "")}: ${entry.classroom}"
                 visibility = View.VISIBLE
+            }
+        }
+
+        // Show teacher info (online mode only)
+        if (!isOffline) {
+            val teacherEmail = subjectTeacherMap[entry.subjectKey]
+            if (!teacherEmail.isNullOrBlank()) {
+                val teacherName = teacherNameCache[teacherEmail.lowercase()] ?: teacherEmail
+                dialogView.findViewById<TextView>(R.id.textDetailTeacher).apply {
+                    text = teacherName
+                    visibility = View.VISIBLE
+                }
             }
         }
 
@@ -669,7 +961,7 @@ class TimetableFragment : Fragment() {
         dialog.show()
     }
 
-    // ── Edit timetable entry dialog ─────────────────────────────────────
+    // ── Edit timetable entry dialog ───────────────────────────────────────────
 
     private val dayKeys = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     private val parityKeys = listOf("every", "odd", "even")
@@ -796,7 +1088,7 @@ class TimetableFragment : Fragment() {
         }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
     }
 
-    // ── Time conflict detection ─────────────────────────────────────────
+    // ── Time conflict detection ───────────────────────────────────────────────
 
     private fun findTimeConflict(day: String, startTime: String, endTime: String, weekParity: String, excludeSubjectKey: String, excludeEntryKey: String): String? {
         val newStart = parseTime(startTime) ?: return null
@@ -832,7 +1124,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── Update timetable entry ──────────────────────────────────────────
+    // ── Update timetable entry ────────────────────────────────────────────────
 
     private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String) {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
@@ -859,7 +1151,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── Add day off dialog ──────────────────────────────────────────────
+    // ── Add day off dialog ────────────────────────────────────────────────────
 
     private fun showAddDayOffDialog() {
         val dialogView = LayoutInflater.from(requireContext())
@@ -974,7 +1266,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── View / Edit / Delete days off ───────────────────────────────────
+    // ── View / Edit / Delete days off ───────────────────────────────────────────
 
     private fun showMyDaysOffDialog() {
         val ownerUid = if (isOffline) "offline_admin" else currentUserUid
@@ -1240,7 +1532,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── Delete timetable entry ──────────────────────────────────────────
+    // ── Delete timetable entry ────────────────────────────────────────────────
 
     private fun deleteTimetableEntry(entry: TimetableEntry) {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
@@ -1256,7 +1548,7 @@ class TimetableFragment : Fragment() {
         }
     }
 
-    // ── Parsing helpers ─────────────────────────────────────────────────
+    // ── Parsing helpers ───────────────────────────────────────────────────────
 
     private fun parseTimetableEntry(key: String, json: JSONObject, subjectKey: String, subjectName: String): TimetableEntry {
         return TimetableEntry(
@@ -1286,7 +1578,7 @@ class TimetableFragment : Fragment() {
         )
     }
 
-    // ── Utilities ───────────────────────────────────────────────────────
+    // ── Utilities ───────────────────────────────────────────────────────────
 
     private fun DayOfWeek.toKey(): String = when (this) {
         DayOfWeek.MONDAY -> "monday"
@@ -1306,22 +1598,59 @@ class TimetableFragment : Fragment() {
     }
 
     private fun animateEntrance() {
-        val root = binding.root as? ViewGroup ?: return
-        for (i in 0 until root.childCount) {
-            val child = root.getChildAt(i)
-            child.alpha = 0f
-            child.translationY = 40f
-            child.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(500)
-                .setStartDelay((i * 80 + 100).toLong())
-                .setInterpolator(DecelerateInterpolator(2f))
-                .start()
-        }
+        binding.root.alpha = 0f
+        binding.root.translationY = 40f
+        binding.root.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(500)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
+    }
+
+    private fun applyStatusBarStyle() {
+        val window = activity?.window ?: return
+        // Make status bar fully transparent so the gradient header shows through
+        @Suppress("DEPRECATION")
+        window.statusBarColor = Color.TRANSPARENT
+        // Light (white) icons over the dark gradient header
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
+    }
+
+    private fun restoreStatusBar() {
+        val window = activity?.window ?: return
+        @Suppress("DEPRECATION")
+        window.statusBarColor = Color.TRANSPARENT
+        val isDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = !isDark
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyStatusBarStyle()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        restoreStatusBar()
+    }
+
+    private fun updateCurrentClassProgress() {
+        if (!isAdded || _binding == null) return
+        scheduleAdapter.updateProgress()
     }
 
     override fun onDestroyView() {
+        progressHandler.removeCallbacks(progressRunnable)
+        clockHandler.removeCallbacks(clockRunnable)
+        emojiBounceAnimator?.cancel()
+        emojiBounceAnimator = null
+        if (::scheduleAdapter.isInitialized) {
+            for (anim in scheduleAdapter.runningAnimators) anim.cancel()
+            scheduleAdapter.runningAnimators.clear()
+            scheduleAdapter.currentCards.clear()
+        }
         super.onDestroyView()
         _binding = null
     }

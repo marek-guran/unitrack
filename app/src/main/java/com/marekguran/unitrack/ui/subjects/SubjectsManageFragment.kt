@@ -923,9 +923,22 @@ class SubjectsManageFragment : Fragment() {
         val newStart = parseTimeSafe(startTime) ?: return null
         val newEnd = parseTimeSafe(endTime) ?: return null
 
+        // Determine the current semester so we skip entries from the other semester
+        val currentSemester = run {
+            val prefs = requireContext().getSharedPreferences("unitrack_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.getString("semester", null) ?: run {
+                val month = java.time.LocalDate.now().monthValue
+                if (month in 1..6) "letny" else "zimny"
+            }
+        }
+
         if (isOfflineMode) {
             val subjects = localDb.getSubjects()
             for ((sKey, sJson) in subjects) {
+                // Skip subjects from the other semester
+                val subjectSemester = sJson.optString("semester", "both")
+                if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
+
                 val subjectName = sJson.optString("name", sKey)
                 val entries = localDb.getTimetableEntries(sKey)
                 for ((eKey, eJson) in entries) {

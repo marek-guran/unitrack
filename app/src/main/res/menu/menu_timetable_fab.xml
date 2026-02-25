@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_day_off"
+        android:title="@string/timetable_add_day_off" />
+    <item
+        android:id="@+id/action_view_days_off"
+        android:title="@string/timetable_my_days_off" />
+</menu>

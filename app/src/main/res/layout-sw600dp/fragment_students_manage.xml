@@ -86,6 +86,7 @@
             android:layout_height="match_parent"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
+            android:dropDownWidth="match_parent"
             android:popupBackground="@drawable/spinner_dropdown_bg"
             android:spinnerMode="dropdown" />
     </FrameLayout>
