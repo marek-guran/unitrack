@@ -32,7 +32,7 @@ Domovská obrazovka (`navigation_home`) je štartovacia destinácia. Z nej vedie
 
 ## PillNavigationBar
 
-Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigationView`. Je to srdce navigácie — animovaná „pilulka" s tieňovým efektom.
+Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigationView`. Je to srdce navigácie — animovaná „pilulka" s glass-morphism efektom.
 
 ### Dva režimy zobrazenia
 
@@ -43,11 +43,16 @@ Toto je vlastný `View` komponent, ktorý nahrádza štandardný `BottomNavigati
 
 ### Vizuálne vlastnosti
 
+- **Glass-morphism** — sklenený translúcentný efekt s dynamickou priehľadnosťou pri interakcii
 - **Pill efekt** — priesvitná „pilulka" s tieňom sa plynulo posúva za vybranou položkou
-- **Animácie** — plynulý presun pilulky s `DecelerateInterpolator` (bez bounce efektu)
-- **Farebné miešanie** — farba textu/ikony sa plynulo mení pri presúvaní pilulky
-- **Okrajová deformácia** — položky blízko okraja sa mierne zmenšujú
+- **Magnifikácia** — položky v blízkosti prsta sa zväčšujú (až na 1.35×) s hladkým gradientom v rámci 90dp polomeru
+- **Animácie** — plynulý presun pilulky s `DecelerateInterpolator` (350ms, bez bounce efektu)
+- **Farebné miešanie** — farba textu/ikony sa plynulo mení podľa prekrytia s pilulkou
+- **Okrajová deformácia** — položky blízko okraja sa stláčajú (squish efekt, max 55%)
+- **Sklenené odlesky** — jemné farebné záblesky na bokoch pilulky simulujúce refrakciu svetla
+- **Žiara** — halo efekt okolo pilulky, ktorý sa stráca pri interakcii
 - **Vstupná animácia** — pri prvom zobrazení sa lišta vysunie zdola (telefón) alebo zhora (tablet)
+- **Tieň** — drop shadow s 14dp rozmazaním a 4dp odsadením
 
 ### API
 
@@ -114,12 +119,24 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Navrhovaná ďalšia známka na základe výkonu
 
 ### TimetableFragment
-**Účel:** Týždenný rozvrh hodín.
+**Účel:** Týždenný rozvrh hodín — najkomplexnejšia obrazovka aplikácie.
 
-- Filtre: Všetky / Dnes / Nepárny týždeň / Párny týždeň
-- Zobrazenie čísla a parity aktuálneho týždňa (ISO kalendár)
-- Učiteľ: pridávanie/správa voľných dní (dialógy s date range a time range)
+- **ViewPager2** — swipe navigácia medzi dňami s 1:1 peek náhľadom
+- **Chip navigátor dní** — horizontálna lišta s animovanými čipmi (DayChipAdapter), dnešný deň označený ako „Dnes"
+- **Stavové karty hodín** — štyri vizuálne stavy (PAST, CURRENT, NEXT, FUTURE) podľa aktuálneho času (ScheduleAdapter)
+- **Živý progress bar** — prebieha hodina zobrazuje priebeh v reálnom čase (aktualizácia každých 5 sekúnd)
+- **Glassmorfický box** — aktuálny čas alebo „Späť na Dnes" s animovanou zmenou šírky
+- **Hlavička** — číslo a parita týždňa, pozdrav podľa času dňa
+- Filtre: semester-aware filtrovanie, parita týždňa (nepárny/párny)
+- Detekcia voľných dní — prečiarknutie kolidujúcich hodín
+- Admin: pridávanie, mazanie a kompletná úprava rozvrhových záznamov
+- Učiteľ: úprava učebne a poznámky existujúcich záznamov
+- Učiteľ/Admin: správa voľných dní (dialógy s date range a time range)
 - Detekcia časových konfliktov
+- Učebňa zobrazená v dedikovanom „pill" odznaku na pravej strane karty predmetu
+- Nekonečný scroll — lazy-loading ďalších týždňov (max ~2 roky)
+- Prázdny stav — animovaný emoji pre dni bez hodín
+- Podrobná dokumentácia: [Rozvrh hodín](ROZVRH.md)
 
 ### StudentsManageFragment
 **Účel:** Správa študentov (offline) alebo účtov (online admin).
@@ -192,6 +209,9 @@ Všetky adaptéry sú v `data/model/` a obsluhujú zoznamy v rôznych fragmentoc
 | `AttendanceTableAdapter` | SubjectDetailFragment | Tabuľková dochádzka |
 | `SubjectAdapterAdmin` | SubjectsManageFragment / Settings | Predmety pre admina |
 | `EnrollStudentAdapter` | StudentsManageFragment | Zápis predmetov pre študenta |
+| `ScheduleAdapter` | TimetableFragment | Stavové karty hodín (PAST/CURRENT/NEXT/FUTURE) s progress barom |
+| `DayChipAdapter` | TimetableFragment | Animovaný chip navigátor dní |
+| `TimetablePagerAdapter` | TimetableFragment | ViewPager2 stránky dní s prázdnym stavom |
 
 ---
 

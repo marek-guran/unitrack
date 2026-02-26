@@ -9,10 +9,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import android.transition.ChangeBounds
+import android.transition.TransitionManager
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.Spinner
@@ -23,6 +24,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
@@ -41,7 +43,6 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.IsoFields
 import java.util.Calendar
-import kotlin.math.abs
 
 class TimetableFragment : Fragment() {
 
@@ -91,14 +92,17 @@ class TimetableFragment : Fragment() {
     private var selectedDate: LocalDate = LocalDate.now()
     // Adapters for the new RecyclerView-based UI
     private lateinit var dayChipAdapter: DayChipAdapter
-    private lateinit var scheduleAdapter: ScheduleAdapter
+    private lateinit var pagerAdapter: TimetablePagerAdapter
 
     // Bounce animator for the empty-state emoji (cancelled on navigation / destroy)
     private var emojiBounceAnimator: android.animation.ObjectAnimator? = null
+    // True once schedule data has been loaded — prevents emoji animation before data arrives
+    private var scheduleDataLoaded = false
 
     // Number of weeks to generate forward for infinite scroll (capped to prevent OOM)
     private var weeksForward = 12
     private val maxWeeksForward = 104 // ~2 years max
+    private val pagerScrollThresholdDays = 7
     private var isExpandingChips = false
     // Slovak date format DD.MM.YYYY
     private val skDateFormat = DateTimeFormatter.ofPattern("dd.MM.yyyy")
@@ -148,6 +152,8 @@ class TimetableFragment : Fragment() {
         binding.recyclerDaysNav.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
         binding.recyclerDaysNav.adapter = dayChipAdapter
+        // Disable default item animator to prevent cross-fade "ghosting" on chip selection changes
+        binding.recyclerDaysNav.itemAnimator = null
 
         // Infinite scroll: load more weeks when reaching the right edge
         binding.recyclerDaysNav.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -166,37 +172,84 @@ class TimetableFragment : Fragment() {
             }
         })
 
-        // Set up schedule RecyclerView
-        scheduleAdapter = ScheduleAdapter(emptyList()) { entry, isDayOff ->
-            if (isAdmin || isTeacher) {
-                showEntryDetailDialog(entry, isDayOff)
+        // Set up ViewPager2 with pager adapter
+        pagerAdapter = TimetablePagerAdapter(
+            buildItemsForDate = { date -> buildScheduleItems(date) },
+            onCardClick = { entry, isDayOff ->
+                if (isAdmin || isTeacher) {
+                    showEntryDetailDialog(entry, isDayOff)
+                }
+            },
+            onEmptyStateBound = { emoji -> animateEmptyEmoji(emoji) },
+            canEdit = { isAdmin || isTeacher },
+            canDelete = { isAdmin },
+            onEditClick = { entry -> showEditEntryDialog(entry) },
+            onDeleteClick = { entry -> showDeleteConfirmation(entry) {} }
+        )
+        binding.viewPager.adapter = pagerAdapter
+
+        // Sync chip selection and header when user swipes pages
+        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                val date = pagerAdapter.getDate(position) ?: return
+                val dateChanged = date != selectedDate
+
+                if (dateChanged) {
+                    selectedDate = date
+                    updateHeader()
+                    updateGlassmorphicBox()
+                }
+
+                // Infinite scroll: expand dates when near the end
+                if (position >= pagerAdapter.itemCount - pagerScrollThresholdDays && weeksForward < maxWeeksForward) {
+                    weeksForward = (weeksForward + 8).coerceAtMost(maxWeeksForward)
+                    expandDayChips() // full rebuild already uses the updated selectedDate
+                } else if (dateChanged) {
+                    dayChipAdapter.selectDate(date) // animated partial update
+                }
+
+                if (dateChanged) {
+                    val chipPos = dayChipAdapter.getSelectedPosition()
+                    if (chipPos >= 0) {
+                        binding.recyclerDaysNav.post {
+                            (binding.recyclerDaysNav.layoutManager as? LinearLayoutManager)
+                                ?.scrollToPositionWithOffset(chipPos, binding.recyclerDaysNav.width / 3)
+                        }
+                    }
+                }
             }
-        }
-        binding.recyclerSchedule.layoutManager = LinearLayoutManager(requireContext())
-        binding.recyclerSchedule.adapter = scheduleAdapter
+        })
 
-        // Swipe left/right on schedule list to navigate days
-        setupSwipeGesture()
-
-        // Position schedule list and empty state below the gradient header
+        // Position ViewPager2 below the gradient header
         binding.headerContainer.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
             override fun onGlobalLayout() {
                 binding.headerContainer.viewTreeObserver.removeOnGlobalLayoutListener(this)
                 val topMargin = binding.headerContainer.bottom
-                val lp = binding.recyclerSchedule.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+                val lp = binding.viewPager.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
                 lp.topMargin = topMargin
-                binding.recyclerSchedule.layoutParams = lp
-                val elp = binding.emptyStateContainer.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
-                elp.topMargin = topMargin
-                binding.emptyStateContainer.layoutParams = elp
+                binding.viewPager.layoutParams = lp
             }
         })
 
         updateHeader()
         buildDayChips()
 
-        // "Dnes" button resets to today
-        binding.btnThisWeek.setOnClickListener {
+        // "Dnes" button resets to today with press animation
+        binding.btnThisWeek.setOnClickListener { v ->
+            v.animate().cancel()
+            v.animate()
+                .scaleX(0.9f)
+                .scaleY(0.9f)
+                .setDuration(80)
+                .withEndAction {
+                    v.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(150)
+                        .setInterpolator(android.view.animation.OvershootInterpolator(2f))
+                        .start()
+                }
+                .start()
             navigateToDay(LocalDate.now(), scrollToChip = true)
         }
 
@@ -241,10 +294,9 @@ class TimetableFragment : Fragment() {
 
     /**
      * Central navigation method: updates selected date, chip highlight,
-     * header, glassmorphic box, and schedule in one place.
-     * @param slideDirection -1 = slide from left (previous day), 1 = slide from right (next day), 0 = no animation
+     * header, glassmorphic box, and ViewPager2 page in one place.
      */
-    private fun navigateToDay(date: LocalDate, scrollToChip: Boolean = false, slideDirection: Int = 0) {
+    private fun navigateToDay(date: LocalDate, scrollToChip: Boolean = false) {
         selectedDate = date
         updateHeader()
         updateGlassmorphicBox()
@@ -261,129 +313,11 @@ class TimetableFragment : Fragment() {
             }
         }
 
-        if (slideDirection != 0) {
-            val recycler = binding.recyclerSchedule
-            val emptyState = binding.emptyStateContainer
-            // Cancel any pending animation from a previous navigation
-            recycler.animate().cancel()
-            emptyState.animate().cancel()
-            val slideOutX = if (slideDirection > 0) -recycler.width.toFloat() else recycler.width.toFloat()
-            val slideInX = -slideOutX
-
-            // Slide out both containers (only one is visible at a time)
-            val slideOutDuration = 150L
-            emptyState.animate().translationX(slideOutX).alpha(0f).setDuration(slideOutDuration).start()
-            recycler.animate()
-                .translationX(slideOutX)
-                .alpha(0f)
-                .setDuration(slideOutDuration)
-                .withEndAction {
-                    buildSchedule()
-                    // Position off-screen on the incoming side
-                    recycler.translationX = slideInX
-                    recycler.alpha = 1f
-                    emptyState.translationX = slideInX
-                    emptyState.alpha = 1f
-                    // Slide in new content
-                    val slideInDuration = 200L
-                    val interp = DecelerateInterpolator(1.5f)
-                    emptyState.animate().translationX(0f).setDuration(slideInDuration).setInterpolator(interp).start()
-                    recycler.animate()
-                        .translationX(0f)
-                        .setDuration(slideInDuration)
-                        .setInterpolator(interp)
-                        .withEndAction {
-                            // Safety net: force a full rebind after the animation
-                            // so MaterialCardView strokes render on a clean pass.
-                            if (isAdded && _binding != null) {
-                                scheduleAdapter.notifyDataSetChanged()
-                            }
-                        }
-                        .start()
-                }
-                .start()
-        } else {
-            buildSchedule()
+        // Navigate ViewPager2 to the selected date
+        val position = pagerAdapter.getPositionForDate(date)
+        if (position >= 0) {
+            binding.viewPager.setCurrentItem(position, true)
         }
-    }
-
-    /** Navigate to the next allowed day in the chip list. */
-    private fun navigateToNextDay() {
-        val chips = generateDayChipList()
-        val currentIdx = chips.indexOfFirst { it.date == selectedDate }
-        val nextIdx = if (currentIdx >= 0 && currentIdx < chips.size - 1) currentIdx + 1 else -1
-        if (nextIdx >= 0) {
-            navigateToDay(chips[nextIdx].date, scrollToChip = true, slideDirection = 1)
-        }
-    }
-
-    /** Navigate to the previous allowed day in the chip list. */
-    private fun navigateToPreviousDay() {
-        val chips = generateDayChipList()
-        val currentIdx = chips.indexOfFirst { it.date == selectedDate }
-        val prevIdx = if (currentIdx > 0) currentIdx - 1 else -1
-        if (prevIdx >= 0) {
-            navigateToDay(chips[prevIdx].date, scrollToChip = true, slideDirection = -1)
-        }
-    }
-
-    /**
-     * Attach a horizontal swipe/peek gesture to the schedule RecyclerView.
-     * During a horizontal drag the list slides to reveal the direction of travel.
-     * On release, if the drag exceeds a threshold (or the fling is fast enough),
-     * the navigation commits to the next/previous day; otherwise it snaps back.
-     */
-    @android.annotation.SuppressLint("ClickableViewAccessibility")
-    private fun setupSwipeGesture() {
-        val commitThresholdFraction = 0.25f // 25% of width to commit
-        val minDragThresholdPx = 30
-        val dragDampingFactor = 0.4f
-        var isDraggingHorizontally = false
-        var startX = 0f
-        var startY = 0f
-
-        val swipeTouchListener = View.OnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = event.rawX
-                    startY = event.rawY
-                    isDraggingHorizontally = false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - startX
-                    val dy = event.rawY - startY
-                    if (!isDraggingHorizontally && abs(dx) > abs(dy) * 1.5f && abs(dx) > minDragThresholdPx) {
-                        isDraggingHorizontally = true
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                    if (isDraggingHorizontally) {
-                        v.translationX = dx * dragDampingFactor
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isDraggingHorizontally) {
-                        isDraggingHorizontally = false
-                        v.parent?.requestDisallowInterceptTouchEvent(false)
-                        val totalDx = event.rawX - startX
-                        val width = v.width.toFloat().coerceAtLeast(1f)
-
-                        if (abs(totalDx) > width * commitThresholdFraction) {
-                            if (totalDx < 0) navigateToNextDay() else navigateToPreviousDay()
-                        } else {
-                            v.animate()
-                                .translationX(0f)
-                                .setDuration(200)
-                                .setInterpolator(DecelerateInterpolator(1.5f))
-                                .start()
-                        }
-                    }
-                }
-            }
-            isDraggingHorizontally
-        }
-
-        binding.recyclerSchedule.setOnTouchListener(swipeTouchListener)
-        binding.emptyStateContainer.setOnTouchListener(swipeTouchListener)
     }
 
     // ── Header ──────────────────────────────────────────────────────────────────
@@ -399,7 +333,8 @@ class TimetableFragment : Fragment() {
 
         val hour = LocalTime.now().hour
         when {
-            hour in 5..11 -> binding.greetingText.text = "Dobré ráno!"
+            hour in 5..8 -> binding.greetingText.text = "Dobré ráno!"
+            hour in 9..11 -> binding.greetingText.text = "Dobrý deň!"
             hour in 12..16 -> binding.greetingText.text = "Dobré popoludnie!"
             hour in 17..20 -> binding.greetingText.text = "Dobrý večer!"
             else -> binding.greetingText.text = "Dobrú noc!"
@@ -408,9 +343,32 @@ class TimetableFragment : Fragment() {
         updateGlassmorphicBox()
     }
 
+    private var glassmorphicShowingToday: Boolean? = null
+
     private fun updateGlassmorphicBox() {
         if (!isAdded || _binding == null) return
         val isViewingToday = selectedDate == LocalDate.now()
+        val stateChanged = glassmorphicShowingToday != null && glassmorphicShowingToday != isViewingToday
+        glassmorphicShowingToday = isViewingToday
+
+        if (stateChanged) {
+            // Smooth expand/shrink — button stays fully visible, width animates
+            // to fit new text content like cards expand left/right
+            val parent = binding.btnThisWeek.parent as? ViewGroup
+            if (parent != null) {
+                val transition = ChangeBounds().apply {
+                    duration = 350
+                    interpolator = DecelerateInterpolator(1.5f)
+                }
+                TransitionManager.beginDelayedTransition(parent, transition)
+            }
+            applyGlassmorphicText(isViewingToday)
+        } else {
+            applyGlassmorphicText(isViewingToday)
+        }
+    }
+
+    private fun applyGlassmorphicText(isViewingToday: Boolean) {
         if (isViewingToday) {
             binding.textBoxLabel.text = "Aktuálny čas"
             binding.textBoxValue.text = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
@@ -427,6 +385,13 @@ class TimetableFragment : Fragment() {
 
         val chips = generateDayChipList()
         dayChipAdapter.updateItems(chips)
+
+        // Sync ViewPager2 pages with chip dates
+        pagerAdapter.updateDates(chips.map { it.date })
+        val pagerPos = pagerAdapter.getPositionForDate(selectedDate)
+        if (pagerPos >= 0 && binding.viewPager.currentItem != pagerPos) {
+            binding.viewPager.setCurrentItem(pagerPos, false)
+        }
 
         if (scrollToSelected) {
             val selectedPos = dayChipAdapter.getSelectedPosition()
@@ -450,6 +415,9 @@ class TimetableFragment : Fragment() {
 
         val chips = generateDayChipList()
         dayChipAdapter.updateItems(chips)
+
+        // Sync ViewPager2 pages with expanded chip dates
+        pagerAdapter.updateDates(chips.map { it.date })
 
         // Restore scroll: the old items are at the same indices (we only append)
         if (firstVisible in 0 until chips.size) {
@@ -475,23 +443,21 @@ class TimetableFragment : Fragment() {
         val startDate = today.with(DayOfWeek.MONDAY)
         val endDate = today.plusWeeks(weeksForward.toLong())
 
+        // Always include Mon–Fri; expand to Sat/Sun only if there are classes on those days
         val daysOfWeekWithClasses = dayOrder.filter { dayKey ->
             allEntries.any { it.day == dayKey }
         }.toSet()
 
-        val allowedDayIndices = if (daysOfWeekWithClasses.isEmpty()) {
-            (0..4).toSet()
-        } else {
-            val firstIdx = dayOrder.indexOfFirst { it in daysOfWeekWithClasses }
-            val lastIdx = dayOrder.indexOfLast { it in daysOfWeekWithClasses }
-            (firstIdx..lastIdx).toSet()
+        val baseDayIndices = (0..4).toMutableSet() // Mon–Fri
+        for (dayKey in daysOfWeekWithClasses) {
+            baseDayIndices.add(dayOrder.indexOf(dayKey))
         }
 
         val chips = mutableListOf<DayChipItem>()
         var date = startDate
         while (!date.isAfter(endDate)) {
             val dayIdx = date.dayOfWeek.value - 1
-            if (dayIdx in allowedDayIndices) {
+            if (dayIdx in baseDayIndices) {
                 chips.add(DayChipItem(
                     dayKey = dayOrder[dayIdx],
                     shortName = if (date == today) "Dnes" else shortDayNames[dayIdx],
@@ -509,12 +475,24 @@ class TimetableFragment : Fragment() {
     private fun buildSchedule() {
         if (!isAdded || _binding == null) return
 
+        scheduleDataLoaded = true
         progressHandler.removeCallbacks(progressRunnable)
 
-        val columnDate = selectedDate
-        val selectedDayKey = columnDate.dayOfWeek.toKey()
+        // Rebuild chips and pager dates (this also refreshes all pager pages)
+        buildDayChips(scrollToSelected = false)
 
-        val weekNumber = columnDate.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
+        // Start progress updates if the current day has active classes
+        val currentItems = buildScheduleItems(selectedDate)
+        if (currentItems.any { it.state == ScheduleCardState.CURRENT }) {
+            progressHandler.postDelayed(progressRunnable, 5_000)
+        }
+    }
+
+    /** Build schedule card items for a given date (used by TimetablePagerAdapter). */
+    private fun buildScheduleItems(date: LocalDate): List<ScheduleCardItem> {
+        val selectedDayKey = date.dayOfWeek.toKey()
+
+        val weekNumber = date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
 
         val dayEntries = allEntries
@@ -522,14 +500,15 @@ class TimetableFragment : Fragment() {
             .sortedBy { it.startTime }
 
         val today = LocalDate.now()
-        val isCurrentDay = columnDate == today
+        val isCurrentDay = date == today
 
-        val items = dayEntries.map { entry ->
-            val isDayOff = isDayOffForEntry(entry, columnDate)
+        return dayEntries.map { entry ->
+            val isDayOff = isDayOffForEntry(entry, date)
             val isWrongParity = entry.weekParity != "every" && entry.weekParity != currentParity
+            val dayOffNote = if (isDayOff) dayOffNoteForEntry(entry, date) else null
 
             val state = if (isCurrentDay && !isDayOff && !isWrongParity) {
-                determineClassState(entry, columnDate, currentParity)
+                determineClassState(entry, date, currentParity)
             } else if (isDayOff || isWrongParity) {
                 ScheduleCardState.PAST
             } else {
@@ -543,31 +522,17 @@ class TimetableFragment : Fragment() {
                 } else null
             } else null
 
-            ScheduleCardItem(entry, state, isDayOff, isWrongParity, teacherName)
-        }
-
-        scheduleAdapter.updateItems(items)
-
-        // Show/hide empty state
-        if (items.isEmpty()) {
-            binding.recyclerSchedule.visibility = View.GONE
-            binding.emptyStateContainer.visibility = View.VISIBLE
-            animateEmptyEmoji()
-        } else {
-            binding.emptyStateContainer.visibility = View.GONE
-            binding.recyclerSchedule.visibility = View.VISIBLE
-        }
-
-        if (items.any { it.state == ScheduleCardState.CURRENT }) {
-            progressHandler.postDelayed(progressRunnable, 5_000)
+            ScheduleCardItem(entry, state, isDayOff, isWrongParity, teacherName, dayOffNote)
         }
     }
 
-    private fun animateEmptyEmoji() {
+    private fun animateEmptyEmoji(emoji: TextView) {
         if (!isAdded || _binding == null) return
+        if (!scheduleDataLoaded) return
+        if (emoji.tag == "emoji_animated") return
+        emoji.tag = "emoji_animated"
         emojiBounceAnimator?.cancel()
         emojiBounceAnimator = null
-        val emoji = binding.textEmptyEmoji
         emoji.translationY = 0f
         emoji.scaleX = 0f
         emoji.scaleY = 0f
@@ -845,6 +810,20 @@ class TimetableFragment : Fragment() {
         return false
     }
 
+    /** Find the note of the matching DayOff for a timetable entry on a given date. */
+    private fun dayOffNoteForEntry(entry: TimetableEntry, date: LocalDate): String? {
+        if (entry.day != date.dayOfWeek.toKey()) return null
+
+        for ((_, daysOff) in daysOffMap) {
+            for (dayOff in daysOff) {
+                if (isEntryInDayOff(date, entry.startTime, entry.endTime, dayOff) && dayOff.note.isNotBlank()) {
+                    return dayOff.note
+                }
+            }
+        }
+        return null
+    }
+
     /** Check if a timetable entry (date + time range) falls within a DayOff. */
     private fun isEntryInDayOff(date: LocalDate, entryStart: String, entryEnd: String, dayOff: DayOff): Boolean {
         val from = parseDateSk(dayOff.date) ?: return false
@@ -998,7 +977,9 @@ class TimetableFragment : Fragment() {
 
         dialogTitle.text = getString(R.string.timetable_edit_entry)
         btnSave.text = "Uložiť"
-        btnDelete.visibility = View.VISIBLE
+
+        // Only admins can delete timetable entries
+        btnDelete.visibility = if (isAdmin) View.VISIBLE else View.GONE
 
         spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
@@ -1013,8 +994,18 @@ class TimetableFragment : Fragment() {
         editClassroom.setText(entry.classroom)
         editNote.setText(entry.note)
 
-        editStartTime.setOnClickListener { showTimePicker(editStartTime) }
-        editEndTime.setOnClickListener { showTimePicker(editEndTime) }
+        // Teachers (non-admin) can only edit classroom and note — hide other fields
+        if (isTeacher && !isAdmin) {
+            dialogView.findViewById<TextView>(R.id.labelDay).visibility = View.GONE
+            spinnerDay.visibility = View.GONE
+            dialogView.findViewById<View>(R.id.layoutStartTime).visibility = View.GONE
+            dialogView.findViewById<View>(R.id.layoutEndTime).visibility = View.GONE
+            dialogView.findViewById<TextView>(R.id.labelWeekParity).visibility = View.GONE
+            spinnerWeekParity.visibility = View.GONE
+        } else {
+            editStartTime.setOnClickListener { showTimePicker(editStartTime) }
+            editEndTime.setOnClickListener { showTimePicker(editEndTime) }
+        }
 
         val dialog = android.app.Dialog(requireContext())
         dialog.setContentView(dialogView)
@@ -1023,10 +1014,10 @@ class TimetableFragment : Fragment() {
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
 
         btnSave.setOnClickListener {
-            val day = dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
-            val startTime = editStartTime.text?.toString()?.trim() ?: ""
-            val endTime = editEndTime.text?.toString()?.trim() ?: ""
-            val weekParity = parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" }
+            val day = if (isAdmin) dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" } else entry.day
+            val startTime = if (isAdmin) (editStartTime.text?.toString()?.trim() ?: "") else entry.startTime
+            val endTime = if (isAdmin) (editEndTime.text?.toString()?.trim() ?: "") else entry.endTime
+            val weekParity = if (isAdmin) parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" } else entry.weekParity
             val classroom = editClassroom.text?.toString()?.trim() ?: ""
             val note = editNote.text?.toString()?.trim() ?: ""
 
@@ -1035,10 +1026,12 @@ class TimetableFragment : Fragment() {
                 return@setOnClickListener
             }
 
-            val conflict = findTimeConflict(day, startTime, endTime, weekParity, entry.subjectKey, entry.key)
-            if (conflict != null) {
-                Snackbar.make(binding.root, conflict, Snackbar.LENGTH_LONG).show()
-                return@setOnClickListener
+            if (isAdmin) {
+                val conflict = findTimeConflict(day, startTime, endTime, weekParity, entry.subjectKey, entry.key)
+                if (conflict != null) {
+                    Snackbar.make(binding.root, conflict, Snackbar.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
             }
 
             updateTimetableEntry(entry, day, startTime, endTime, weekParity, classroom, note)
@@ -1129,25 +1122,41 @@ class TimetableFragment : Fragment() {
     private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String) {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
-        val data = mapOf(
-            "day" to day,
-            "startTime" to startTime,
-            "endTime" to endTime,
-            "weekParity" to weekParity,
-            "classroom" to classroom,
-            "note" to note
-        )
+        val entryRef = db.child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
 
-        if (isOffline) {
-            val json = JSONObject(data)
-            localDb.removeTimetableEntry(entry.subjectKey, entry.key)
-            localDb.addTimetableEntry(entry.subjectKey, json)
-            loadOfflineTimetable()
-        } else {
-            db.child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
-                .setValue(data).addOnSuccessListener {
+        if (isTeacher && !isAdmin) {
+            // Teachers can only update classroom and note
+            val teacherData = mapOf(
+                "classroom" to classroom,
+                "note" to note
+            )
+            if (isOffline) {
+                localDb.updateTimetableEntryFields(entry.subjectKey, entry.key, teacherData)
+                loadOfflineTimetable()
+            } else {
+                entryRef.updateChildren(teacherData).addOnSuccessListener {
                     if (isAdded) loadOnlineTimetable()
                 }
+            }
+        } else {
+            val data = mapOf(
+                "day" to day,
+                "startTime" to startTime,
+                "endTime" to endTime,
+                "weekParity" to weekParity,
+                "classroom" to classroom,
+                "note" to note
+            )
+            if (isOffline) {
+                val json = JSONObject(data)
+                localDb.removeTimetableEntry(entry.subjectKey, entry.key)
+                localDb.addTimetableEntry(entry.subjectKey, json)
+                loadOfflineTimetable()
+            } else {
+                entryRef.setValue(data).addOnSuccessListener {
+                    if (isAdded) loadOnlineTimetable()
+                }
+            }
         }
     }
 
@@ -1638,7 +1647,8 @@ class TimetableFragment : Fragment() {
 
     private fun updateCurrentClassProgress() {
         if (!isAdded || _binding == null) return
-        scheduleAdapter.updateProgress()
+        val currentPos = binding.viewPager.currentItem
+        pagerAdapter.getScheduleAdapter(currentPos)?.updateProgress()
     }
 
     override fun onDestroyView() {
@@ -1646,11 +1656,6 @@ class TimetableFragment : Fragment() {
         clockHandler.removeCallbacks(clockRunnable)
         emojiBounceAnimator?.cancel()
         emojiBounceAnimator = null
-        if (::scheduleAdapter.isInitialized) {
-            for (anim in scheduleAdapter.runningAnimators) anim.cancel()
-            scheduleAdapter.runningAnimators.clear()
-            scheduleAdapter.currentCards.clear()
-        }
         super.onDestroyView()
         _binding = null
     }

@@ -31,13 +31,14 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase) aj **offline** (
 - **Správa predmetov** — vytváranie, editácia a priradenie predmetov k semestrom (zimný/letný/obidva)
 - **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent)
 - **Akademická analytika** — priemery známok, percentá dochádzky
-- **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa (aplikuje sa už od spustenia)
+- **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa (aplikuje sa už od spustenia, vrátane ikon stavového riadku)
 - **Export a import databázy** — zálohovanie a obnova celej lokálnej databázy ako JSON súbor
 - **Nastaviteľné notifikácie** — živá aktualizácia rozvrhu, upozornenia na zrušené hodiny, zmeny známok a nové neprítomnosti s konfigurovateľnými intervalmi
 - **Android 16 Live Update** — segmentovaný progress bar s farebnými blokmi pre hodiny a prestávky (na podporovaných zariadeniach)
 - **Reset hesla** — možnosť odoslať email na obnovu hesla priamo z nastavení
 - **Meno učiteľa** — v offline režime si učiteľ môže nastaviť a uložiť svoje meno
 - **Responzívny dizajn** — prispôsobený pre telefóny aj tablety s vlastnou pill navigáciou
+- **Plynulý rozvrh** — swipe navigácia medzi dňami s 1:1 peek animáciou (obsah sleduje prst), zobrazovanie voľných dní s prázdnym stavom, učebňa zobrazená v „pill" odznaku na kartách rozvrhu, fade-out na okrajoch navigátora dní, bez ghosting efektu pri prepínaní čipov
 
 ---
 
@@ -51,7 +52,8 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase) aj **offline** (
 | UI | Material Design 3, AndroidX, View Binding |
 | Architektúra | MVVM (ViewModel + LiveData + Fragmenty) |
 | Navigácia | Android Navigation Component |
-| UI efekty | Vlastný PillNavigationBar s animáciami a tieňovým efektom |
+| UI efekty | Vlastný PillNavigationBar s glass-morphism efektom, magnifikáciou a tieňmi |
+| Rozvrh | ViewPager2 s DayChipAdapter, ScheduleAdapter a stavovými kartami hodín |
 | Build systém | Gradle (Kotlin DSL) s Version Catalog |
 
 ---
@@ -67,11 +69,15 @@ UniTrack/
 │       │   │   ├── home/               # Domovská obrazovka (zoznam predmetov, detail)
 │       │   │   ├── dashboard/          # Dashboard
 │       │   │   ├── login/              # Prihlásenie
-│       │   │   ├── timetable/          # Rozvrh a voľné dni
+│       │   │   ├── timetable/          # Rozvrh hodín
+│       │   │   │   ├── TimetableFragment.kt      # Hlavný kontrolér rozvrhu
+│       │   │   │   ├── ScheduleAdapter.kt         # Stavové karty hodín (PAST/CURRENT/NEXT/FUTURE)
+│       │   │   │   ├── DayChipAdapter.kt          # Animovaný chip navigátor dní
+│       │   │   │   └── TimetablePagerAdapter.kt   # ViewPager2 adaptér pre stránky dní
 │       │   │   ├── subjects/           # Správa predmetov
 │       │   │   ├── students/           # Správa študentov / účtov
 │       │   │   ├── settings/           # Nastavenia (tmavý režim, notifikácie, export, admin)
-│       │   │   └── PillNavigationBar.kt  # Vlastná navigačná lišta
+│       │   │   └── PillNavigationBar.kt  # Vlastná navigačná lišta (glass-morphism)
 │       │   ├── data/                   # Dátová vrstva
 │       │   │   ├── model/              # Dátové modely (Mark, Student, Timetable...)
 │       │   │   ├── LocalDatabase.kt    # Lokálna JSON databáza
@@ -146,7 +152,7 @@ Týždenný rozvrh s filtrami:
 - **Dnes** — len dnešné hodiny
 - **Nepárny/Párny týždeň** — podľa parity týždňa
 
-Učitelia môžu pridávať **voľné dni** (dovolenky) s dátumom, časovým rozsahom a poznámkou. Rozvrh zobrazuje aj učebňu a poznámky k jednotlivým hodinám.
+Učitelia môžu pridávať **voľné dni** (dovolenky) s dátumom, časovým rozsahom a poznámkou. Rozvrh zobrazuje učebňu v dedikovanom „pill" odznaku na pravej strane karty predmetu pre rýchlu identifikáciu miestnosti. Navigácia medzi dňami podporuje swipe gesto s plynulým 1:1 peek náhľadom (obsah sleduje prst v reálnom čase) a zobrazuje všetky dni vrátane voľných dní s prázdnym stavom. Horizontálny navigátor dní má fade-out efekt na okrajoch pre indikáciu posúvateľnosti a prepínanie medzi čipmi prebieha bez vizuálneho „ghostingu".
 
 ### 👥 Študenti / Účty
 
@@ -160,7 +166,7 @@ Správa predmetov — vytváranie nových, úprava názvu, priradenie učiteľa 
 
 ### ⚙️ Nastavenia
 
-- **Vzhľad** — prepínanie tmavého režimu
+- **Vzhľad** — prepínanie tmavého režimu (vrátane automatickej aktualizácie ikon stavového riadku)
 - **Notifikácie** — zapínanie/vypínanie živej aktualizácie rozvrhu a upozornení na zmeny, nastavenie intervalov kontroly, zobrazenie učebne a nasledujúcej hodiny v notifikácii, konfigurácia počtu minút pred prvou hodinou, optimalizácia batérie
 - **Admin funkcie** — správa akademických rokov a semestrov
 - **Offline funkcie** — export/import databázy, vytváranie školských rokov, nastavenie mena učiteľa
@@ -238,6 +244,7 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 | [Architektúra aplikácie](docs/ARCHITEKTURA.md) | Celková architektúra, MVVM vzor, priebeh dát medzi vrstvami, životný cyklus komponentov, SplashActivity |
 | [Databáza a dátová vrstva](docs/DATABAZA.md) | Firebase Realtime Database cesty, lokálna JSON databáza, dátové modely, convenience metódy, migrácia semestrov |
 | [Navigácia a UI komponenty](docs/NAVIGACIA.md) | Navigation Component, PillNavigationBar, role-based navigácia, fragmenty a adaptéry |
+| [Rozvrh hodín](docs/ROZVRH.md) | ViewPager2 navigácia, stavové karty (PAST/CURRENT/NEXT/FUTURE), živý progress bar, chip navigátor, voľné dni, filtrovanie parity |
 | [Notifikačný systém](docs/NOTIFIKACIE.md) | Kanály, konfigurovateľné intervaly, Android 16 ProgressStyle, detekcia zmien známok, neprítomnosti a zrušených hodín |
 | [Nastavenia aplikácie](docs/NASTAVENIA.md) | Podrobný popis všetkých nastavení — vzhľad, notifikácie, správa účtu, offline funkcie, SharedPreferences kľúče |
 | [Tlač a export dát](docs/TLAC_A_EXPORT.md) | PDF reporty (predmet, študent, učiteľ), export/import lokálnej databázy, formát záloh |
@@ -249,8 +256,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 2.0.3
-- **Kód verzie (Google):** 23
+- **Verzia aplikácie:** 2.0.6
+- **Kód verzie (Google):** 26
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

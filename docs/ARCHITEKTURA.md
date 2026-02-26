@@ -96,11 +96,15 @@ com.marekguran.unitrack/
 ├── notification/                # Notifikačný systém
 │   └── NextClassAlarmReceiver.kt
 └── ui/                          # Obrazovky
-    ├── PillNavigationBar.kt     # Vlastný navigačný komponent
+    ├── PillNavigationBar.kt     # Vlastný navigačný komponent (glass-morphism)
     ├── home/                    # Domov + dialóg známok
     ├── dashboard/               # Dashboard (ViewModel + Fragment)
     ├── login/                   # Prihlásenie (MVVM komplet)
     ├── timetable/               # Rozvrh
+    │   ├── TimetableFragment.kt       # Hlavný kontrolér (dáta, CRUD, filtre)
+    │   ├── ScheduleAdapter.kt         # Stavové karty hodín (PAST/CURRENT/NEXT/FUTURE)
+    │   ├── DayChipAdapter.kt          # Chip navigátor dní s animáciami
+    │   └── TimetablePagerAdapter.kt   # ViewPager2 adaptér pre stránky dní
     ├── students/                # Správa študentov / účtov
     ├── subjects/                # Správa predmetov
     └── settings/                # Nastavenia (téma, notifikácie, export, admin)
@@ -146,8 +150,10 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 | `androidx.constraintlayout` | Flexibilné layouty |
 | `androidx.lifecycle` | ViewModel + LiveData |
 | `androidx.navigation` | Fragment navigácia |
+| `androidx.viewpager2` | ViewPager2 pre swipe navigáciu rozvrhu |
 | `firebase-database` | Firebase Realtime Database |
 | `firebase-auth` | Firebase Authentication |
+| `blurview` | BlurView pre glass-morphism efekty (PillNavigationBar) |
 
 
 ### Build konfigurácia

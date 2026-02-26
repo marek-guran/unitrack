@@ -18,6 +18,7 @@ Nastavenia sú prístupné cez navigačnú lištu (posledná záložka). Obsah s
 - **Uloženie:** `SharedPreferences` (kľúč `dark_mode`)
 - **Aplikácia:** Okamžitá — `AppCompatDelegate.setDefaultNightMode()` sa volá priamo pri zmene
 - **Inicializácia:** Tmavý režim sa načíta a aplikuje už v `UniTrackApplication.onCreate()`, čo zaručuje, že aj `SplashActivity` sa zobrazí v správnej téme
+- **Stavový riadok:** Ikony stavového riadku sa automaticky aktualizujú podľa zvolenej témy pomocou `WindowInsetsControllerCompat.isAppearanceLightStatusBars`
 
 ---
 

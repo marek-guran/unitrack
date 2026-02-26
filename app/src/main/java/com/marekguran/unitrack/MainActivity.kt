@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.animation.DecelerateInterpolator
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.marekguran.unitrack.databinding.ActivityMainBinding
@@ -56,6 +58,11 @@ class MainActivity : AppCompatActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         supportActionBar?.hide()
+
+        // Update status bar icon colors to match current theme
+        val isDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = !isDark
 
         val isOffline = OfflineMode.isOffline(this)
 
@@ -234,8 +241,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startPeriodicInternetCheck() {
-        handler.post(object : Runnable {
+        // Delay the first check to avoid showing the dialog immediately on activity
+        // creation (e.g. after screen unlock or rotation)
+        handler.postDelayed(object : Runnable {
             override fun run() {
+                if (isFinishing || isDestroyed) return
                 if (!isInternetAvailable()) {
                     if ((noInternetDialog == null || !noInternetDialog!!.isShowing) && !dialogDismissedManually) {
                         showNoInternetDialog()
@@ -247,7 +257,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 handler.postDelayed(this, checkInterval)
             }
-        })
+        }, checkInterval)
     }
 
     private fun isInternetAvailable(): Boolean {
@@ -258,18 +268,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showNoInternetDialog() {
-        noInternetDialog = AlertDialog.Builder(this)
-            .setTitle("Bez pripojenia na internet")
-            .setMessage("Na používanie tejto aplikácie je potrebné pripojenie na internet. Pripojte sa k Wi-Fi alebo k mobilným dátam.")
-            .setCancelable(false)
-            .setPositiveButton("Nastavenia") { _, _ ->
-                startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-            }
-            .setNegativeButton("Zrušiť") { dialog, _ ->
-                dialog.dismiss()
-                dialogDismissedManually = true
-            }
-            .setOnDismissListener { }
-            .show()
+        if (isFinishing || isDestroyed) return
+        val dialogView = layoutInflater.inflate(R.layout.dialog_confirm, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Bez pripojenia na internet"
+        dialogView.findViewById<TextView>(R.id.dialogMessage).text =
+            "Na používanie tejto aplikácie je potrebné pripojenie na internet. Pripojte sa k Wi-Fi alebo k mobilným dátam."
+        val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+        confirmBtn.text = "Nastavenia"
+        val cancelBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+        cancelBtn.text = "Zrušiť"
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        confirmBtn.setOnClickListener {
+            dialog.dismiss()
+            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+        }
+        cancelBtn.setOnClickListener {
+            dialog.dismiss()
+            dialogDismissedManually = true
+        }
+        dialog.setOnDismissListener {
+            dialogDismissedManually = true
+        }
+        noInternetDialog = dialog
+        dialog.show()
     }
 }

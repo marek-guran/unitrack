@@ -35,7 +35,8 @@
             android:label="@string/title_activity_login" />
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout" />
 
         <receiver
             android:name=".notification.NextClassAlarmReceiver"

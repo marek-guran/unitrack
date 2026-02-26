@@ -52,7 +52,7 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Row 2: Clock icon + time range -->
+        <!-- Row 2: Clock icon + time range + classroom pill on the right -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -69,13 +69,27 @@
 
             <TextView
                 android:id="@+id/textTime"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
                 android:textAppearance="@style/TextAppearance.Material3.BodySmall"
                 android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <!-- Classroom pill badge -->
+            <TextView
+                android:id="@+id/textClassroom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Row 3: Classroom + person icon + teacher -->
+        <!-- Row 3: person icon + teacher -->
         <LinearLayout
             android:id="@+id/rowClassroomTeacher"
             android:layout_width="match_parent"
@@ -85,20 +99,11 @@
             android:layout_marginTop="4dp"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/textClassroom"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone" />
-
             <ImageView
                 android:id="@+id/iconPerson"
                 android:layout_width="14dp"
                 android:layout_height="14dp"
                 android:src="@drawable/ic_person_outline"
-                android:layout_marginStart="12dp"
                 android:layout_marginEnd="4dp"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
@@ -145,6 +150,66 @@
             android:layout_marginTop="4dp"
             android:gravity="end"
             android:visibility="gone" />
+
+        <!-- Expandable details container (visible to all users on expand) -->
+        <LinearLayout
+            android:id="@+id/expandedContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="10dp"
+            android:visibility="gone">
+
+            <!-- Day-off cancellation note (visible to everyone when class is cancelled) -->
+            <TextView
+                android:id="@+id/textDayOffNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorError"
+                android:textStyle="italic"
+                android:visibility="gone" />
+
+            <!-- Note text (visible to everyone if note exists) -->
+            <TextView
+                android:id="@+id/textNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone" />
+
+            <!-- Action buttons (admin/teacher only) -->
+            <LinearLayout
+                android:id="@+id/actionButtonsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCardEdit"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Upraviť"
+                    android:textSize="12sp"
+                    android:layout_marginEnd="8dp"
+                    app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCardDelete"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Odstrániť"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorError"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 

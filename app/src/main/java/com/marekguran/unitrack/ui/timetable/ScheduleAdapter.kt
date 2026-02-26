@@ -5,10 +5,13 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.animation.ValueAnimator
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -25,18 +28,24 @@ data class ScheduleCardItem(
     val state: ScheduleCardState,
     val isDayOff: Boolean,
     val isWrongParity: Boolean,
-    val teacherName: String?
+    val teacherName: String?,
+    val dayOffNote: String? = null
 )
 
 enum class ScheduleCardState { PAST, CURRENT, NEXT, FUTURE }
 
 class ScheduleAdapter(
     private var items: List<ScheduleCardItem>,
-    private val onCardClick: (TimetableEntry, Boolean) -> Unit
+    private val onCardClick: (TimetableEntry, Boolean) -> Unit,
+    private val canEdit: () -> Boolean = { false },
+    private val canDelete: () -> Boolean = { false },
+    private val onEditClick: ((TimetableEntry) -> Unit)? = null,
+    private val onDeleteClick: ((TimetableEntry) -> Unit)? = null
 ) : RecyclerView.Adapter<ScheduleAdapter.ViewHolder>() {
 
     val runningAnimators = mutableListOf<ObjectAnimator>()
     val currentCards = mutableListOf<Pair<View, TimetableEntry>>()
+    private var expandedPosition: Int = RecyclerView.NO_POSITION
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val card: MaterialCardView = view as MaterialCardView
@@ -50,6 +59,12 @@ class ScheduleAdapter(
         val progressBar: ProgressBar = view.findViewById(R.id.progressClass)
         val rowClassroomTeacher: View = view.findViewById(R.id.rowClassroomTeacher)
         val iconPerson: View = view.findViewById(R.id.iconPerson)
+        val expandedContainer: LinearLayout = view.findViewById(R.id.expandedContainer)
+        val textDayOffNote: TextView = view.findViewById(R.id.textDayOffNote)
+        val textNote: TextView = view.findViewById(R.id.textNote)
+        val actionButtonsContainer: LinearLayout = view.findViewById(R.id.actionButtonsContainer)
+        val btnCardEdit: View = view.findViewById(R.id.btnCardEdit)
+        val btnCardDelete: View = view.findViewById(R.id.btnCardDelete)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -73,6 +88,10 @@ class ScheduleAdapter(
         holder.iconPerson.visibility = View.GONE
         holder.rowClassroomTeacher.visibility = View.GONE
         holder.textWeekParity.visibility = View.GONE
+        holder.expandedContainer.visibility = View.GONE
+        holder.textDayOffNote.visibility = View.GONE
+        holder.textNote.visibility = View.GONE
+        holder.actionButtonsContainer.visibility = View.GONE
         // NOTE: Do NOT reset holder.card.foreground — MaterialCardView uses its
         // internal foreground MaterialShapeDrawable to render the stroke/border.
         // Setting foreground = null removes that drawable and the stroke disappears.
@@ -85,21 +104,21 @@ class ScheduleAdapter(
         holder.textSubjectName.text = entry.subjectName
         holder.textTime.text = "${entry.startTime} – ${entry.endTime}"
 
-        // Classroom + Teacher row
+        // Classroom pill badge (now separate from teacher row)
         val hasClassroom = entry.classroom.isNotBlank()
         val hasTeacher = item.teacherName != null
 
-        if (hasClassroom || hasTeacher) {
+        if (hasClassroom) {
+            holder.textClassroom.text = entry.classroom
+            holder.textClassroom.visibility = View.VISIBLE
+            holder.textClassroom.setBackgroundResource(R.drawable.bg_classroom_pill)
+        }
+
+        if (hasTeacher) {
             holder.rowClassroomTeacher.visibility = View.VISIBLE
-            if (hasClassroom) {
-                holder.textClassroom.text = entry.classroom
-                holder.textClassroom.visibility = View.VISIBLE
-            }
-            if (hasTeacher) {
-                holder.iconPerson.visibility = View.VISIBLE
-                holder.textTeacher.text = item.teacherName
-                holder.textTeacher.visibility = View.VISIBLE
-            }
+            holder.iconPerson.visibility = View.VISIBLE
+            holder.textTeacher.text = item.teacherName
+            holder.textTeacher.visibility = View.VISIBLE
         }
 
         if (entry.weekParity != "every") {
@@ -147,7 +166,7 @@ class ScheduleAdapter(
         // Default text colors
         holder.textSubjectName.setTextColor(colorOnSurface)
         holder.textTime.setTextColor(colorOnSurfaceVariant)
-        holder.textClassroom.setTextColor(colorOnSurfaceVariant)
+        holder.textClassroom.setTextColor(colorBadge)
         holder.textTeacher.setTextColor(colorOnSurfaceVariant)
         holder.textWeekParity.setTextColor(colorOnSurfaceVariant)
 
@@ -226,7 +245,91 @@ class ScheduleAdapter(
             }
         }
 
-        holder.card.setOnClickListener { onCardClick(entry, item.isDayOff) }
+        // Expand/collapse: show note for everyone, edit/delete for admin/teacher only
+        val isExpanded = position == expandedPosition
+        if (isExpanded) {
+            holder.expandedContainer.visibility = View.VISIBLE
+
+            // Show day-off note if class is cancelled
+            showDayOffNote(holder, item)
+
+            // Show note if present
+            if (entry.note.isNotBlank()) {
+                holder.textNote.text = entry.note
+                holder.textNote.visibility = View.VISIBLE
+            }
+
+            // Show edit/delete buttons only for admin/teacher
+            if (canEdit()) {
+                holder.actionButtonsContainer.visibility = View.VISIBLE
+                holder.btnCardDelete.visibility = if (canDelete()) View.VISIBLE else View.GONE
+            }
+        }
+
+        holder.btnCardEdit.setOnClickListener { onEditClick?.invoke(entry) }
+        holder.btnCardDelete.setOnClickListener { onDeleteClick?.invoke(entry) }
+
+        holder.card.setOnClickListener { v ->
+            // Small press feedback animation
+            v.animate().cancel()
+            v.animate()
+                .scaleX(0.97f)
+                .scaleY(0.97f)
+                .setDuration(80)
+                .withEndAction {
+                    v.animate()
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(200)
+                        .setInterpolator(android.view.animation.OvershootInterpolator(2f))
+                        .start()
+                }
+                .start()
+
+            val adapterPos = holder.bindingAdapterPosition
+            if (adapterPos == RecyclerView.NO_POSITION) return@setOnClickListener
+
+            // Check if there is anything to show when expanded
+            val hasNote = entry.note.isNotBlank()
+            val hasDayOffNote = item.isDayOff
+            val hasActions = canEdit()
+            if (!hasNote && !hasDayOffNote && !hasActions) {
+                onCardClick(entry, item.isDayOff)
+                return@setOnClickListener
+            }
+
+            val previousExpanded = expandedPosition
+            val isExpanding = adapterPos != expandedPosition
+            expandedPosition = if (isExpanding) adapterPos else RecyclerView.NO_POSITION
+
+            val recycler = holder.itemView.parent as? RecyclerView
+
+            // Collapse previously expanded card directly (avoids full rebind jump)
+            if (previousExpanded != RecyclerView.NO_POSITION && previousExpanded != adapterPos) {
+                val prevHolder = recycler?.findViewHolderForAdapterPosition(previousExpanded) as? ViewHolder
+                if (prevHolder != null) {
+                    animateCollapse(prevHolder.expandedContainer)
+                } else {
+                    notifyItemChanged(previousExpanded)
+                }
+            }
+
+            // Expand or collapse the tapped card directly
+            if (isExpanding) {
+                showDayOffNote(holder, item)
+                if (hasNote) {
+                    holder.textNote.text = entry.note
+                    holder.textNote.visibility = View.VISIBLE
+                }
+                if (hasActions) {
+                    holder.actionButtonsContainer.visibility = View.VISIBLE
+                    holder.btnCardDelete.visibility = if (canDelete()) View.VISIBLE else View.GONE
+                }
+                animateExpand(holder.expandedContainer)
+            } else {
+                animateCollapse(holder.expandedContainer)
+            }
+        }
     }
 
     override fun getItemCount(): Int = items.size
@@ -235,8 +338,20 @@ class ScheduleAdapter(
         for (anim in runningAnimators) anim.cancel()
         runningAnimators.clear()
         currentCards.clear()
+        expandedPosition = RecyclerView.NO_POSITION
         items = newItems
         notifyDataSetChanged()
+    }
+
+    private fun showDayOffNote(holder: ViewHolder, item: ScheduleCardItem) {
+        val context = holder.itemView.context
+        if (item.isDayOff && !item.dayOffNote.isNullOrBlank()) {
+            holder.textDayOffNote.text = "${context.getString(R.string.timetable_class_cancelled)}: ${item.dayOffNote}"
+            holder.textDayOffNote.visibility = View.VISIBLE
+        } else if (item.isDayOff) {
+            holder.textDayOffNote.text = context.getString(R.string.timetable_class_cancelled)
+            holder.textDayOffNote.visibility = View.VISIBLE
+        }
     }
 
     fun updateProgress() {
@@ -255,6 +370,71 @@ class ScheduleAdapter(
         val tv = TypedValue()
         context.theme.resolveAttribute(attr, tv, true)
         return tv.data
+    }
+
+    /** Slide-open expand: animate height from 0 to measured wrap_content */
+    private fun animateExpand(view: View) {
+        // Cancel any running animation on this view
+        (view.getTag(R.id.expandedContainer) as? ValueAnimator)?.cancel()
+
+        // Measure target height while still hidden to avoid flicker
+        view.visibility = View.INVISIBLE
+        view.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec((view.parent as View).width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.UNSPECIFIED
+        )
+        val targetHeight = view.measuredHeight
+        view.layoutParams.height = 0
+        view.visibility = View.VISIBLE
+
+        ValueAnimator.ofInt(0, targetHeight).apply {
+            duration = 350
+            interpolator = DecelerateInterpolator(1.5f)
+            addUpdateListener {
+                view.layoutParams.height = it.animatedValue as Int
+                view.requestLayout()
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    view.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    view.requestLayout()
+                    view.setTag(R.id.expandedContainer, null)
+                }
+            })
+            view.setTag(R.id.expandedContainer, this)
+            start()
+        }
+    }
+
+    /** Slide-closed collapse: animate height from current to 0 */
+    private fun animateCollapse(view: View) {
+        // Cancel any running animation on this view
+        (view.getTag(R.id.expandedContainer) as? ValueAnimator)?.cancel()
+
+        val initialHeight = view.height
+        if (initialHeight <= 0) {
+            view.visibility = View.GONE
+            return
+        }
+        ValueAnimator.ofInt(initialHeight, 0).apply {
+            duration = 350
+            interpolator = DecelerateInterpolator(1.5f)
+            addUpdateListener {
+                view.layoutParams.height = it.animatedValue as Int
+                view.requestLayout()
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    view.visibility = View.GONE
+                    view.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    view.requestLayout()
+                    view.setTag(R.id.expandedContainer, null)
+                }
+            })
+            view.setTag(R.id.expandedContainer, this)
+            start()
+        }
     }
 
     private fun parseTime(time: String): LocalTime? {

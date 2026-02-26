@@ -361,6 +361,15 @@ class LocalDatabase private constructor(private val context: Context) {
         remove("predmety/$subjectKey/timetable/$entryKey")
     }
 
+    fun updateTimetableEntryFields(subjectKey: String, entryKey: String, fields: Map<String, Any>) {
+        val path = "predmety/$subjectKey/timetable/$entryKey"
+        val existing = getJson(path) ?: return
+        for ((key, value) in fields) {
+            existing.put(key, value)
+        }
+        put(path, existing)
+    }
+
     // --- Days off methods ---
 
     fun getDaysOff(teacherUid: String): Map<String, JSONObject> {

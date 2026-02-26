@@ -116,17 +116,47 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
 
     "predmety": {
       ".read": "auth != null",
-      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+      "$subjectKey": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+        "timetable": {
+          "$entryKey": {
+            "classroom": {
+              ".write": "auth != null && root.child('teachers').child(auth.uid).exists() && data.parent().exists()"
+            },
+            "note": {
+              ".write": "auth != null && root.child('teachers').child(auth.uid).exists() && data.parent().exists()"
+            }
+          }
+        }
+      }
     },
 
     "hodnotenia": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$year": {
+        "$semester": {
+          "$subjectKey": {
+            ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+            "$studentUid": {
+              ".read": "auth != null && $studentUid === auth.uid"
+            }
+          }
+        }
+      }
     },
 
     "pritomnost": {
-      ".read": "auth != null",
-      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$year": {
+        "$semester": {
+          "$subjectKey": {
+            ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+            "$studentUid": {
+              ".read": "auth != null && $studentUid === auth.uid"
+            }
+          }
+        }
+      }
     },
 
     "school_years": {
@@ -153,9 +183,9 @@ Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní 
 - **admins** — Čítať aj zapisovať zoznam adminov môžu len existujúci admini. Jednotlivý používateľ si môže prečítať vlastný admin záznam (`$uid === auth.uid`), čo umožňuje aplikácii zistiť, či je prihlásený používateľ admin. Validácia vynucuje, že hodnota musí byť boolean.
 - **teachers** — Čítať zoznam učiteľov môže každý prihlásený používateľ (potrebné pre výber učiteľa v UI). Zapisovať môžu len admini. Validácia vynucuje, že hodnota musí byť reťazec.
 - **students** — Čítať údaje o študentoch môže každý prihlásený používateľ (potrebné pre rozvrh a zobrazenie zapísaných predmetov). Zapisovať môžu len admini a učitelia.
-- **predmety** — Čítať môže každý prihlásený používateľ. Zapisovať môžu admini a učitelia.
-- **hodnotenia** — Čítať známky môže každý prihlásený používateľ (potrebné pre notifikácie o zmenách známok). Zapisovať môžu len admini a učitelia.
-- **pritomnost** — Čítať dochádzku môže každý prihlásený používateľ (potrebné pre notifikácie o zmenách dochádzky). Zapisovať môžu len admini a učitelia.
+- **predmety** — Čítať môže každý prihlásený používateľ. Celé predmety (vytvorenie, mazanie, zmena štruktúry) môžu zapisovať len admini. Učitelia majú povolený zápis výlučne do polí `classroom` a `note` existujúcich rozvrhových záznamov (`timetable/$entryKey/classroom` a `timetable/$entryKey/note`), a to len ak daný záznam už existuje (`data.parent().exists()`). Nemôžu vytvárať ani mazať rozvrhové záznamy.
+- **hodnotenia** — Čítanie známok je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre zobrazenie známok všetkých študentov v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastné známky (`$studentUid === auth.uid`). Žiaden študent nemôže čítať známky iného študenta. Zapisovať môžu len admini a učitelia.
+- **pritomnost** — Čítanie dochádzky je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre správu dochádzky v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastnú dochádzku (`$studentUid === auth.uid`). Žiaden študent nemôže čítať dochádzku iného študenta. Zapisovať môžu len admini a učitelia.
 - **school_years** — Čítať môže každý prihlásený používateľ. Vytvárať a upravovať školské roky môžu len admini.
 - **days_off** — Čítať môže každý prihlásený používateľ. Zapisovať voľné dni môže učiteľ len pre seba (`$teacherUid === auth.uid`), alebo admin pre kohokoľvek.
 

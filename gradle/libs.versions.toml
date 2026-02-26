@@ -14,6 +14,7 @@ blurview = "version-3.2.0"
 navigationFragmentKtx = "2.9.6"
 navigationUiKtx = "2.9.6"
 annotation = "1.9.1"
+viewpager2 = "1.1.0"
 googleGmsGoogleServices = "4.4.4"
 firebaseDatabase = "22.0.1"
 firebaseAuth = "24.0.1"
@@ -34,6 +35,7 @@ androidx-annotation = { group = "androidx.annotation", name = "annotation", vers
 firebase-database = { group = "com.google.firebase", name = "firebase-database", version.ref = "firebaseDatabase" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth", version.ref = "firebaseAuth" }
 blurview = { module = "com.github.Dimezis:BlurView", version.ref = "blurview" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

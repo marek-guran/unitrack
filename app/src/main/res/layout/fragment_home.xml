@@ -1,120 +1,129 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="?attr/colorSurface"
     tools:context=".ui.home.HomeFragment">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/topAppBar"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:visibility="gone" />
-
-    <!-- App name label -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/app_name"
-        android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-        android:textColor="?attr/colorPrimary"
-        android:letterSpacing="0.1"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="48dp" />
-
-    <!-- Large greeting title -->
-    <TextView
-        android:id="@+id/titleName"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Načítavam..."
-        android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
-        android:textStyle="bold"
-        android:textColor="?attr/colorOnSurface"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="8dp" />
-
-    <!-- Inline filter row -->
     <LinearLayout
-        android:id="@+id/filterCard"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="12dp"
-        android:baselineAligned="false">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <FrameLayout
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/topAppBar"
             android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone" />
+
+        <!-- App name label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:letterSpacing="0.1"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="48dp" />
+
+        <!-- Large greeting title -->
+        <TextView
+            android:id="@+id/titleName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Načítavam..."
+            android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="8dp" />
+
+        <!-- Inline filter row -->
+        <LinearLayout
+            android:id="@+id/filterCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="12dp"
+            android:baselineAligned="false">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/bg_pill_chip">
+
+                <Spinner
+                    android:id="@+id/schoolYearSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:popupBackground="@drawable/spinner_dropdown_bg"
+                    android:spinnerMode="dropdown" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_pill_chip">
+
+                <Spinner
+                    android:id="@+id/semesterSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:popupBackground="@drawable/spinner_dropdown_bg"
+                    android:spinnerMode="dropdown" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Subject list -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/subjectRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_height="44dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/bg_pill_chip">
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="90dp"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:layoutAnimation="@anim/layout_animation_slide_up"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/item_subject" />
 
-            <Spinner
-                android:id="@+id/schoolYearSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:popupBackground="@drawable/spinner_dropdown_bg"
-                android:spinnerMode="dropdown" />
-        </FrameLayout>
-
-        <FrameLayout
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="44dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_pill_chip">
-
-            <Spinner
-                android:id="@+id/semesterSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:popupBackground="@drawable/spinner_dropdown_bg"
-                android:spinnerMode="dropdown" />
-        </FrameLayout>
     </LinearLayout>
 
-    <!-- Subject list -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/subjectRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="90dp"
-        android:clipToPadding="false"
-        android:overScrollMode="never"
-        android:layoutAnimation="@anim/layout_animation_slide_up"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/item_subject" />
-
-    <!-- Export button (visible only for students) -->
-    <com.google.android.material.button.MaterialButton
+    <!-- Export FAB (visible only for students/teachers) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/exportStudentResultsBtn"
-        style="@style/Widget.Material3.Button.TonalButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginStart="40dp"
-        android:layout_marginEnd="40dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
         android:layout_marginBottom="100dp"
-        android:text="Exportovať výsledky"
+        android:contentDescription="Exportovať výsledky"
+        android:src="@drawable/ic_export"
         android:visibility="gone"
-        app:cornerRadius="12dp" />
+        app:fabSize="normal"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.UniTrack.SmallComponent"
+        app:backgroundTint="?attr/colorPrimary"
+        app:tint="?attr/colorOnPrimary"
+        app:elevation="2dp" />
 
-</LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

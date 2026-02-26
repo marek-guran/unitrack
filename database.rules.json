@@ -1,0 +1,83 @@
+{
+  "rules": {
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".validate": "newData.isBoolean()"
+      }
+    },
+
+    "teachers": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".validate": "newData.isString()"
+      }
+    },
+
+    "students": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+    },
+
+    "predmety": {
+      ".read": "auth != null",
+      "$subjectKey": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+        "timetable": {
+          "$entryKey": {
+            "classroom": {
+              ".write": "auth != null && root.child('teachers').child(auth.uid).exists() && data.parent().exists()"
+            },
+            "note": {
+              ".write": "auth != null && root.child('teachers').child(auth.uid).exists() && data.parent().exists()"
+            }
+          }
+        }
+      }
+    },
+
+    "hodnotenia": {
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$year": {
+        "$semester": {
+          "$subjectKey": {
+            ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+            "$studentUid": {
+              ".read": "auth != null && $studentUid === auth.uid"
+            }
+          }
+        }
+      }
+    },
+
+    "pritomnost": {
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$year": {
+        "$semester": {
+          "$subjectKey": {
+            ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+            "$studentUid": {
+              ".read": "auth != null && $studentUid === auth.uid"
+            }
+          }
+        }
+      }
+    },
+
+    "school_years": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    "days_off": {
+      ".read": "auth != null",
+      "$teacherUid": {
+        ".write": "auth != null && ($teacherUid === auth.uid || root.child('admins').child(auth.uid).exists())"
+      }
+    }
+  }
+}

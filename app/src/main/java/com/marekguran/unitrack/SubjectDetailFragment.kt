@@ -179,7 +179,8 @@ class SubjectDetailFragment : Fragment() {
             y += 30f
 
             // --- Table Rows
-            for (student in students) {
+            val stripePaint = Paint().apply { color = 0xFFF5F5F5.toInt(); style = Paint.Style.FILL }
+            for ((rowIndex, student) in students.withIndex()) {
                 val marksStr = student.marks.joinToString(", ") { it.mark.grade.replace("FX", "Fx") }
                 // Student names are bold
                 paint.isFakeBoldText = true
@@ -205,6 +206,11 @@ class SubjectDetailFragment : Fragment() {
                     y = marginTop
                     drawTableHeader(canvas, paint, columns, colWidths, y)
                     y += 30f
+                }
+
+                // Alternating row background
+                if (rowIndex % 2 == 1) {
+                    canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
                 }
 
                 for (line in 0 until maxLines) {
@@ -305,6 +311,7 @@ class SubjectDetailFragment : Fragment() {
             }
             // Right border of last column
             canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
+            canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
             canvas.drawLine(
                 marginLeft,
                 y + rowHeight,

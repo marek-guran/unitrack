@@ -86,6 +86,7 @@ class HomeFragment : Fragment() {
     private var selectedSchoolYear: String = ""
     private var selectedSemester: String = ""
     private var isAdminUser: Boolean = false
+    private var exportFabEnabled: Boolean = false
 
     private lateinit var prefs: SharedPreferences
 
@@ -154,6 +155,15 @@ class HomeFragment : Fragment() {
 
         binding.subjectRecyclerView.layoutManager = LinearLayoutManager(context)
         binding.subjectRecyclerView.adapter = summaryAdapter
+
+        // Hide FAB on scroll down, show on scroll up
+        binding.subjectRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                if (!exportFabEnabled) return
+                if (dy > 0 && binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.hide()
+                else if (dy < 0 && !binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.show()
+            }
+        })
 
         if (isOffline) {
             isAdminUser = true
@@ -804,6 +814,7 @@ class HomeFragment : Fragment() {
 
                                         // Show export button for students
                                         binding.exportStudentResultsBtn.visibility = View.VISIBLE
+                                        exportFabEnabled = true
                                         binding.exportStudentResultsBtn.setOnClickListener {
                                             exportStudentResults(studentName, year, semester, tempSubjects)
                                         }
@@ -820,6 +831,7 @@ class HomeFragment : Fragment() {
         val year = selectedSchoolYear
         val semester = selectedSemester
         binding.exportStudentResultsBtn.visibility = View.GONE
+        exportFabEnabled = false
 
         db.child("teachers").child(teacherUid).get().addOnSuccessListener { teacherSnap ->
             val teacherInfo = teacherSnap.getValue(String::class.java) ?: return@addOnSuccessListener
@@ -887,8 +899,8 @@ class HomeFragment : Fragment() {
                             summaryAdapter.notifyDataSetChanged()
 
                             // Show export button for teachers
-                            binding.exportStudentResultsBtn.text = "Exportovať prehľad"
                             binding.exportStudentResultsBtn.visibility = View.VISIBLE
+                            exportFabEnabled = true
                             binding.exportStudentResultsBtn.setOnClickListener {
                                 exportTeacherSubjects(teacherName, year, semester, tempSummaries, uniqueStudentUids.size)
                             }
@@ -940,6 +952,7 @@ class HomeFragment : Fragment() {
     private fun showSubjectMenuOffline() {
         subjectSummaries.clear()
         binding.exportStudentResultsBtn.visibility = View.GONE
+        exportFabEnabled = false
         val year = selectedSchoolYear
         val semester = selectedSemester
         val subjects = localDb.getSubjects()
@@ -1026,8 +1039,8 @@ class HomeFragment : Fragment() {
         binding.subjectRecyclerView.adapter = summaryAdapter
 
         // Show export button for teacher (offline)
-        binding.exportStudentResultsBtn.text = "Exportovať prehľad"
         binding.exportStudentResultsBtn.visibility = View.VISIBLE
+        exportFabEnabled = true
         binding.exportStudentResultsBtn.setOnClickListener {
             val offlineTeacherName = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
                 .getString("teacher_name", null)?.takeIf { it.isNotBlank() }
@@ -1041,7 +1054,7 @@ class HomeFragment : Fragment() {
             putString("subjectName", subjectName)
             putString("subjectKey", subjectKey)
         }
-        findNavController().navigate(R.id.subjectDetailFragment, bundle)
+        findNavController().navigate(R.id.action_home_to_subject_detail, bundle)
     }
 
     private fun showAddMarkDialog(student: StudentDetail) {
@@ -1943,12 +1956,18 @@ class HomeFragment : Fragment() {
             y += 30f
 
             // Table rows — Predmet column supports multi-line wrapping
-            for (subject in subjectsList) {
+            val stripePaint = Paint().apply { color = 0xFFF5F5F5.toInt(); style = Paint.Style.FILL }
+            for ((rowIndex, subject) in subjectsList.withIndex()) {
                 val marksStr = subject.marks.joinToString(", ")
 
                 // Wrap subject name to fit within column width
                 val nameLines = wrapText(subject.name, paint, colWidths[0] - 10f)
                 val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
+
+                // Alternating row background
+                if (rowIndex % 2 == 1) {
+                    canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
+                }
 
                 // Draw cell text
                 for ((lineIdx, line) in nameLines.withIndex()) {
@@ -1963,6 +1982,7 @@ class HomeFragment : Fragment() {
                 x = marginLeft
                 for (w in colWidths) { canvas.drawLine(x, y, x, y + rowHeight, paint); x += w }
                 canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
+                canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
                 canvas.drawLine(marginLeft, y + rowHeight, marginLeft + tableWidth, y + rowHeight, paint)
                 y += rowHeight
             }
@@ -2126,9 +2146,15 @@ class HomeFragment : Fragment() {
             y += 30f
 
             // Table rows
-            for (summary in summaries) {
+            val stripePaint = Paint().apply { color = 0xFFF5F5F5.toInt(); style = Paint.Style.FILL }
+            for ((rowIndex, summary) in summaries.withIndex()) {
                 val nameLines = wrapText(summary.subjectName, paint, colWidths[0] - 10f)
                 val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
+
+                // Alternating row background
+                if (rowIndex % 2 == 1) {
+                    canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
+                }
 
                 for ((lineIdx, line) in nameLines.withIndex()) {
                     canvas.drawText(line, marginLeft + 5f, y + 14f + lineIdx * lineHeight, paint)
@@ -2142,6 +2168,7 @@ class HomeFragment : Fragment() {
                 x = marginLeft
                 for (w in colWidths) { canvas.drawLine(x, y, x, y + rowHeight, paint); x += w }
                 canvas.drawLine(marginLeft + tableWidth, y, marginLeft + tableWidth, y + rowHeight, paint)
+                canvas.drawLine(marginLeft, y, marginLeft + tableWidth, y, paint)
                 canvas.drawLine(marginLeft, y + rowHeight, marginLeft + tableWidth, y + rowHeight, paint)
                 y += rowHeight
             }
