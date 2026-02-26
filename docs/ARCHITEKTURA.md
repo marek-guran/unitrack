@@ -161,10 +161,10 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 - **compileSdk:** 36
 - **minSdk:** 31 (Android 12)
 - **targetSdk:** 36
-- **Java kompatibilita:** 11
-- **Kotlin JVM target:** 11
+- **Java kompatibilita:** 17
+- **Kotlin JVM target:** 17
 - **View Binding:** zapnuté
-- **ProGuard:** vypnutý (isMinifyEnabled = false)
+- **ProGuard:** zapnutý (isMinifyEnabled = true)
 
 ---
 

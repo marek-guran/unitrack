@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -67,7 +68,7 @@ class PillNavigationBar @JvmOverloads constructor(
     private val barHeight = (44 * density).toInt()
     private val cornerRadius = 22 * density        // same for bar AND pill
     private val pillVPad = 4 * density              // vertical inset for pill
-    private val baseTextSize = BASE_TEXT_SP * resources.displayMetrics.scaledDensity
+    private val baseTextSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, BASE_TEXT_SP, resources.displayMetrics)
     private val iconSizePx = (ICON_SIZE_DP * density).toInt()
     private val maxIconSizePx = (MAX_ICON_SIZE_DP * density).toInt()
     private val magnifyRadius = MAGNIFY_RADIUS_DP * density

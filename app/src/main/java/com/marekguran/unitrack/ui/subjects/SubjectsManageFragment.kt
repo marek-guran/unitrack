@@ -20,6 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -29,8 +30,13 @@ import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
 import org.json.JSONObject
+import java.text.Collator
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SubjectsManageFragment : Fragment() {
 
@@ -72,6 +78,8 @@ class SubjectsManageFragment : Fragment() {
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
+        recycler.setHasFixedSize(true)
+        recycler.setItemViewCacheSize(20)
 
         // Hide FAB on scroll down, show on scroll up
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -106,28 +114,37 @@ class SubjectsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun applyFilters() {
-        filteredSubjectItems.clear()
-        var result = allSubjectItems.toList()
+        val snapshot = allSubjectItems.toList()
+        val semester = selectedSemester
+        val query = searchQuery
 
-        // Filter by semester
-        if (selectedSemester != "all") {
-            result = result.filter {
-                it.semester.isEmpty() || it.semester == "both" || it.semester == selectedSemester
+        viewLifecycleOwner.lifecycleScope.launch {
+            val sorted = withContext(Dispatchers.Default) {
+                var result = snapshot
+
+                if (semester != "all") {
+                    result = result.filter {
+                        it.semester.isEmpty() || it.semester == "both" || it.semester == semester
+                    }
+                }
+
+                if (query.isNotEmpty()) {
+                    val lowerQuery = query.lowercase()
+                    result = result.filter {
+                        it.name.lowercase().contains(lowerQuery) ||
+                                it.teacherEmail.lowercase().contains(lowerQuery)
+                    }
+                }
+
+                val collator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
+                result.sortedWith(compareBy(collator) { it.name })
             }
-        }
 
-        // Filter by search query
-        if (searchQuery.isNotEmpty()) {
-            val lowerQuery = searchQuery.lowercase()
-            result = result.filter {
-                it.name.lowercase().contains(lowerQuery) ||
-                        it.teacherEmail.lowercase().contains(lowerQuery)
-            }
+            filteredSubjectItems.clear()
+            filteredSubjectItems.addAll(sorted)
+            adapter.notifyDataSetChanged()
+            updateEmptyState()
         }
-
-        filteredSubjectItems.addAll(result)
-        adapter.notifyDataSetChanged()
-        updateEmptyState()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -141,16 +158,24 @@ class SubjectsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun loadSubjectsOffline() {
-        allSubjectItems.clear()
-        val subjects = localDb.getSubjects()
-        for ((key, json) in subjects) {
-            val name = json.optString("name", key.replaceFirstChar { it.uppercaseChar() })
-            val teacherEmail = json.optString("teacherEmail", "")
-            val semester = json.optString("semester", "both")
-            allSubjectItems.add(SubjectManageItem(key, name, teacherEmail, semester))
+        viewLifecycleOwner.lifecycleScope.launch {
+            val items = withContext(Dispatchers.IO) {
+                val result = mutableListOf<SubjectManageItem>()
+                val subjects = localDb.getSubjects()
+                for ((key, json) in subjects) {
+                    val name = json.optString("name", key.replaceFirstChar { it.uppercaseChar() })
+                    val teacherEmail = json.optString("teacherEmail", "")
+                    val semester = json.optString("semester", "both")
+                    result.add(SubjectManageItem(key, name, teacherEmail, semester))
+                }
+                result.sortBy { it.name.lowercase() }
+                result
+            }
+
+            allSubjectItems.clear()
+            allSubjectItems.addAll(items)
+            applyFilters()
         }
-        allSubjectItems.sortBy { it.name.lowercase() }
-        applyFilters()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -158,17 +183,25 @@ class SubjectsManageFragment : Fragment() {
         val db = FirebaseDatabase.getInstance().reference.child("predmety")
         db.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                allSubjectItems.clear()
-                for (subjectSnap in snapshot.children) {
-                    val key = subjectSnap.key ?: continue
-                    val name = subjectSnap.child("name").getValue(String::class.java)
-                        ?: key.replaceFirstChar { it.uppercaseChar() }
-                    val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                    val semester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
-                    allSubjectItems.add(SubjectManageItem(key, name, teacherEmail, semester))
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val items = withContext(Dispatchers.Default) {
+                        val result = mutableListOf<SubjectManageItem>()
+                        for (subjectSnap in snapshot.children) {
+                            val key = subjectSnap.key ?: continue
+                            val name = subjectSnap.child("name").getValue(String::class.java)
+                                ?: key.replaceFirstChar { it.uppercaseChar() }
+                            val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                            val semester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                            result.add(SubjectManageItem(key, name, teacherEmail, semester))
+                        }
+                        result.sortBy { it.name.lowercase() }
+                        result
+                    }
+
+                    allSubjectItems.clear()
+                    allSubjectItems.addAll(items)
+                    applyFilters()
                 }
-                allSubjectItems.sortBy { it.name.lowercase() }
-                applyFilters()
             }
             override fun onCancelled(error: DatabaseError) {}
         })
@@ -488,6 +521,15 @@ class SubjectsManageFragment : Fragment() {
                         teacherEmails.add(email)
                     }
                 }
+                // Sort teachers alphabetically (keep first "(nepriradený)" entry in place)
+                val sorted = teacherNames.drop(1).zip(teacherEmails.drop(1)).sortedBy { it.first.lowercase() }
+                val firstName = teacherNames.first()
+                val firstEmail = teacherEmails.first()
+                teacherNames.clear()
+                teacherEmails.clear()
+                teacherNames.add(firstName)
+                teacherEmails.add(firstEmail)
+                sorted.forEach { (name, email) -> teacherNames.add(name); teacherEmails.add(email) }
                 val tAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, teacherNames)
                 tAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
                 spinnerTeachers.adapter = tAdapter

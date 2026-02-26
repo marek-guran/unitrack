@@ -39,9 +39,11 @@ import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import org.json.JSONObject
 import android.text.Editable
 import android.text.TextWatcher
+import java.text.Collator
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class HomeFragment : Fragment() {
 
@@ -80,6 +82,7 @@ class HomeFragment : Fragment() {
 
     private val subjects = mutableListOf<SubjectInfo>()
     private lateinit var subjectAdapter: SubjectAdapter
+    private val skCollator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
 
     private var openedSubject: String? = null
     private var openedSubjectKey: String? = null
@@ -198,7 +201,7 @@ class HomeFragment : Fragment() {
                 }
             } else {
                 isEnabled = false
-                requireActivity().onBackPressed()
+                requireActivity().onBackPressedDispatcher.onBackPressed()
             }
         }
 
@@ -807,6 +810,7 @@ class HomeFragment : Fragment() {
 
                                     loadedCount++
                                     if (loadedCount == enrolledSubjectKeys.size) {
+                                        tempSubjects.sortWith(compareBy(skCollator) { it.name })
                                         subjects.clear()
                                         subjects.addAll(tempSubjects)
                                         subjectAdapter.notifyDataSetChanged()
@@ -894,6 +898,7 @@ class HomeFragment : Fragment() {
                                     )
                                 )
                             }
+                            tempSummaries.sortWith(compareBy(skCollator) { it.subjectName })
                             subjectSummaries.clear()
                             subjectSummaries.addAll(tempSummaries)
                             summaryAdapter.notifyDataSetChanged()
@@ -1034,6 +1039,7 @@ class HomeFragment : Fragment() {
                 )
             )
         }
+        tempSummaries.sortWith(compareBy(skCollator) { it.subjectName })
         subjectSummaries.addAll(tempSummaries)
         summaryAdapter.notifyDataSetChanged()
         binding.subjectRecyclerView.adapter = summaryAdapter

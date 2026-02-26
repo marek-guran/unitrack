@@ -31,7 +31,7 @@ class SubjectAdapter(
         holder.subjectName.text = subject.name
         holder.marks.text = "Známky: ${subject.marks.joinToString(", ")}"
         holder.average.text = "Priemer: ${subject.average}"
-        val presentCount = subject.attendanceCount.values.count { (it as? AttendanceEntry)?.absent == false }
+        val presentCount = subject.attendanceCount.values.count { !it.absent }
         val totalCount = subject.attendanceCount.size
         holder.attendance.text = "Prítomnosť: $presentCount/$totalCount"
 

@@ -436,7 +436,7 @@ class SubjectDetailFragment : Fragment() {
         binding.studentsRecyclerView.visibility = View.GONE
 
         // Setup TabLayout for Material 3 tabs
-        binding.tabLayout?.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+        binding.tabLayout.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
                 when (tab?.position) {
                     0 -> { // Marks tab
@@ -495,7 +495,7 @@ class SubjectDetailFragment : Fragment() {
                             }
                         )
                         // Return to marks tab after attendance dialog
-                        binding.tabLayout?.getTabAt(0)?.select()
+                        binding.tabLayout.getTabAt(0)?.select()
                     }
                     2 -> { // Students tab
                         isStatsVisible = false
@@ -522,7 +522,7 @@ class SubjectDetailFragment : Fragment() {
                             null
                         )
                         // Return to marks tab after export
-                        binding.tabLayout?.getTabAt(0)?.select()
+                        binding.tabLayout.getTabAt(0)?.select()
                     }
                 }
             }
@@ -694,6 +694,7 @@ class SubjectDetailFragment : Fragment() {
                                         suggestedMark = suggestMark(calculateAverage(marks.map { it.mark.grade }))
                                     )
                                 )
+                                students.sortBy { it.studentName.lowercase() }
                                 studentAdapter.notifyDataSetChanged()
                                 binding.studentsRecyclerView.visibility =
                                     if (isStudentsVisible) View.VISIBLE else View.GONE
@@ -762,6 +763,7 @@ class SubjectDetailFragment : Fragment() {
                 )
             )
         }
+        students.sortBy { it.studentName.lowercase() }
         studentAdapter.notifyDataSetChanged()
         binding.studentsRecyclerView.visibility =
             if (isStudentsVisible) View.VISIBLE else View.GONE
@@ -799,6 +801,7 @@ class SubjectDetailFragment : Fragment() {
                 val enrolled = subjects.contains(openedSubjectKey ?: "")
                 items.add(EnrollStudentItem(uid, name, enrolled))
             }
+            items.sortBy { it.name.lowercase() }
             var enrollFilter = "all" // "all", "enrolled", "not_enrolled"
             fun applyFilters() {
                 val query = searchEditText.text?.toString()?.lowercase() ?: ""
@@ -850,7 +853,7 @@ class SubjectDetailFragment : Fragment() {
                 for (item in items) {
                     val ref = db.child("students").child(selectedSchoolYear).child(item.uid).child("subjects").child(selectedSemester)
                     ref.get().addOnSuccessListener { snapshot: DataSnapshot ->
-                        val current = snapshot.getValue(object : GenericTypeIndicator<List<String>>() {}) as? List<String> ?: emptyList()
+                        val current = snapshot.getValue(object : GenericTypeIndicator<List<String>>() {}) ?: emptyList()
                         val newList = current.toMutableList()
                         if (item.enrolled && !newList.contains(subjectKey)) {
                             newList.add(subjectKey)
@@ -896,6 +899,7 @@ class SubjectDetailFragment : Fragment() {
             val enrolled = subjectList.contains(openedSubjectKey ?: "")
             items.add(EnrollStudentItem(uid, name, enrolled))
         }
+        items.sortBy { it.name.lowercase() }
         var enrollFilter = "all"
         fun applyFilters() {
             val query = searchEditText.text?.toString()?.lowercase() ?: ""

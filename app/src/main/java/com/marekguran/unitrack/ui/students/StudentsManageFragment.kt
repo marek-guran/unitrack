@@ -24,6 +24,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -40,7 +41,12 @@ import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
 import java.security.SecureRandom
+import java.text.Collator
+import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class StudentsManageFragment : Fragment() {
 
@@ -73,7 +79,7 @@ class StudentsManageFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_students_manage, container, false)
-        prefs = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
 
         val pageTitle = view.findViewById<TextView>(R.id.pageTitle)
         if (!isOffline) {
@@ -111,6 +117,8 @@ class StudentsManageFragment : Fragment() {
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
+        recycler.setHasFixedSize(true)
+        recycler.setItemViewCacheSize(20)
 
         // Hide FAB on scroll down, show on scroll up
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -164,33 +172,47 @@ class StudentsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun applyFilters() {
-        filteredStudentItems.clear()
-        var source = allStudentItems.toList()
+        val snapshot = allStudentItems.toList()
+        val roleFilter = currentRoleFilter
+        val searchQuery = currentSearchQuery
+        val subjectFilter = currentSubjectFilter
+        val offline = isOffline
+        val subjectsMap = studentSubjectsMap.toMap()
 
-        if (!isOffline) {
-            source = when (currentRoleFilter) {
-                RoleFilter.ALL -> source
-                RoleFilter.STUDENTS -> source.filter { !it.isTeacher && !it.isAdmin }
-                RoleFilter.TEACHERS -> source.filter { it.isTeacher }
-                RoleFilter.ADMINS -> source.filter { it.isAdmin }
+        viewLifecycleOwner.lifecycleScope.launch {
+            val sorted = withContext(Dispatchers.Default) {
+                var source = snapshot
+
+                if (!offline) {
+                    source = when (roleFilter) {
+                        RoleFilter.ALL -> source
+                        RoleFilter.STUDENTS -> source.filter { !it.isTeacher && !it.isAdmin }
+                        RoleFilter.TEACHERS -> source.filter { it.isTeacher }
+                        RoleFilter.ADMINS -> source.filter { it.isAdmin }
+                    }
+                }
+
+                if (searchQuery.isNotEmpty()) {
+                    val lowerQuery = searchQuery.lowercase()
+                    source = source.filter {
+                        it.name.lowercase().contains(lowerQuery) ||
+                                it.email.lowercase().contains(lowerQuery)
+                    }
+                }
+
+                if (subjectFilter != null) {
+                    source = source.filter { subjectsMap[it.uid]?.contains(subjectFilter) == true }
+                }
+
+                val collator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
+                source.sortedWith(compareBy(collator) { it.name })
             }
-        }
 
-        if (currentSearchQuery.isNotEmpty()) {
-            val lowerQuery = currentSearchQuery.lowercase()
-            source = source.filter {
-                it.name.lowercase().contains(lowerQuery) ||
-                        it.email.lowercase().contains(lowerQuery)
-            }
+            filteredStudentItems.clear()
+            filteredStudentItems.addAll(sorted)
+            adapter.notifyDataSetChanged()
+            updateEmptyState()
         }
-
-        if (currentSubjectFilter != null) {
-            source = source.filter { studentSubjectsMap[it.uid]?.contains(currentSubjectFilter) == true }
-        }
-
-        filteredStudentItems.addAll(source)
-        adapter.notifyDataSetChanged()
-        updateEmptyState()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -200,41 +222,62 @@ class StudentsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun loadStudentsOffline() {
-        allStudentItems.clear()
-        studentSubjectsMap.clear()
-        subjectKeysList.clear()
-        subjectNamesList.clear()
-        val year = getLatestYearOffline()
-        if (year.isEmpty()) {
-            filteredStudentItems.clear()
-            adapter.notifyDataSetChanged()
-            updateEmptyState()
-            populateSubjectSpinner()
-            return
-        }
-        val semester = prefs.getString("semester", "zimny") ?: "zimny"
-        val subjects = localDb.getSubjects()
-        for ((key, subjectJson) in subjects) {
-            val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
-            subjectKeysList.add(key)
-            subjectNamesList.add(name)
-        }
-        val students = localDb.getStudents(year)
-        for ((uid, json) in students) {
-            val name = json.optString("name", "(bez mena)")
-            val email = json.optString("email", "")
-            allStudentItems.add(StudentManageItem(uid, name, email))
-            val subjectsObj = json.optJSONObject("subjects")
-            val semSubjects = subjectsObj?.optJSONArray(semester)
-            if (semSubjects != null) {
-                val enrolled = mutableSetOf<String>()
-                for (i in 0 until semSubjects.length()) enrolled.add(semSubjects.optString(i))
-                if (enrolled.isNotEmpty()) studentSubjectsMap[uid] = enrolled
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                val year = getLatestYearOffline()
+                if (year.isEmpty()) return@withContext null
+
+                val subjects = localDb.getSubjects()
+                val keys = mutableListOf<String>()
+                val names = mutableListOf<String>()
+                for ((key, subjectJson) in subjects) {
+                    val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
+                    keys.add(key)
+                    names.add(name)
+                }
+                val sortedPairs = keys.zip(names).sortedBy { it.second.lowercase() }
+
+                val items = mutableListOf<StudentManageItem>()
+                val subjectsMap = mutableMapOf<String, MutableSet<String>>()
+                val students = localDb.getStudents(year)
+                for ((uid, json) in students) {
+                    val name = json.optString("name", "(bez mena)")
+                    val email = json.optString("email", "")
+                    items.add(StudentManageItem(uid, name, email))
+                    val subjectsObj = json.optJSONObject("subjects")
+                    if (subjectsObj != null) {
+                        val enrolled = mutableSetOf<String>()
+                        for (semKey in subjectsObj.keys()) {
+                            val semSubjects = subjectsObj.optJSONArray(semKey) ?: continue
+                            for (i in 0 until semSubjects.length()) enrolled.add(semSubjects.optString(i))
+                        }
+                        if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
+                    }
+                }
+                items.sortBy { it.name.lowercase() }
+                Triple(sortedPairs, items, subjectsMap)
             }
+
+            allStudentItems.clear()
+            studentSubjectsMap.clear()
+            subjectKeysList.clear()
+            subjectNamesList.clear()
+
+            if (result == null) {
+                filteredStudentItems.clear()
+                adapter.notifyDataSetChanged()
+                updateEmptyState()
+                populateSubjectSpinner()
+                return@launch
+            }
+
+            val (sortedPairs, items, subjectsMap) = result
+            sortedPairs.forEach { (key, name) -> subjectKeysList.add(key); subjectNamesList.add(name) }
+            allStudentItems.addAll(items)
+            studentSubjectsMap.putAll(subjectsMap)
+            populateSubjectSpinner()
+            applyFilters()
         }
-        allStudentItems.sortBy { it.name.lowercase() }
-        populateSubjectSpinner()
-        applyFilters()
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -245,47 +288,78 @@ class StudentsManageFragment : Fragment() {
         subjectNamesList.clear()
 
         db.child("admins").get().addOnSuccessListener { adminSnap ->
-            adminUids = adminSnap.children.mapNotNull { it.key }.toSet()
-
             db.child("school_years").get().addOnSuccessListener { schoolSnap ->
-                val latestYear = schoolSnap.children.mapNotNull { it.key }.maxOrNull() ?: ""
-
                 db.child("teachers").get().addOnSuccessListener { teacherSnap ->
-                    allStudentItems.clear()
-                    val teacherUids = mutableSetOf<String>()
-                    for (child in teacherSnap.children) {
-                        val uid = child.key ?: continue
-                        val value = child.value as? String ?: continue
-                        val parts = value.split(",").map { it.trim() }
-                        val email = parts.getOrElse(0) { "" }
-                        val name = parts.getOrElse(1) { email }
-                        teacherUids.add(uid)
-                        allStudentItems.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in adminUids))
-                    }
+                    val latestYear = schoolSnap.children.mapNotNull { it.key }.maxOrNull() ?: ""
 
                     if (latestYear.isEmpty()) {
-                        allStudentItems.sortBy { it.name.lowercase() }
-                        loadSubjectNamesOnline(db)
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val items = withContext(Dispatchers.Default) {
+                                val admins = adminSnap.children.mapNotNull { it.key }.toSet()
+                                val result = mutableListOf<StudentManageItem>()
+                                for (child in teacherSnap.children) {
+                                    val uid = child.key ?: continue
+                                    val value = child.value as? String ?: continue
+                                    val parts = value.split(",").map { it.trim() }
+                                    val email = parts.getOrElse(0) { "" }
+                                    val name = parts.getOrElse(1) { email }
+                                    result.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
+                                }
+                                result.sortBy { it.name.lowercase() }
+                                Pair(admins, result)
+                            }
+                            adminUids = items.first
+                            allStudentItems.clear()
+                            allStudentItems.addAll(items.second)
+                            loadSubjectNamesOnline(db)
+                        }
                         return@addOnSuccessListener
                     }
 
                     db.child("students").child(latestYear).get().addOnSuccessListener { studentSnap ->
-                        val semester = prefs.getString("semester", "zimny") ?: "zimny"
-                        for (child in studentSnap.children) {
-                            val uid = child.key ?: continue
-                            if (uid in teacherUids) continue
-                            val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
-                            val email = child.child("email").getValue(String::class.java) ?: ""
-                            allStudentItems.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in adminUids))
-                            val enrolled = mutableSetOf<String>()
-                            child.child("subjects").child(semester).children.forEach { subjectChild ->
-                                val subjectKey = subjectChild.getValue(String::class.java)
-                                if (subjectKey != null) enrolled.add(subjectKey)
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val result = withContext(Dispatchers.Default) {
+                                val admins = adminSnap.children.mapNotNull { it.key }.toSet()
+                                val semester = prefs.getString("semester", "zimny") ?: "zimny"
+                                val teacherUids = mutableSetOf<String>()
+                                val items = mutableListOf<StudentManageItem>()
+                                val subjectsMap = mutableMapOf<String, MutableSet<String>>()
+
+                                for (child in teacherSnap.children) {
+                                    val uid = child.key ?: continue
+                                    val value = child.value as? String ?: continue
+                                    val parts = value.split(",").map { it.trim() }
+                                    val email = parts.getOrElse(0) { "" }
+                                    val name = parts.getOrElse(1) { email }
+                                    teacherUids.add(uid)
+                                    items.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
+                                }
+
+                                for (child in studentSnap.children) {
+                                    val uid = child.key ?: continue
+                                    if (uid in teacherUids) continue
+                                    val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
+                                    val email = child.child("email").getValue(String::class.java) ?: ""
+                                    items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
+                                    val enrolled = mutableSetOf<String>()
+                                    child.child("subjects").child(semester).children.forEach { subjectChild ->
+                                        val subjectKey = subjectChild.getValue(String::class.java)
+                                        if (subjectKey != null) enrolled.add(subjectKey)
+                                    }
+                                    if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
+                                }
+
+                                items.sortBy { it.name.lowercase() }
+                                Triple(admins, items, subjectsMap)
                             }
-                            if (enrolled.isNotEmpty()) studentSubjectsMap[uid] = enrolled
+
+                            adminUids = result.first
+                            allStudentItems.clear()
+                            allStudentItems.addAll(result.second)
+                            studentSubjectsMap.clear()
+                            studentSubjectsMap.putAll(result.third)
+                            loadSubjectNamesOnline(db)
                         }
-                        allStudentItems.sortBy { it.name.lowercase() }
-                        loadSubjectNamesOnline(db)
                     }
                 }
             }
@@ -599,6 +673,7 @@ class StudentsManageFragment : Fragment() {
                 items.add(SubjectEnrollItem(key, name, assigned))
             }
         }
+        items.sortBy { it.name.lowercase() }
 
         var filtered = items.toMutableList()
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -666,6 +741,7 @@ class StudentsManageFragment : Fragment() {
                     items.add(SubjectEnrollItem(key, name, assigned))
                 }
             }
+            items.sortBy { it.name.lowercase() }
 
             var filtered = items.toMutableList()
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -785,6 +861,7 @@ class StudentsManageFragment : Fragment() {
                 if (subjectSemester != "both" && subjectSemester != semester) continue
                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
             }
+            items.sortBy { it.name.lowercase() }
             applyEnrollFilters()
         }
 
@@ -911,6 +988,7 @@ class StudentsManageFragment : Fragment() {
                                 if (subjectSemester != "both" && subjectSemester != semester) continue
                                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
                             }
+                            items.sortBy { it.name.lowercase() }
                             applyEnrollFilters()
                         }
                 }
@@ -1057,24 +1135,39 @@ class StudentsManageFragment : Fragment() {
 
     private fun loadSubjectNamesOnline(db: DatabaseReference) {
         db.child("predmety").get().addOnSuccessListener { subjectsSnap ->
-            subjectKeysList.clear()
-            subjectNamesList.clear()
-            for (subjectSnap in subjectsSnap.children) {
-                val key = subjectSnap.key ?: continue
-                val name = subjectSnap.child("name").getValue(String::class.java)
-                    ?: key.replaceFirstChar { it.uppercaseChar() }
-                subjectKeysList.add(key)
-                subjectNamesList.add(name)
-                val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                if (teacherEmail.isNotEmpty()) {
-                    val teacher = allStudentItems.find { it.isTeacher && it.email == teacherEmail }
-                    if (teacher != null) {
-                        studentSubjectsMap.getOrPut(teacher.uid) { mutableSetOf() }.add(key)
+            val studentItemsSnapshot = allStudentItems.toList()
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = withContext(Dispatchers.Default) {
+                    val keys = mutableListOf<String>()
+                    val names = mutableListOf<String>()
+                    val teacherSubjects = mutableMapOf<String, MutableSet<String>>()
+                    for (subjectSnap in subjectsSnap.children) {
+                        val key = subjectSnap.key ?: continue
+                        val name = subjectSnap.child("name").getValue(String::class.java)
+                            ?: key.replaceFirstChar { it.uppercaseChar() }
+                        keys.add(key)
+                        names.add(name)
+                        val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                        if (teacherEmail.isNotEmpty()) {
+                            val teacher = studentItemsSnapshot.find { it.isTeacher && it.email == teacherEmail }
+                            if (teacher != null) {
+                                teacherSubjects.getOrPut(teacher.uid) { mutableSetOf() }.add(key)
+                            }
+                        }
                     }
+                    val sortedPairs = keys.zip(names).sortedBy { it.second.lowercase() }
+                    Pair(sortedPairs, teacherSubjects)
                 }
+
+                subjectKeysList.clear()
+                subjectNamesList.clear()
+                result.first.forEach { (key, name) -> subjectKeysList.add(key); subjectNamesList.add(name) }
+                for ((uid, subjects) in result.second) {
+                    studentSubjectsMap.getOrPut(uid) { mutableSetOf() }.addAll(subjects)
+                }
+                populateSubjectSpinner()
+                applyFilters()
             }
-            populateSubjectSpinner()
-            applyFilters()
         }.addOnFailureListener {
             populateSubjectSpinner()
             applyFilters()
@@ -1182,9 +1275,9 @@ class StudentsManageFragment : Fragment() {
 
             holder.itemView.setOnClickListener {
                 val prevExpanded = expandedPosition
-                expandedPosition = if (isExpanded) -1 else holder.adapterPosition
+                expandedPosition = if (isExpanded) -1 else holder.bindingAdapterPosition
                 if (prevExpanded >= 0) notifyItemChanged(prevExpanded)
-                if (!isExpanded) notifyItemChanged(holder.adapterPosition)
+                if (!isExpanded) notifyItemChanged(holder.bindingAdapterPosition)
             }
 
             // Alternating row color

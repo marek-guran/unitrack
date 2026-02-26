@@ -31,7 +31,7 @@ class AttendanceTableAdapter(
     override fun onBindViewHolder(holder: RowViewHolder, position: Int) {
         val entry = attendanceList[position]
         holder.dateText.text = formatDate(entry.date)
-        holder.noteText.text = entry.note ?: ""
+        holder.noteText.text = entry.note
 
         // Show green check if present, red cross if absent
         if (entry.absent) {

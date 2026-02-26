@@ -476,7 +476,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                     segmentsList.add(segmentObj)
                 }
 
-                progressStyleClass.getMethod("setProgressSegments", java.util.List::class.java)
+                progressStyleClass.getMethod("setProgressSegments", List::class.java)
                     .invoke(progressStyleObj, segmentsList)
 
                 progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)

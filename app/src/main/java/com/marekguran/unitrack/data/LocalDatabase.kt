@@ -103,7 +103,7 @@ class LocalDatabase private constructor(private val context: Context) {
                 else -> return null
             }
         }
-        return (current as? JSONObject)?.optString(parts.last(), null)
+        return (current as? JSONObject)?.opt(parts.last()) as? String
     }
 
     @Synchronized

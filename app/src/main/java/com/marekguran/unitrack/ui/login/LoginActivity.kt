@@ -47,8 +47,8 @@ class LoginActivity : AppCompatActivity() {
         // Animate entrance of login elements
         animateEntrance()
 
-        val username = binding.usernameLayout?.editText!!
-        val password = binding.passwordLayout?.editText!!
+        val username = binding.usernameLayout.editText!!
+        val password = binding.passwordLayout.editText!!
         val login = binding.login
         val loading = binding.loading
 
