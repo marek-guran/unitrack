@@ -60,8 +60,13 @@
         <Spinner
             android:id="@+id/semesterSpinner"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_pill_chip"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:popupBackground="@drawable/spinner_dropdown_bg"
+            android:spinnerMode="dropdown"
             android:visibility="gone" />
 
         <!-- Timetable section (used in edit subject dialog) -->
@@ -84,7 +89,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddTimetableEntry"
-            style="@style/Widget.Material3.Button.TonalButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/timetable_add_entry"
