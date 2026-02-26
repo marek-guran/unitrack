@@ -62,6 +62,9 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             )
             if (!enabled) {
                 alarmManager.cancel(pendingIntent)
+                // Dismiss any currently showing live notification
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.cancel(NOTIFICATION_ID)
                 return
             }
             val intervalMinutes = prefs.getInt("notif_interval_live", 2)
@@ -184,6 +187,11 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
     // ═══════════════════════════════════════════════════════════════════
 
     internal fun handleNextClass(context: Context) {
+        val appPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        if (!appPrefs.getBoolean("notif_enabled_live", true)) {
+            dismissNextClassNotification(context)
+            return
+        }
         val isOffline = OfflineMode.isOffline(context)
         if (isOffline) {
             handleNextClassOffline(context)
@@ -501,6 +509,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
     // ═══════════════════════════════════════════════════════════════════
 
     private fun handleChangesCheck(context: Context) {
+        val appPrefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        if (!appPrefs.getBoolean("notif_enabled_changes", true)) return
         if (OfflineMode.isOffline(context)) return // only online mode
         val user = FirebaseAuth.getInstance().currentUser ?: return
         val db = FirebaseDatabase.getInstance().reference
