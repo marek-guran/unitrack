@@ -165,6 +165,7 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 - **Kotlin JVM target:** 17
 - **View Binding:** zapnuté
 - **ProGuard:** zapnutý (isMinifyEnabled = true)
+- **ProGuard:** zapnuté (isMinifyEnabled = true)
 
 ---
 
