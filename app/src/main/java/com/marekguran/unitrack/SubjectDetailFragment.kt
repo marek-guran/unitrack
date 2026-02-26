@@ -47,8 +47,10 @@ import android.print.PageRange
 import android.print.PrintDocumentInfo
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.GenericTypeIndicator
+import java.text.Collator
 
 class SubjectDetailFragment : Fragment() {
+    private val skCollator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
     inner class SubjectReportPrintAdapter(
         private val context: Context,
         private val subjectName: String,
@@ -694,7 +696,7 @@ class SubjectDetailFragment : Fragment() {
                                         suggestedMark = suggestMark(calculateAverage(marks.map { it.mark.grade }))
                                     )
                                 )
-                                students.sortBy { it.studentName.lowercase() }
+                                students.sortWith(compareBy(skCollator) { it.studentName })
                                 studentAdapter.notifyDataSetChanged()
                                 binding.studentsRecyclerView.visibility =
                                     if (isStudentsVisible) View.VISIBLE else View.GONE
@@ -763,7 +765,7 @@ class SubjectDetailFragment : Fragment() {
                 )
             )
         }
-        students.sortBy { it.studentName.lowercase() }
+        students.sortWith(compareBy(skCollator) { it.studentName })
         studentAdapter.notifyDataSetChanged()
         binding.studentsRecyclerView.visibility =
             if (isStudentsVisible) View.VISIBLE else View.GONE
@@ -801,7 +803,7 @@ class SubjectDetailFragment : Fragment() {
                 val enrolled = subjects.contains(openedSubjectKey ?: "")
                 items.add(EnrollStudentItem(uid, name, enrolled))
             }
-            items.sortBy { it.name.lowercase() }
+            items.sortWith(compareBy(skCollator) { it.name })
             var enrollFilter = "all" // "all", "enrolled", "not_enrolled"
             fun applyFilters() {
                 val query = searchEditText.text?.toString()?.lowercase() ?: ""
@@ -899,7 +901,7 @@ class SubjectDetailFragment : Fragment() {
             val enrolled = subjectList.contains(openedSubjectKey ?: "")
             items.add(EnrollStudentItem(uid, name, enrolled))
         }
-        items.sortBy { it.name.lowercase() }
+        items.sortWith(compareBy(skCollator) { it.name })
         var enrollFilter = "all"
         fun applyFilters() {
             val query = searchEditText.text?.toString()?.lowercase() ?: ""

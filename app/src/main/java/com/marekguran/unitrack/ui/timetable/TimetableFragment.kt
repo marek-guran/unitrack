@@ -74,17 +74,21 @@ class TimetableFragment : Fragment() {
     private val progressHandler = Handler(Looper.getMainLooper())
     private val progressRunnable = object : Runnable {
         override fun run() {
+            checkCardStateTransitions()
             updateCurrentClassProgress()
-            progressHandler.postDelayed(this, 5_000) // update every 5s
+            progressHandler.postDelayed(this, 1_000) // update every 1s for second-level countdown
         }
     }
 
-    // Handler for updating the glassmorphic box clock
+    // Handler for updating the glassmorphic box clock and detecting day change
     private val clockHandler = Handler(Looper.getMainLooper())
+    private var lastKnownDate: LocalDate = LocalDate.now()
+    private var lastStateFingerprint: String = ""
     private val clockRunnable = object : Runnable {
         override fun run() {
+            checkDayChange()
             updateGlassmorphicBox()
-            clockHandler.postDelayed(this, 30_000)
+            clockHandler.postDelayed(this, 5_000) // 5s for responsive midnight detection
         }
     }
 
@@ -287,7 +291,7 @@ class TimetableFragment : Fragment() {
         animateEntrance()
 
         // Start clock updates for the glassmorphic box
-        clockHandler.postDelayed(clockRunnable, 30_000)
+        clockHandler.postDelayed(clockRunnable, 5_000)
     }
 
     // ── Day navigation ──────────────────────────────────────────────────────────
@@ -481,10 +485,14 @@ class TimetableFragment : Fragment() {
         // Rebuild chips and pager dates (this also refreshes all pager pages)
         buildDayChips(scrollToSelected = false)
 
-        // Start progress updates if the current day has active classes
-        val currentItems = buildScheduleItems(selectedDate)
-        if (currentItems.any { it.state == ScheduleCardState.CURRENT }) {
-            progressHandler.postDelayed(progressRunnable, 5_000)
+        // Initialize state fingerprint for today
+        val today = LocalDate.now()
+        lastStateFingerprint = buildStateFingerprint(today)
+
+        // Start progress updates if today has any active or upcoming classes
+        val currentItems = buildScheduleItems(today)
+        if (currentItems.any { it.state == ScheduleCardState.CURRENT || it.state == ScheduleCardState.NEXT || it.state == ScheduleCardState.FUTURE }) {
+            progressHandler.postDelayed(progressRunnable, 1_000)
         }
     }
 
@@ -1075,10 +1083,14 @@ class TimetableFragment : Fragment() {
     }
 
     private fun showTimePicker(editText: TextInputEditText) {
-        val cal = Calendar.getInstance()
-        TimePickerDialog(requireContext(), { _, hour, minute ->
-            editText.setText(String.format("%02d:%02d", hour, minute))
-        }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+        // Pre-fill picker with existing value if present, otherwise use current time
+        val existing = editText.text?.toString()?.trim() ?: ""
+        val parsedTime = parseTime(existing)
+        val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
+        TimePickerDialog(requireContext(), { _, h, m ->
+            editText.setText(String.format("%02d:%02d", h, m))
+        }, hour, minute, true).show()
     }
 
     // ── Time conflict detection ───────────────────────────────────────────────
@@ -1202,10 +1214,13 @@ class TimetableFragment : Fragment() {
         // Time pickers
         val timeClickListener = { editText: TextInputEditText ->
             View.OnClickListener {
-                val cal = Calendar.getInstance()
-                TimePickerDialog(requireContext(), { _, hour, minute ->
-                    editText.setText(String.format("%02d:%02d", hour, minute))
-                }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                val existing = editText.text?.toString()?.trim() ?: ""
+                val parsedTime = parseTime(existing)
+                val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
+                TimePickerDialog(requireContext(), { _, h, m ->
+                    editText.setText(String.format("%02d:%02d", h, m))
+                }, hour, minute, true).show()
             }
         }
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
@@ -1433,10 +1448,13 @@ class TimetableFragment : Fragment() {
 
         val timeClickListener = { editText: TextInputEditText ->
             View.OnClickListener {
-                val cal = Calendar.getInstance()
-                TimePickerDialog(requireContext(), { _, hour, minute ->
-                    editText.setText(String.format("%02d:%02d", hour, minute))
-                }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+                val existing = editText.text?.toString()?.trim() ?: ""
+                val parsedTime = parseTime(existing)
+                val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
+                TimePickerDialog(requireContext(), { _, h, m ->
+                    editText.setText(String.format("%02d:%02d", h, m))
+                }, hour, minute, true).show()
             }
         }
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
@@ -1638,17 +1656,100 @@ class TimetableFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         applyStatusBarStyle()
+        // Check if day changed while the fragment was paused
+        checkDayChange()
+        // Restart periodic updates if schedule data is loaded
+        if (scheduleDataLoaded) {
+            // Immediately refresh card states and progress so stale countdowns
+            // are updated right away (e.g. countdown finished while phone was locked)
+            checkCardStateTransitions()
+            updateCurrentClassProgress()
+
+            // Always restart the progress handler — even if all classes appear
+            // PAST right now, a NEXT class could start any second
+            progressHandler.removeCallbacks(progressRunnable)
+            progressHandler.postDelayed(progressRunnable, 1_000)
+
+            clockHandler.removeCallbacks(clockRunnable)
+            clockHandler.postDelayed(clockRunnable, 5_000)
+            updateGlassmorphicBox()
+        }
     }
 
     override fun onPause() {
         super.onPause()
         restoreStatusBar()
+        progressHandler.removeCallbacks(progressRunnable)
+        clockHandler.removeCallbacks(clockRunnable)
     }
 
     private fun updateCurrentClassProgress() {
         if (!isAdded || _binding == null) return
         val currentPos = binding.viewPager.currentItem
         pagerAdapter.getScheduleAdapter(currentPos)?.updateProgress()
+    }
+
+    /**
+     * Checks if any card state has changed (e.g. CURRENT class ended → PAST,
+     * NEXT class started → CURRENT). If so, refreshes the current pager page
+     * with a smooth animation transition on cards whose state changed.
+     */
+    private fun checkCardStateTransitions() {
+        if (!isAdded || _binding == null || !scheduleDataLoaded) return
+        val today = LocalDate.now()
+        val currentPos = binding.viewPager.currentItem
+        val viewedDate = pagerAdapter.getDate(currentPos) ?: return
+        // Only auto-transition cards for today's page
+        if (viewedDate != today) return
+
+        val freshItems = buildScheduleItems(viewedDate)
+        val newFingerprint = freshItems.joinToString(",") { "${it.entry.key}:${it.state}" }
+        if (newFingerprint != lastStateFingerprint) {
+            lastStateFingerprint = newFingerprint
+            val adapter = pagerAdapter.getScheduleAdapter(currentPos)
+            if (adapter != null) {
+                // Find the RecyclerView for animated card transitions
+                val pagerRv = binding.viewPager.getChildAt(0) as? RecyclerView
+                val pageHolder = pagerRv?.findViewHolderForAdapterPosition(currentPos)
+                val scheduleRv = pageHolder?.itemView?.findViewById<RecyclerView>(R.id.recyclerSchedule)
+                adapter.updateItemsAnimated(freshItems, scheduleRv)
+            } else {
+                pagerAdapter.notifyItemChanged(currentPos)
+            }
+        }
+    }
+
+    private fun buildStateFingerprint(date: LocalDate): String {
+        val items = buildScheduleItems(date)
+        return items.joinToString(",") { "${it.entry.key}:${it.state}" }
+    }
+
+    /**
+     * Checks if the real-world date has changed (e.g. midnight passed).
+     * If so, cross-fades the UI, rebuilds day chips so "Dnes" moves to the new
+     * today, updates the header, and refreshes the glassmorphic box.
+     */
+    private fun checkDayChange() {
+        if (!isAdded || _binding == null || !scheduleDataLoaded) return
+        val today = LocalDate.now()
+        if (today != lastKnownDate) {
+            lastKnownDate = today
+            val wasViewingOldToday = selectedDate == today.minusDays(1)
+
+            // Crossfade animation: fade out → update → fade in
+            val root = binding.root
+            root.animate().alpha(0f).setDuration(300).withEndAction {
+                // Rebuild day chips so "Dnes" label moves to the new today
+                buildDayChips(scrollToSelected = false)
+                if (wasViewingOldToday) {
+                    navigateToDay(today, scrollToChip = true)
+                } else {
+                    updateHeader()
+                    updateGlassmorphicBox()
+                }
+                root.animate().alpha(1f).setDuration(400).start()
+            }.start()
+        }
     }
 
     override fun onDestroyView() {

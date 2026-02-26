@@ -52,6 +52,7 @@ class StudentsManageFragment : Fragment() {
 
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
     private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
+    private val skCollator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
     private lateinit var prefs: SharedPreferences
     private val allStudentItems = mutableListOf<StudentManageItem>()
     private val filteredStudentItems = mutableListOf<StudentManageItem>()
@@ -204,7 +205,7 @@ class StudentsManageFragment : Fragment() {
                     source = source.filter { subjectsMap[it.uid]?.contains(subjectFilter) == true }
                 }
 
-                val collator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
+                val collator = skCollator
                 source.sortedWith(compareBy(collator) { it.name })
             }
 
@@ -235,7 +236,7 @@ class StudentsManageFragment : Fragment() {
                     keys.add(key)
                     names.add(name)
                 }
-                val sortedPairs = keys.zip(names).sortedBy { it.second.lowercase() }
+                val sortedPairs = keys.zip(names).sortedWith(compareBy(skCollator) { it.second })
 
                 val items = mutableListOf<StudentManageItem>()
                 val subjectsMap = mutableMapOf<String, MutableSet<String>>()
@@ -254,7 +255,7 @@ class StudentsManageFragment : Fragment() {
                         if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                     }
                 }
-                items.sortBy { it.name.lowercase() }
+                items.sortWith(compareBy(skCollator) { it.name })
                 Triple(sortedPairs, items, subjectsMap)
             }
 
@@ -305,7 +306,7 @@ class StudentsManageFragment : Fragment() {
                                     val name = parts.getOrElse(1) { email }
                                     result.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
                                 }
-                                result.sortBy { it.name.lowercase() }
+                                result.sortWith(compareBy(skCollator) { it.name })
                                 Pair(admins, result)
                             }
                             adminUids = items.first
@@ -349,7 +350,7 @@ class StudentsManageFragment : Fragment() {
                                     if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                                 }
 
-                                items.sortBy { it.name.lowercase() }
+                                items.sortWith(compareBy(skCollator) { it.name })
                                 Triple(admins, items, subjectsMap)
                             }
 
@@ -673,7 +674,7 @@ class StudentsManageFragment : Fragment() {
                 items.add(SubjectEnrollItem(key, name, assigned))
             }
         }
-        items.sortBy { it.name.lowercase() }
+        items.sortWith(compareBy(skCollator) { it.name })
 
         var filtered = items.toMutableList()
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -741,7 +742,7 @@ class StudentsManageFragment : Fragment() {
                     items.add(SubjectEnrollItem(key, name, assigned))
                 }
             }
-            items.sortBy { it.name.lowercase() }
+            items.sortWith(compareBy(skCollator) { it.name })
 
             var filtered = items.toMutableList()
             recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -861,7 +862,7 @@ class StudentsManageFragment : Fragment() {
                 if (subjectSemester != "both" && subjectSemester != semester) continue
                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
             }
-            items.sortBy { it.name.lowercase() }
+            items.sortWith(compareBy(skCollator) { it.name })
             applyEnrollFilters()
         }
 
@@ -988,7 +989,7 @@ class StudentsManageFragment : Fragment() {
                                 if (subjectSemester != "both" && subjectSemester != semester) continue
                                 items.add(SubjectEnrollItem(key, name, currentList.contains(key)))
                             }
-                            items.sortBy { it.name.lowercase() }
+                            items.sortWith(compareBy(skCollator) { it.name })
                             applyEnrollFilters()
                         }
                 }
@@ -1155,7 +1156,7 @@ class StudentsManageFragment : Fragment() {
                             }
                         }
                     }
-                    val sortedPairs = keys.zip(names).sortedBy { it.second.lowercase() }
+                    val sortedPairs = keys.zip(names).sortedWith(compareBy(skCollator) { it.second })
                     Pair(sortedPairs, teacherSubjects)
                 }
 

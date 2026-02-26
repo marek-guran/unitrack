@@ -42,6 +42,7 @@ class SubjectsManageFragment : Fragment() {
 
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
     private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
+    private val skCollator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
     private val allSubjectItems = mutableListOf<SubjectManageItem>()
     private val filteredSubjectItems = mutableListOf<SubjectManageItem>()
     private lateinit var adapter: SubjectManageAdapter
@@ -136,7 +137,7 @@ class SubjectsManageFragment : Fragment() {
                     }
                 }
 
-                val collator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
+                val collator = skCollator
                 result.sortedWith(compareBy(collator) { it.name })
             }
 
@@ -168,7 +169,7 @@ class SubjectsManageFragment : Fragment() {
                     val semester = json.optString("semester", "both")
                     result.add(SubjectManageItem(key, name, teacherEmail, semester))
                 }
-                result.sortBy { it.name.lowercase() }
+                result.sortWith(compareBy(skCollator) { it.name })
                 result
             }
 
@@ -194,7 +195,7 @@ class SubjectsManageFragment : Fragment() {
                             val semester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
                             result.add(SubjectManageItem(key, name, teacherEmail, semester))
                         }
-                        result.sortBy { it.name.lowercase() }
+                        result.sortWith(compareBy(skCollator) { it.name })
                         result
                     }
 
@@ -522,7 +523,7 @@ class SubjectsManageFragment : Fragment() {
                     }
                 }
                 // Sort teachers alphabetically (keep first "(nepriradený)" entry in place)
-                val sorted = teacherNames.drop(1).zip(teacherEmails.drop(1)).sortedBy { it.first.lowercase() }
+                val sorted = teacherNames.drop(1).zip(teacherEmails.drop(1)).sortedWith(compareBy(skCollator) { it.first })
                 val firstName = teacherNames.first()
                 val firstEmail = teacherEmails.first()
                 teacherNames.clear()

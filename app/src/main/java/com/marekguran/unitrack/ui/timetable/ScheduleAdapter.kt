@@ -45,6 +45,7 @@ class ScheduleAdapter(
 
     val runningAnimators = mutableListOf<ObjectAnimator>()
     val currentCards = mutableListOf<Pair<View, TimetableEntry>>()
+    val nextCards = mutableListOf<Pair<View, TimetableEntry>>()
     private var expandedPosition: Int = RecyclerView.NO_POSITION
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -200,15 +201,20 @@ class ScheduleAdapter(
                 }
                 holder.textStatusBadge.visibility = View.VISIBLE
 
-                val progress = calculateProgress(entry)
+                val progress = calculateProgressFine(entry)
                 holder.progressBar.progress = progress
                 holder.progressBar.progressTintList = ColorStateList.valueOf(colorBadge)
                 holder.progressBar.progressBackgroundTintList = ColorStateList.valueOf(colorOutline)
                 holder.progressBar.visibility = View.VISIBLE
 
                 val minutesLeft = calculateMinutesLeft(entry)
-                if (minutesLeft >= 0) {
-                    holder.textTimeRemaining.text = "zostáva $minutesLeft min"
+                val secondsLeft = calculateSecondsLeft(entry)
+                if (secondsLeft >= 0) {
+                    holder.textTimeRemaining.text = if (minutesLeft >= 1) {
+                        "zostáva $minutesLeft min"
+                    } else {
+                        formatSecondsRemaining(secondsLeft)
+                    }
                     holder.textTimeRemaining.setTextColor(colorBadge)
                     holder.textTimeRemaining.visibility = View.VISIBLE
                 }
@@ -229,14 +235,21 @@ class ScheduleAdapter(
                 holder.textStatusBadge.visibility = View.VISIBLE
 
                 val minutesUntil = calculateMinutesUntilStart(entry)
-                if (minutesUntil >= 0) {
+                val secondsUntil = calculateSecondsUntilStart(entry)
+                if (secondsUntil >= 0) {
                     holder.textTimeRemaining.text = if (minutesUntil >= 60) {
                         val h = minutesUntil / 60; val m = minutesUntil % 60
                         "za ${h}h ${m}m"
-                    } else "za $minutesUntil min"
+                    } else if (minutesUntil >= 1) {
+                        "za $minutesUntil min"
+                    } else {
+                        formatSecondsUntil(secondsUntil)
+                    }
                     holder.textTimeRemaining.setTextColor(colorBadge)
                     holder.textTimeRemaining.visibility = View.VISIBLE
                 }
+
+                nextCards.add(Pair(holder.itemView, entry))
             }
             ScheduleCardState.FUTURE -> {
                 holder.card.scaleX = 1.0f
@@ -338,9 +351,70 @@ class ScheduleAdapter(
         for (anim in runningAnimators) anim.cancel()
         runningAnimators.clear()
         currentCards.clear()
+        nextCards.clear()
         expandedPosition = RecyclerView.NO_POSITION
         items = newItems
         notifyDataSetChanged()
+    }
+
+    /**
+     * Animated update: cross-fades cards whose state changed (e.g. CURRENT→PAST).
+     * Cards that gained or lost the CURRENT/PAST state get a smooth alpha+scale transition.
+     */
+    fun updateItemsAnimated(newItems: List<ScheduleCardItem>, recyclerView: RecyclerView?) {
+        val oldStates = items.associate { it.entry.key to it.state }
+        val newStates = newItems.associate { it.entry.key to it.state }
+
+        for (anim in runningAnimators) anim.cancel()
+        runningAnimators.clear()
+        currentCards.clear()
+        nextCards.clear()
+        expandedPosition = RecyclerView.NO_POSITION
+        items = newItems
+        notifyDataSetChanged()
+
+        // After rebind, animate cards whose state changed
+        recyclerView?.post {
+            for (i in newItems.indices) {
+                val item = newItems[i]
+                val oldState = oldStates[item.entry.key] ?: continue
+                val newState = newStates[item.entry.key] ?: continue
+                if (oldState == newState) continue
+
+                val holder = recyclerView.findViewHolderForAdapterPosition(i) ?: continue
+                val card = holder.itemView
+
+                when {
+                    // Became PAST (class ended) — scale down + fade
+                    newState == ScheduleCardState.PAST && oldState == ScheduleCardState.CURRENT -> {
+                        card.scaleX = 1.0f; card.scaleY = 1.0f; card.alpha = 1.0f
+                        card.animate()
+                            .scaleX(0.98f).scaleY(0.98f).alpha(0.5f)
+                            .setDuration(500)
+                            .setInterpolator(DecelerateInterpolator(1.5f))
+                            .start()
+                    }
+                    // Became CURRENT (class started) — pulse scale up
+                    newState == ScheduleCardState.CURRENT -> {
+                        card.scaleX = 0.95f; card.scaleY = 0.95f; card.alpha = 0.7f
+                        card.animate()
+                            .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
+                            .setDuration(500)
+                            .setInterpolator(android.view.animation.OvershootInterpolator(1.5f))
+                            .start()
+                    }
+                    // Became NEXT — gentle fade in
+                    newState == ScheduleCardState.NEXT -> {
+                        card.alpha = 0.6f
+                        card.animate()
+                            .alpha(1.0f)
+                            .setDuration(400)
+                            .setInterpolator(DecelerateInterpolator())
+                            .start()
+                    }
+                }
+            }
+        }
     }
 
     private fun showDayOffNote(holder: ViewHolder, item: ScheduleCardItem) {
@@ -358,10 +432,30 @@ class ScheduleAdapter(
         for ((view, entry) in currentCards) {
             val progressBar = view.findViewById<ProgressBar>(R.id.progressClass) ?: continue
             val textTimeRemaining = view.findViewById<TextView>(R.id.textTimeRemaining) ?: continue
-            progressBar.progress = calculateProgress(entry)
+            animateProgressTo(progressBar, calculateProgressFine(entry))
             val minutesLeft = calculateMinutesLeft(entry)
-            if (minutesLeft >= 0) {
-                textTimeRemaining.text = "zostáva $minutesLeft min"
+            val secondsLeft = calculateSecondsLeft(entry)
+            if (secondsLeft >= 0) {
+                textTimeRemaining.text = if (minutesLeft >= 1) {
+                    "zostáva $minutesLeft min"
+                } else {
+                    formatSecondsRemaining(secondsLeft)
+                }
+            }
+        }
+        for ((view, entry) in nextCards) {
+            val textTimeRemaining = view.findViewById<TextView>(R.id.textTimeRemaining) ?: continue
+            val minutesUntil = calculateMinutesUntilStart(entry)
+            val secondsUntil = calculateSecondsUntilStart(entry)
+            if (secondsUntil >= 0) {
+                textTimeRemaining.text = if (minutesUntil >= 60) {
+                    val h = minutesUntil / 60; val m = minutesUntil % 60
+                    "za ${h}h ${m}m"
+                } else if (minutesUntil >= 1) {
+                    "za $minutesUntil min"
+                } else {
+                    formatSecondsUntil(secondsUntil)
+                }
             }
         }
     }
@@ -447,14 +541,26 @@ class ScheduleAdapter(
         }
     }
 
-    private fun calculateProgress(entry: TimetableEntry): Int {
+    /** Fine-grained progress out of 10000 (using seconds) for smooth bar filling. */
+    private fun calculateProgressFine(entry: TimetableEntry): Int {
         val now = LocalTime.now()
         val start = parseTime(entry.startTime) ?: return 0
         val end = parseTime(entry.endTime) ?: return 0
-        val totalMinutes = Duration.between(start, end).toMinutes()
-        if (totalMinutes <= 0) return 0
-        val elapsed = Duration.between(start, now).toMinutes()
-        return ((elapsed * 100) / totalMinutes).toInt().coerceIn(0, 100)
+        val totalSeconds = Duration.between(start, end).seconds
+        if (totalSeconds <= 0) return 0
+        val elapsed = Duration.between(start, now).seconds
+        return ((elapsed * 10000) / totalSeconds).toInt().coerceIn(0, 10000)
+    }
+
+    /** Smoothly animate the progress bar from its current value to the target. */
+    private fun animateProgressTo(progressBar: ProgressBar, target: Int) {
+        val current = progressBar.progress
+        if (current == target) return
+        ObjectAnimator.ofInt(progressBar, "progress", current, target).apply {
+            duration = 900
+            interpolator = DecelerateInterpolator()
+            start()
+        }
     }
 
     private fun calculateMinutesLeft(entry: TimetableEntry): Int {
@@ -463,9 +569,68 @@ class ScheduleAdapter(
         return Duration.between(now, end).toMinutes().toInt().coerceAtLeast(0)
     }
 
+    private fun calculateSecondsLeft(entry: TimetableEntry): Long {
+        val now = LocalTime.now()
+        val end = parseTime(entry.endTime) ?: return -1
+        return Duration.between(now, end).seconds.coerceAtLeast(0)
+    }
+
     private fun calculateMinutesUntilStart(entry: TimetableEntry): Int {
         val now = LocalTime.now()
         val start = parseTime(entry.startTime) ?: return -1
         return Duration.between(now, start).toMinutes().toInt().coerceAtLeast(0)
+    }
+
+    private fun calculateSecondsUntilStart(entry: TimetableEntry): Long {
+        val now = LocalTime.now()
+        val start = parseTime(entry.startTime) ?: return -1
+        return Duration.between(now, start).seconds.coerceAtLeast(0)
+    }
+
+    // ── Slovak grammar helpers ──────────────────────────────────────────────────
+
+    /**
+     * Slovak grammar for "remaining" countdown (class ending):
+     *   0 sekúnd  → "zostáva 0 sekúnd"
+     *   1 sekunda → "zostáva 1 sekunda"
+     *   2 sekundy → "zostávajú 2 sekundy"
+     *   3 sekundy → "zostávajú 3 sekundy"
+     *   4 sekundy → "zostávajú 4 sekundy"
+     *   5+ sekúnd → "zostáva 5 sekúnd"  (including 22, 44, etc.)
+     */
+    private fun formatSecondsRemaining(seconds: Long): String {
+        val verb = if (seconds in 2..4) "zostávajú" else "zostáva"
+        val unit = secondsUnitSk(seconds)
+        return "$verb $seconds $unit"
+    }
+
+    /**
+     * Slovak grammar for "until start" countdown (next class):
+     *   0 sekúnd  → "za 0 sekúnd"
+     *   1 sekunda → "za 1 sekundu"  (accusative)
+     *   2-4 sekundy → "za 2 sekundy"
+     *   5+ sekúnd → "za 5 sekúnd"
+     */
+    private fun formatSecondsUntil(seconds: Long): String {
+        val unit = secondsUnitAccusativeSk(seconds)
+        return "za $seconds $unit"
+    }
+
+    /** Nominative case: sekunda / sekundy / sekúnd — Slovak uses simple 1/2-4/rest rule */
+    private fun secondsUnitSk(n: Long): String {
+        return when (n) {
+            1L -> "sekunda"
+            in 2..4 -> "sekundy"
+            else -> "sekúnd"
+        }
+    }
+
+    /** Accusative case (after "za"): sekundu / sekundy / sekúnd */
+    private fun secondsUnitAccusativeSk(n: Long): String {
+        return when (n) {
+            1L -> "sekundu"
+            in 2..4 -> "sekundy"
+            else -> "sekúnd"
+        }
     }
 }
