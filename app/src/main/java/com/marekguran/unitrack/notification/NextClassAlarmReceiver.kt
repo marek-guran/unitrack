@@ -68,12 +68,19 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 return
             }
             val intervalMinutes = prefs.getInt("notif_interval_live", 2)
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 5000,
-                intervalMinutes * 60 * 1000L,
-                pendingIntent
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + intervalMinutes * 60 * 1000L,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + intervalMinutes * 60 * 1000L,
+                    pendingIntent
+                )
+            }
         }
 
         /** Schedule the loud changes check (grades + cancellations). */
@@ -93,12 +100,19 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 return
             }
             val intervalMinutes = prefs.getInt("notif_interval_changes", 30)
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 10000,
-                intervalMinutes * 60 * 1000L,
-                pendingIntent
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + intervalMinutes * 60 * 1000L,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + intervalMinutes * 60 * 1000L,
+                    pendingIntent
+                )
+            }
         }
 
         fun cancelAll(context: Context) {
@@ -173,8 +187,16 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         createNotificationChannels(context)
 
         when (intent?.action) {
-            "ACTION_CHECK_CHANGES" -> handleChangesCheck(context)
-            else -> handleNextClass(context)
+            "ACTION_CHECK_CHANGES" -> {
+                handleChangesCheck(context)
+                // Re-schedule for next interval (one-shot alarm pattern)
+                scheduleChangesCheck(context)
+            }
+            else -> {
+                handleNextClass(context)
+                // Re-schedule for next interval (one-shot alarm pattern)
+                scheduleNextClass(context)
+            }
         }
 
         // Safety: finish the pending result after a delay to avoid ANR

@@ -31,9 +31,10 @@ import com.marekguran.unitrack.data.LocalDatabase
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -169,8 +170,7 @@ class SubjectDetailFragment : Fragment() {
                 y += 20f
             }
             // Print date/time
-            val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-            val printDateTime = dateFormat.format(Date())
+            val printDateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", Locale.getDefault()))
             canvas.drawText("Dátum tlače: $printDateTime", 40f, y, paint)
             y += 30f
 
@@ -1106,8 +1106,9 @@ class SubjectDetailFragment : Fragment() {
                 val markWithKey = sortedMarks[position]
                 holder.markNameText.text = markWithKey.mark.name
                 holder.markGradeText.text = markWithKey.mark.grade
-                holder.markDateText.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                    .format(Date(markWithKey.mark.timestamp))
+                holder.markDateText.text = Instant.ofEpochMilli(markWithKey.mark.timestamp)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
                 holder.itemView.setOnClickListener { showMarkDetailsDialog(student, markWithKey) }
 
                 // Alternating row color
@@ -1189,7 +1190,8 @@ class SubjectDetailFragment : Fragment() {
         // Set default date to today (displayed as dd.MM.yyyy, but stored as millis)
         var pickedDateMillis = System.currentTimeMillis()
         dateInput.text =
-            SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(pickedDateMillis))
+            Instant.ofEpochMilli(pickedDateMillis).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
         dateInput.setOnClickListener {
             val cal = java.util.Calendar.getInstance().apply { timeInMillis = pickedDateMillis }
             DatePickerDialog(
@@ -1198,10 +1200,9 @@ class SubjectDetailFragment : Fragment() {
                     val pickedCal = java.util.Calendar.getInstance()
                     pickedCal.set(year, month, dayOfMonth)
                     pickedDateMillis = pickedCal.timeInMillis
-                    dateInput.text = SimpleDateFormat(
-                        "dd.MM.yyyy",
-                        Locale.getDefault()
-                    ).format(Date(pickedDateMillis))
+                    dateInput.text = Instant.ofEpochMilli(pickedDateMillis)
+                        .atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
                 },
                 cal.get(java.util.Calendar.YEAR),
                 cal.get(java.util.Calendar.MONTH),
@@ -1297,10 +1298,9 @@ class SubjectDetailFragment : Fragment() {
         nameInput.setText(markWithKey.mark.name)
         descInput.setText(markWithKey.mark.desc)
         noteInput.setText(markWithKey.mark.note)
-        dateField.text = SimpleDateFormat(
-            "dd.MM.yyyy",
-            Locale.getDefault()
-        ).format(Date(markWithKey.mark.timestamp))
+        dateField.text = Instant.ofEpochMilli(markWithKey.mark.timestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
 
         var pickedTimestamp = markWithKey.mark.timestamp
 
@@ -1312,10 +1312,9 @@ class SubjectDetailFragment : Fragment() {
                     val pickedCal = java.util.Calendar.getInstance()
                     pickedCal.set(year, month, dayOfMonth)
                     pickedTimestamp = pickedCal.timeInMillis
-                    dateField.text = SimpleDateFormat(
-                        "dd.MM.yyyy",
-                        Locale.getDefault()
-                    ).format(Date(pickedTimestamp))
+                    dateField.text = Instant.ofEpochMilli(pickedTimestamp)
+                        .atZone(ZoneId.systemDefault())
+                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
                 },
                 cal.get(java.util.Calendar.YEAR),
                 cal.get(java.util.Calendar.MONTH),
@@ -2008,9 +2007,11 @@ class SubjectDetailFragment : Fragment() {
                 val markWithKey = sortedMarks[position]
                 holder.markNameText.text = markWithKey.mark.name
                 holder.markGradeText.text = markWithKey.mark.grade
-                holder.markDateText.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
-                    .format(Date(markWithKey.mark.timestamp))
+                holder.markDateText.text = Instant.ofEpochMilli(markWithKey.mark.timestamp)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
                 holder.itemView.setOnClickListener { showMarkDetailsDialog(student, markWithKey) }
+
                 // Alternating row color
                 val rowBgAttr = if (position % 2 == 0) {
                     com.google.android.material.R.attr.colorSurfaceContainerLowest
@@ -2062,10 +2063,9 @@ class SubjectDetailFragment : Fragment() {
         dialogView.findViewById<TextView>(R.id.markGradeDetail).text = "Známka: ${mark.grade}"
         dialogView.findViewById<TextView>(R.id.markNameDetail).text = "Názov: ${mark.name}"
         dialogView.findViewById<TextView>(R.id.markTimestampDetail).text =
-            "Dátum: " + SimpleDateFormat(
-                "dd.MM.yyyy",
-                Locale.getDefault()
-            ).format(Date(mark.timestamp))
+            "Dátum: " + Instant.ofEpochMilli(mark.timestamp)
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
 
         // --- Hide student note if empty ---
         val noteStudentDetail = dialogView.findViewById<TextView>(R.id.markNoteStudentDetail)

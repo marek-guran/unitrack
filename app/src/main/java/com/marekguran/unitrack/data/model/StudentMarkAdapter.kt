@@ -8,8 +8,9 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.marekguran.unitrack.R
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class StudentMarkAdapter(
@@ -32,7 +33,9 @@ class StudentMarkAdapter(
         holder.markGrade.text = mark.grade
         holder.markName.text = mark.name
         holder.markDesc.text = mark.desc
-        holder.markTimestamp.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(mark.timestamp))
+        holder.markTimestamp.text = Instant.ofEpochMilli(mark.timestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
 
         // Color-coded grade badge
         val ctx = holder.itemView.context

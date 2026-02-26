@@ -9,8 +9,10 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.marekguran.unitrack.R
-import java.text.SimpleDateFormat
-import java.util.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class MarkAdapter(
     private val marks: List<MarkWithKey>,
@@ -64,7 +66,9 @@ class MarkAdapter(
             holder.markNote.visibility = View.VISIBLE
         }
 
-        holder.markTimestamp.text = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(mark.timestamp))
+        holder.markTimestamp.text = Instant.ofEpochMilli(mark.timestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
         holder.editMarkBtn.setOnClickListener { onEdit(markWithKey) }
         holder.removeMarkBtn.setOnClickListener { onRemove(markWithKey) }
 
