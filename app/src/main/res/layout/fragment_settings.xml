@@ -323,8 +323,45 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Admin: Academic Year Management -->
+        <TextView
+            android:id="@+id/labelSchoolYears"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Akademické roky"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05"
+            android:visibility="gone" />
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/layoutSchoolYears"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerSchoolYears"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Admin: Database Migration -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/layoutMigrateDb"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
@@ -344,15 +381,60 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Akademické roky"
+                    android:text="Migrácia databázy"
                     android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
                     android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Migruje existujúce predmety a študentov do novej štruktúry databázy (akademické roky, globálni študenti)."
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:layout_marginBottom="12dp" />
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recyclerSchoolYears"
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/checkMigrateBackup"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:text="Mám zálohu databázy, ktorú môžem obnoviť ak sa niečo pokazí"
+                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                    android:layout_marginBottom="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMigrateDb"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Migrovať databázu"
+                    app:cornerRadius="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="8dp">
+
+                    <ImageView
+                        android:id="@+id/iconMigrateSuccess"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/baseline_check_circle_24"
+                        android:layout_marginEnd="6dp"
+                        android:visibility="gone"
+                        app:tint="@color/good_mark" />
+
+                    <TextView
+                        android:id="@+id/textMigrateStatus"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -412,6 +494,17 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Export/Import (offline mode) -->
+        <TextView
+            android:id="@+id/labelExportImport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Databáza"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05"
+            android:visibility="gone" />
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/layoutExportImport"
             android:layout_width="match_parent"
@@ -427,31 +520,25 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:orientation="horizontal"
                 android:padding="20dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Záloha databázy"
-                    android:textAppearance="@style/TextAppearance.Material3.TitleSmall"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnExportDatabase"
                     style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="52dp"
+                    android:layout_weight="1"
                     android:text="@string/export_database"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginEnd="8dp"
                     app:cornerRadius="12dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnImportDatabase"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="52dp"
+                    android:layout_weight="1"
                     android:text="@string/import_database"
                     app:cornerRadius="12dp" />
             </LinearLayout>
@@ -488,21 +575,23 @@
                     android:id="@+id/switchNotifLive"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Živé notifikácie rozvrhu"
+                    android:text="Priebežný prehľad rozvrhu"
                     android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
                     android:padding="4dp"
                     android:layout_marginBottom="12dp" />
 
                 <!-- Live notification update interval -->
                 <TextView
+                    android:id="@+id/labelLiveInterval"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Interval živých notifikácií (minúty)"
+                    android:text="Interval aktualizácie (minúty)"
                     android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:layout_marginBottom="4dp" />
 
                 <FrameLayout
+                    android:id="@+id/frameLiveInterval"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
                     android:layout_marginBottom="16dp"
@@ -519,6 +608,7 @@
 
                 <!-- Minutes before class to start showing notification -->
                 <TextView
+                    android:id="@+id/labelMinutesBefore"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Zobraziť pred začiatkom hodiny (minúty)"
@@ -527,6 +617,7 @@
                     android:layout_marginBottom="4dp" />
 
                 <FrameLayout
+                    android:id="@+id/frameMinutesBefore"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
                     android:layout_marginBottom="16dp"
@@ -541,41 +632,7 @@
                         android:spinnerMode="dropdown" />
                 </FrameLayout>
 
-                <!-- Enable changes notifications (grades, cancellations) -->
-                <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switchNotifChanges"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Notifikácie o zmenách (známky, zrušenia)"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-                    android:padding="4dp"
-                    android:layout_marginBottom="12dp" />
-
-                <!-- Changes check interval -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Interval kontroly zmien (minúty)"
-                    android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:layout_marginBottom="4dp" />
-
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginBottom="16dp"
-                    android:background="@drawable/bg_pill_chip">
-                    <Spinner
-                        android:id="@+id/spinnerChangesInterval"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp"
-                        android:popupBackground="@drawable/spinner_dropdown_bg"
-                        android:spinnerMode="dropdown" />
-                </FrameLayout>
-
-                <!-- Show classroom in notification -->
+                <!-- Show classroom in notification (part of live timetable) -->
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switchNotifClassroom"
                     android:layout_width="match_parent"
@@ -585,7 +642,7 @@
                     android:padding="4dp"
                     android:layout_marginBottom="12dp" />
 
-                <!-- Show upcoming class -->
+                <!-- Show upcoming class (part of live timetable) -->
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switchNotifUpcoming"
                     android:layout_width="match_parent"
@@ -595,7 +652,86 @@
                     android:padding="4dp"
                     android:layout_marginBottom="16dp" />
 
-                <!-- Battery optimization button -->
+                <!-- Changes notifications group (hidden for teachers) -->
+                <LinearLayout
+                    android:id="@+id/layoutNotifChangesGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- Enable changes notifications (grades, cancellations) -->
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switchNotifChanges"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Upozornenia na zmeny (známky, zrušenia)"
+                        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                        android:padding="4dp"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- Changes check interval -->
+                    <TextView
+                        android:id="@+id/labelChangesInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Interval kontroly zmien (minúty)"
+                        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:layout_marginBottom="4dp" />
+
+                    <FrameLayout
+                        android:id="@+id/frameChangesInterval"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginBottom="16dp"
+                        android:background="@drawable/bg_pill_chip">
+                        <Spinner
+                            android:id="@+id/spinnerChangesInterval"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="16dp"
+                            android:popupBackground="@drawable/spinner_dropdown_bg"
+                            android:spinnerMode="dropdown" />
+                    </FrameLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Battery optimization group -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Optimalizácia batérie"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="8dp"
+            android:letterSpacing="0.05" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLowest">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Optimalizácia batérie môže spôsobiť, že Android pozdrží alebo úplne zablokuje notifikácie o rozvrhu, známkach a dochádzke. Pre spoľahlivé doručovanie notifikácií je potrebné túto optimalizáciu vypnúť."
+                    android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:layout_marginBottom="12dp" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnBatteryOptimization"
                     style="@style/Widget.Material3.Button.TonalButton"

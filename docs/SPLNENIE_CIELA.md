@@ -24,7 +24,7 @@ Cieľ práce pozostáva z piatich kľúčových častí. Každá je nižšie ana
 | Návrh databázy | Stromová JSON štruktúra (Firebase + lokálna replika) | [DATABAZA.md](DATABAZA.md) |
 | Návrh používateľského rozhrania | Material Design 3, responzívne layouty (telefón + tablet) | [NAVIGACIA.md](NAVIGACIA.md) |
 | Návrh notifikačného systému | 4 kanály, konfigurovateľné intervaly, Android 16 podpora | [NOTIFIKACIE.md](NOTIFIKACIE.md) |
-| Návrh bezpečnostného modelu | Firebase Auth, role-based prístup, offline sandbox | [BEZPECNOST.md](BEZPECNOST.md) |
+| Návrh bezpečnostného modelu | Firebase Auth, App Check (Play Integrity), role-based prístup, offline sandbox | [BEZPECNOST.md](BEZPECNOST.md) |
 
 ---
 
@@ -124,15 +124,19 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 | **Vlastná navigácia** | PillNavigationBar — animovaná „pilulka" s adaptívnym dizajnom |
 | **Správa účtov** | Administrácia používateľov s priradením rolí (admin, učiteľ, študent) |
 | **Správa predmetov** | Vytváranie, editácia, priradenie semestrov s automatickou migráciou dát |
-| **Splash obrazovka** | Animovaný vstupný screen s logom |
+| **Splash obrazovka** | Animovaný vstupný screen s logom a slide-up animáciou |
 | **Reset hesla** | Odoslanie emailu na obnovu hesla |
 | **Optimalizácia batérie** | Nastavenie výnimky pre spoľahlivé notifikácie |
+| **Firebase App Check** | Ochrana backendových zdrojov pred neoprávneným prístupom (Play Integrity + Debug provider) |
+| **Hromadné hodnotenie** | BulkGradeActivity — rýchle zadanie známok viacerým študentom naraz s chip komponentmi a expand/collapse animáciami |
+| **Migrácia databázy** | Automatické aj manuálne migrácie štruktúry dát (globálne predmety → per-year, per-year študenti → globálna štruktúra) |
+| **Pokročilé animácie** | Paint-drop efekt pri zmene tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, 1:1 peek navigácia v rozvrhu |
 
 ---
 
 ## Záver
 
-Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, čo z nej robí ucelený nástroj pre akademickú správu.
+Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
 
 ---
 

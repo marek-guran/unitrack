@@ -11,16 +11,13 @@ import com.marekguran.unitrack.R
 
 class TeacherStudentAdapter(
     private val students: List<StudentDetail>,
-    private val onViewDetails: (StudentDetail) -> Unit,
-    private val onAddAttendance: (StudentDetail) -> Unit,
-    private val onRemoveAttendance: (StudentDetail) -> Unit,
+    private val onShowGrades: (StudentDetail) -> Unit,
     private val onAddMark: (StudentDetail) -> Unit,
     private val onShowAttendanceDetails: (StudentDetail) -> Unit
 ) : RecyclerView.Adapter<TeacherStudentAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val studentName: TextView = view.findViewById(R.id.studentName)
-        val viewDetailsBtn: Button = view.findViewById(R.id.viewDetailsBtn)
         val addMarkBtn: Button = view.findViewById(R.id.addMarkBtn)
         val attendanceChip: Chip = view.findViewById(R.id.attendanceChip)
         val avgMarkChip: Chip = view.findViewById(R.id.avgMarkChip)
@@ -37,17 +34,12 @@ class TeacherStudentAdapter(
         holder.studentName.text = student.studentName
         val presentCount = student.attendanceMap.values.count { !it.absent }
         val totalCount = student.attendanceMap.size
-        holder.attendanceChip.text = "Prítomnosť: $presentCount/$totalCount"
+        holder.attendanceChip.text = "Dochádzka: $presentCount/$totalCount"
         holder.avgMarkChip.text = "Priemer: ${student.average}"
 
-        holder.viewDetailsBtn.setOnClickListener { onViewDetails(student) }
+        holder.avgMarkChip.setOnClickListener { onShowGrades(student) }
         holder.addMarkBtn.setOnClickListener { onAddMark(student) }
-        holder.attendanceChip.setOnClickListener { onAddAttendance(student) }
-        holder.attendanceChip.setOnLongClickListener {
-            onShowAttendanceDetails(student)
-            true
-        }
-        holder.attendanceChip.tooltipText = "Podržte pre detail dochádzky"
+        holder.attendanceChip.setOnClickListener { onShowAttendanceDetails(student) }
 
         // Alternating row color
         val rowBgAttr = if (position % 2 == 0) {

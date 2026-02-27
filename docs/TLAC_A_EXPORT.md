@@ -24,10 +24,10 @@ Aplikácia ponúka tri typy PDF reportov, z ktorých každý má vlastný `Print
 - Dátum a čas tlače
 - Tabuľka študentov so stĺpcami:
   - **Meno študenta** (tučné, s automatickým zalamovaním)
-  - **Prítomnosť** (počet/celkom + percento, napr. „8/10 (80%)")
+  - **Prítomnosť** (počet/celkom + presné percento, napr. „8/10 (80.00%)")
   - **Známky** (zoznam všetkých známok, s automatickým zalamovaním)
   - **Priemer** (vypočítaný priemer známok)
-- Zhrnutie: celkom študentov, celkom udelených známok, priemerná dochádzka
+- Zhrnutie: celkom študentov, celkom udelených známok, priemerná dochádzka (v presných percentách), priemerná známka
 - Podpora viacstránkových dokumentov (automatické stránkovanie pri dlhých zoznamoch)
 
 **Názov súboru:** `{názov_predmetu}-report.pdf`
@@ -46,7 +46,7 @@ Aplikácia ponúka tri typy PDF reportov, z ktorých každý má vlastný `Print
   - **Dochádzka** (percento prítomnosti)
   - **Známky** (zoznam udelených známok)
   - **Priemer** (priemer známok v predmete)
-- Zhrnutie: celkom predmetov, celkový priemer, celková dochádzka
+- Zhrnutie: celkom predmetov, celkový priemer, celková dochádzka (v presných percentách)
 
 **Názov súboru:** `{meno_študenta}-vysledky.pdf`
 
@@ -64,7 +64,7 @@ Aplikácia ponúka tri typy PDF reportov, z ktorých každý má vlastný `Print
   - **Študenti** (počet zapísaných študentov)
   - **Priemerná dochádzka** (celková dochádzka v predmete)
   - **Priemerná známka** (celkový priemer hodnotení)
-- Zhrnutie: celkom predmetov, celkom unikátnych študentov
+- Zhrnutie: celkom predmetov, celkom unikátnych študentov, priemerná dochádzka (v presných percentách), priemerná známka
 
 **Názov súboru:** `{meno_učiteľa}-predmety.pdf`
 

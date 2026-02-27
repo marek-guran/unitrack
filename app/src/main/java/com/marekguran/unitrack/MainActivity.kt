@@ -3,6 +3,7 @@ package com.marekguran.unitrack
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -11,7 +12,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.TypedValue
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -33,6 +39,20 @@ import com.marekguran.unitrack.ui.PillNavigationBar
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        /** Snapshot of the screen taken before a dark-mode toggle so we can
+         *  animate the old→new theme transition with a paint-drop splash. */
+        @JvmStatic
+        var pendingThemeBitmap: Bitmap? = null
+
+        /** Set to true right before [AppCompatDelegate.setDefaultNightMode] so
+         *  the old activity's [onDestroy] does not recycle the bitmap that the
+         *  new activity still needs. */
+        @Volatile
+        @JvmStatic
+        var themeChangeInProgress = false
+    }
+
     private lateinit var binding: ActivityMainBinding
     private var noInternetDialog: AlertDialog? = null
     private var dialogDismissedManually = false
@@ -48,6 +68,10 @@ class MainActivity : AppCompatActivity() {
     ) { /* granted or not, we proceed gracefully */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Reset the flag early so it never stays stuck true after a failed onCreate
+        val wasThemeChange = themeChangeInProgress
+        themeChangeInProgress = false
+
         val prefs = getSharedPreferences("app_settings", 0)
         val useDarkMode = prefs.getBoolean("dark_mode", false)
         AppCompatDelegate.setDefaultNightMode(
@@ -81,6 +105,172 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // "Paint-drop splash" animation from the dark-mode switch when activity
+        // is recreated after a theme change.
+        // 1. An old-theme screenshot overlays the new content.
+        // 2. A paint drop falls from the switch to the bottom of the screen.
+        // 3. On impact the drop "splashes" and an expanding hole in the overlay
+        //    reveals the new theme from the bottom up — like a bucket of paint.
+        if (savedInstanceState != null) {
+            val cx = prefs.getInt("theme_anim_cx", -1)
+            val cy = prefs.getInt("theme_anim_cy", -1)
+            val oldBitmap = pendingThemeBitmap
+            pendingThemeBitmap = null
+
+            if (cx >= 0 && cy >= 0 && oldBitmap != null) {
+                prefs.edit().remove("theme_anim_cx").remove("theme_anim_cy").apply()
+
+                val decorView = window.decorView as? ViewGroup
+                if (decorView != null) {
+                    // --- Old-theme overlay (draws bitmap with an expanding circular hole) ---
+                    // Added SYNCHRONOUSLY so it is drawn on the very first frame,
+                    // eliminating any flicker of the new theme.
+                    val overlay = object : View(this@MainActivity) {
+                        var holeCx = 0f
+                        var holeCy = 0f
+                        var holeRadius = 0f
+
+                        override fun onDraw(canvas: android.graphics.Canvas) {
+                            if (oldBitmap.isRecycled) return
+                            canvas.save()
+                            if (holeRadius > 0f) {
+                                val path = android.graphics.Path()
+                                path.fillType = android.graphics.Path.FillType.EVEN_ODD
+                                path.addRect(
+                                    0f, 0f, width.toFloat(), height.toFloat(),
+                                    android.graphics.Path.Direction.CW
+                                )
+                                path.addCircle(holeCx, holeCy, holeRadius,
+                                    android.graphics.Path.Direction.CW
+                                )
+                                canvas.clipPath(path)
+                            }
+                            canvas.drawBitmap(oldBitmap, 0f, 0f, null)
+                            canvas.restore()
+                        }
+                    }
+                    decorView.addView(overlay, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    ))
+
+                    // Start the drop animation after layout so we have screen dimensions
+                    overlay.post {
+                        val screenWidth = decorView.width
+                        val screenHeight = decorView.height
+                        val density = resources.displayMetrics.density
+
+                        // --- Paint drop ---
+                        val dropSize = (40 * density).toInt()
+                        val drop = View(this@MainActivity)
+                        val shape = android.graphics.drawable.GradientDrawable()
+                        shape.shape = android.graphics.drawable.GradientDrawable.OVAL
+                        val tv = TypedValue()
+                        theme.resolveAttribute(android.R.attr.colorBackground, tv, true)
+                        shape.setColor(tv.data)
+                        drop.background = shape
+                        drop.elevation = 12 * density
+                        decorView.addView(drop, FrameLayout.LayoutParams(dropSize, dropSize))
+                        drop.translationX = cx - dropSize / 2f
+                        drop.translationY = cy - dropSize / 2f
+                        drop.scaleX = 0.6f
+                        drop.scaleY = 0.6f
+                        drop.alpha = 0.9f
+
+                        // Phase 1 — drop falls from the switch to the bottom of the screen
+                        val targetY = (screenHeight - dropSize).toFloat()
+                        var cancelled = false
+                        drop.animate()
+                            .translationY(targetY)
+                            .scaleX(1f)
+                            .scaleY(1.3f)
+                            .alpha(1f)
+                            .setDuration(520)
+                            .setInterpolator(AccelerateInterpolator(1.8f))
+                            .setListener(object : android.animation.AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    if (cancelled) return
+
+                                    // Phase 2 — splash: drop rapidly expands + fades
+                                    drop.animate()
+                                        .scaleX(6f)
+                                        .scaleY(6f)
+                                        .alpha(0f)
+                                        .setDuration(250)
+                                        .setInterpolator(DecelerateInterpolator())
+                                        .setListener(null)
+                                        .withEndAction {
+                                            if (drop.parent != null) decorView.removeView(drop)
+                                        }
+                                        .start()
+
+                                    // Phase 3 — inverted circular reveal
+                                    val splashX = cx.toFloat()
+                                    val splashY = screenHeight.toFloat()
+                                    overlay.holeCx = splashX
+                                    overlay.holeCy = splashY
+                                    val maxRadius = kotlin.math.hypot(
+                                        kotlin.math.max(splashX, screenWidth - splashX).toDouble(),
+                                        screenHeight.toDouble()
+                                    ).toFloat()
+
+                                    val revealAnim = android.animation.ValueAnimator.ofFloat(0f, maxRadius)
+                                    revealAnim.duration = 700
+                                    revealAnim.interpolator = DecelerateInterpolator(1.8f)
+                                    revealAnim.addUpdateListener { anim ->
+                                        overlay.holeRadius = anim.animatedValue as Float
+                                        overlay.invalidate()
+                                    }
+                                    revealAnim.addListener(object : android.animation.AnimatorListenerAdapter() {
+                                        override fun onAnimationEnd(a: android.animation.Animator) {
+                                            if (overlay.parent != null) decorView.removeView(overlay)
+                                            if (!oldBitmap.isRecycled) oldBitmap.recycle()
+                                        }
+                                    })
+                                    revealAnim.start()
+                                }
+                                override fun onAnimationCancel(animation: android.animation.Animator) {
+                                    cancelled = true
+                                    if (drop.parent != null) decorView.removeView(drop)
+                                    if (overlay.parent != null) decorView.removeView(overlay)
+                                    if (!oldBitmap.isRecycled) oldBitmap.recycle()
+                                }
+                            })
+                            .start()
+                    }
+                } else {
+                    oldBitmap.recycle()
+                }
+            } else {
+                oldBitmap?.recycle()
+                if (cx >= 0 && cy >= 0) {
+                    // Coordinates but no bitmap — simple circular reveal fallback
+                    prefs.edit().remove("theme_anim_cx").remove("theme_anim_cy").apply()
+                    binding.root.visibility = View.INVISIBLE
+                    binding.root.post {
+                        val maxR = kotlin.math.hypot(
+                            binding.root.width.toDouble(), binding.root.height.toDouble()
+                        ).toFloat()
+                        val reveal = android.view.ViewAnimationUtils.createCircularReveal(
+                            binding.root, cx, cy, 0f, maxR
+                        )
+                        reveal.duration = 500
+                        reveal.interpolator = DecelerateInterpolator()
+                        binding.root.visibility = View.VISIBLE
+                        reveal.start()
+                    }
+                } else {
+                    // Fallback crossfade for non-theme recreations
+                    binding.root.alpha = 0f
+                    binding.root.animate()
+                        .alpha(1f)
+                        .setDuration(400)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                }
+            }
+        }
 
         // Handle navigation bar inset for the pill nav so it sits above the system nav bar
         ViewCompat.setOnApplyWindowInsetsListener(binding.pillNavBar) { view, insets ->
@@ -238,6 +428,12 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         noInternetDialog?.dismiss()
+        // Prevent bitmap leak — but not if the activity is being recreated
+        // for a theme change, because the new activity still needs the bitmap.
+        if (!themeChangeInProgress) {
+            pendingThemeBitmap?.recycle()
+            pendingThemeBitmap = null
+        }
     }
 
     private fun startPeriodicInternetCheck() {

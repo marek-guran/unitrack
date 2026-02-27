@@ -5,22 +5,25 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
+import com.google.android.material.textfield.TextInputLayout
 import com.marekguran.unitrack.R
-import com.marekguran.unitrack.data.model.StudentDetail
 
 class AttendanceStudentAdapter(
     private val students: List<StudentDetail>,
     private val presentStates: MutableList<Boolean>, // parallel to students
+    private val notes: MutableList<String>, // parallel to students
     private val onPresentChanged: (Int, Boolean) -> Unit
 ) : RecyclerView.Adapter<AttendanceStudentAdapter.AttendanceViewHolder>() {
 
     inner class AttendanceViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val name: TextView = view.findViewById(R.id.textStudentName)
         val chip: Chip = view.findViewById(R.id.checkBoxPresent)
+        val noteInputLayout: TextInputLayout = view.findViewById(R.id.noteInputLayout)
+        val noteInput: EditText = view.findViewById(R.id.noteInput)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AttendanceViewHolder {
@@ -39,10 +42,38 @@ class AttendanceStudentAdapter(
         // Update chip appearance based on state
         updateChipAppearance(holder.chip, isPresent)
 
+        // Show/hide note field based on absent state
+        holder.noteInputLayout.visibility = if (isPresent) View.GONE else View.VISIBLE
+
+        // Remove previous TextWatcher before setting text to avoid triggering it
+        val oldWatcher = holder.noteInput.tag as? android.text.TextWatcher
+        if (oldWatcher != null) {
+            holder.noteInput.removeTextChangedListener(oldWatcher)
+        }
+        holder.noteInput.setText(notes[position])
+
+        // Add new TextWatcher and store reference
+        val watcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val adapterPos = holder.bindingAdapterPosition
+                if (adapterPos != RecyclerView.NO_POSITION) {
+                    notes[adapterPos] = s?.toString() ?: ""
+                }
+            }
+        }
+        holder.noteInput.addTextChangedListener(watcher)
+        holder.noteInput.tag = watcher
+
         holder.chip.setOnCheckedChangeListener { _, isChecked ->
-            presentStates[position] = isChecked
-            updateChipAppearance(holder.chip, isChecked)
-            onPresentChanged(position, isChecked)
+            val adapterPos = holder.bindingAdapterPosition
+            if (adapterPos != RecyclerView.NO_POSITION) {
+                presentStates[adapterPos] = isChecked
+                updateChipAppearance(holder.chip, isChecked)
+                holder.noteInputLayout.visibility = if (isChecked) View.GONE else View.VISIBLE
+                onPresentChanged(adapterPos, isChecked)
+            }
         }
 
         // Alternating row color

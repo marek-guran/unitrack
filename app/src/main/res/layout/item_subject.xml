@@ -71,7 +71,7 @@
                 android:id="@+id/subjectAttendance"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Prezenčka: "
+                android:text="Dochádzka: "
                 android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
                 android:textColor="?attr/colorOnTertiaryContainer"
                 android:background="@drawable/bg_pill_tertiary_outlined"

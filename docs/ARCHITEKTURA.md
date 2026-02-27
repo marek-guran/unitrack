@@ -40,11 +40,11 @@ Duálny backend: buď Firebase Realtime Database (online), alebo `LocalDatabase`
 
 ### Spustenie (cold start)
 
-1. `UniTrackApplication.onCreate()` — inicializácia Application triedy, aplikovanie tmavého režimu zo `SharedPreferences` (aby všetky Activity vrátane SplashActivity mali správnu tému od začiatku)
+1. `UniTrackApplication.onCreate()` — inicializácia Application triedy, aplikovanie tmavého režimu zo `SharedPreferences`, inicializácia Firebase App Check (Play Integrity pre release, Debug provider pre vývoj)
 2. `SplashActivity.onCreate()`:
    - Aplikuje tmavý režim (záloha pre prípad, že Application ešte nestihla)
    - Skryje ActionBar a nastaví edge-to-edge zobrazenie
-   - Zobrazí animovaný obsah (logo a názov aplikácie) — animácia zdola nahor
+   - Zobrazí animovaný obsah (logo a názov aplikácie) — slide-up animácia zdola nahor (800ms, DecelerateInterpolator)
    - Po 2 sekundách presmeruje na `MainActivity` s fade prechodom
 3. `MainActivity.onCreate()`:
    - Načíta preferenciu tmavého režimu zo `SharedPreferences` a nastaví tému
@@ -84,10 +84,11 @@ Projekt má jediný modul `app/`. Nie je rozdelený do feature modulov — je to
 com.marekguran.unitrack/
 ├── SplashActivity.kt            # Animovaná splash obrazovka (launcher)
 ├── MainActivity.kt              # Vstupný bod po splashi, navigácia, internet check
-├── UniTrackApplication.kt       # Application trieda (inicializácia témy)
-├── SubjectDetailFragment.kt     # Detail predmetu (známky, dochádzka)
+├── UniTrackApplication.kt       # Application trieda (inicializácia témy + App Check)
+├── BulkGradeActivity.kt         # Hromadné zadávanie známok (expand/collapse animácie)
+├── SubjectDetailFragment.kt     # Detail predmetu (ViewPager2 — známky, dochádzka, študenti)
 ├── data/                        # Dátová vrstva
-│   ├── LocalDatabase.kt         # Offline JSON databáza s convenience metódami
+│   ├── LocalDatabase.kt         # Offline JSON databáza s convenience a migračnými metódami
 │   ├── LoginDataSource.kt       # Prihlásenie (scaffold, reálne cez Firebase)
 │   ├── LoginRepository.kt       # Repository pre prihlásenie
 │   ├── OfflineMode.kt           # Online/offline prepínač
@@ -97,6 +98,8 @@ com.marekguran.unitrack/
 │   └── NextClassAlarmReceiver.kt
 └── ui/                          # Obrazovky
     ├── PillNavigationBar.kt     # Vlastný navigačný komponent (glass-morphism)
+    ├── SubjectDetailPagerAdapter.kt  # ViewPager2 pre detail predmetu (3 záložky)
+    ├── SwipeableFrameLayout.kt  # Gestá pre swipe navigáciu
     ├── home/                    # Domov + dialóg známok
     ├── dashboard/               # Dashboard (ViewModel + Fragment)
     ├── login/                   # Prihlásenie (MVVM komplet)
@@ -153,6 +156,7 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 | `androidx.viewpager2` | ViewPager2 pre swipe navigáciu rozvrhu |
 | `firebase-database` | Firebase Realtime Database |
 | `firebase-auth` | Firebase Authentication |
+| `firebase-appcheck` | Firebase App Check (Play Integrity + Debug provider) |
 | `blurview` | BlurView pre glass-morphism efekty (PillNavigationBar) |
 
 
@@ -164,20 +168,18 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 - **Java kompatibilita:** 17
 - **Kotlin JVM target:** 17
 - **View Binding:** zapnuté
-<<<<<<< HEAD
 - **ProGuard:** zapnutý (isMinifyEnabled = true)
-=======
-- **ProGuard:** zapnuté (isMinifyEnabled = true)
->>>>>>> 7904de077bebf25fe9ff070e9b210575324282fc
 
 ---
 
 ## Bezpečnosť
 
+- **Firebase App Check** overuje, že požiadavky na Firebase pochádzajú z legitimnej inštancie aplikácie (Play Integrity pre release, Debug provider pre vývoj) — bez platného atestačného tokenu nie je možné pristupovať k online databáze
 - Firebase Authentication rieši prihlásenie — heslá sa neukladajú lokálne
 - Offline režim nepoužíva autentifikáciu (dáta sú len na zariadení)
-- `google-services.json` obsahuje konfiguráciu Firebase projektu — nie je to tajný kľúč, ale nemal by sa zdieľať verejne
-- Admin práva sa overujú cez Firebase cestu `admins/{uid}` — nie je to client-side only, Firebase Security Rules by mali byť nastavené na serveri
+- `google-services.json` je súčasťou repozitára — obsahuje konfiguráciu Firebase projektu, nie tajné kľúče. Skutočná ochrana je zabezpečená cez App Check a Security Rules
+- Admin práva sa overujú cez Firebase cestu `admins/{uid}` — Firebase Security Rules zabezpečujú, že prístup je kontrolovaný na strane servera
+- Podrobnosti v [Bezpečnosť](BEZPECNOST.md)
 
 ---
 

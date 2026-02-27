@@ -114,9 +114,11 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 ### SubjectDetailFragment
 **Účel:** Detail predmetu — kompletná správa známok a dochádzky pre konkrétny predmet.
 
+- **ViewPager2** s `SubjectDetailPagerAdapter` — tri záložky: Známky, Dochádzka, Študenti
 - Zoznam študentov s priemermi a dochádzkou
 - Dialógy: pridanie/úprava známky, zobrazenie všetkých známok, správa dochádzky
 - Navrhovaná ďalšia známka na základe výkonu
+- Spustenie hromadného hodnotenia (`BulkGradeActivity`) pre rýchle zadanie známok celej skupine
 
 ### TimetableFragment
 **Účel:** Týždenný rozvrh hodín — najkomplexnejšia obrazovka aplikácie.
@@ -155,7 +157,7 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 ### SettingsFragment
 **Účel:** Nastavenia aplikácie.
 
-- Tmavý režim (switch) — ukladá sa do SharedPreferences
+- Tmavý režim (switch) — ukladá sa do SharedPreferences, prepnutie spúšťa paint-drop animáciu s kruhovým reveal efektom
 - **Nastavenia notifikácií:**
   - Zapnutie/vypnutie živej aktualizácie rozvrhu
   - Interval živej aktualizácie (1, 2, 5, 10, 15 minút)
@@ -165,6 +167,7 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
   - Zobrazenie učebne v notifikácii
   - Zobrazenie nasledujúcej hodiny v notifikácii
   - Optimalizácia batérie — tlačidlo na vypnutie systémovej optimalizácie
+- **Migrácia databázy** — manuálne spustenie migrácie štruktúry dát (online aj offline)
 - Online: správa akademických rokov, reset hesla, odhlásenie
 - Offline: export/import databázy, vytváranie školských rokov, nastavenie mena učiteľa, reset aplikácie
 
@@ -181,15 +184,24 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Validácia formulára cez `LoginViewModel` + `LoginFormState`
 - Tlačidlo „Lokálny režim" pre offline
 - Vstupné animácie (staggered fade + bounce)
-- Klávesnica „Done" triggeruje prihlásenie
+- Klávesnica „Done" spustí prihlásenie
 
 ### SplashActivity
 **Účel:** Animovaná vstupná obrazovka (launcher).
 
-- Zobrazí logo a názov aplikácie s animáciou zdola nahor
+- Zobrazí logo a názov aplikácie s slide-up animáciou zdola nahor (800ms, DecelerateInterpolator)
 - Aplikuje tmavý režim zo SharedPreferences
 - Po 2 sekundách presmeruje na `MainActivity` s fade prechodom
 - Edge-to-edge zobrazenie bez ActionBaru
+
+### BulkGradeActivity
+**Účel:** Hromadné zadávanie známok viacerým študentom naraz.
+
+- RecyclerView so zoznamom študentov a Material chip komponentmi pre výber známky (A–Fx)
+- Spoločný dátum a názov hodnotenia pre celú skupinu
+- Voliteľné poznámky pre jednotlivých študentov s plynulou expand/collapse animáciou (350ms)
+- Vyhľadávanie a filtrovanie študentov
+- Podpora online aj offline režimu
 
 ---
 

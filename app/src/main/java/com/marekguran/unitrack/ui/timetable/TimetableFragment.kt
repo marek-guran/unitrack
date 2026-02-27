@@ -57,15 +57,18 @@ class TimetableFragment : Fragment() {
     private var isAdmin = false
     private var currentUserUid = ""
     private var currentUserEmail = ""
+    private var selectedSchoolYear = ""
 
     // All timetable entries the user should see
     private val allEntries = mutableListOf<TimetableEntry>()
     // Teacher days off: teacherUid -> list of DayOff
     private val daysOffMap = mutableMapOf<String, MutableList<DayOff>>()
-    // Subject key -> teacher uid mapping
+    // Subject key -> teacher email mapping
     private val subjectTeacherMap = mutableMapOf<String, String>()
     // Teacher email -> display name cache
     private val teacherNameCache = mutableMapOf<String, String>()
+    // Teacher email -> UID reverse lookup (for matching days off to subjects)
+    private val teacherEmailToUidMap = mutableMapOf<String, String>()
 
     // Active "My days off" dialog so it can be refreshed after edits/deletes
     private var myDaysOffDialog: android.app.Dialog? = null
@@ -133,6 +136,9 @@ class TimetableFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        selectedSchoolYear = requireContext().getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+            .getString("school_year", "") ?: ""
 
         // Initialize selected day to today (or next Monday if weekend with no classes)
         selectedDate = LocalDate.now()
@@ -624,12 +630,12 @@ class TimetableFragment : Fragment() {
         daysOffMap.clear()
 
         val currentSemester = getCurrentSemester()
-        val subjects = localDb.getSubjects()
+        val subjects = localDb.getSubjects(selectedSchoolYear)
         for ((subjectKey, subjectJson) in subjects) {
             val subjectSemester = subjectJson.optString("semester", "both")
             if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
             val subjectName = subjectJson.optString("name", subjectKey)
-            val entries = localDb.getTimetableEntries(subjectKey)
+            val entries = localDb.getTimetableEntries(selectedSchoolYear, subjectKey)
             for ((entryKey, entryJson) in entries) {
                 allEntries.add(parseTimetableEntry(entryKey, entryJson, subjectKey, subjectName))
             }
@@ -673,7 +679,7 @@ class TimetableFragment : Fragment() {
     private fun loadTeacherTimetable() {
         val currentSemester = getCurrentSemester()
         // Teachers see subjects they teach (matched by email)
-        db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+        db.child("school_years").child(selectedSchoolYear).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!isAdded) return
                 for (subjectSnap in snapshot.children) {
@@ -702,26 +708,22 @@ class TimetableFragment : Fragment() {
 
     private fun loadStudentTimetable() {
         // Find the student's enrolled subjects across all school years
-        db.child("students").addListenerForSingleValueEvent(object : ValueEventListener {
+        db.child("students").child(currentUserUid).child("subjects").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(studentsSnapshot: DataSnapshot) {
                 if (!isAdded) return
                 val enrolledSubjectKeys = mutableSetOf<String>()
 
                 for (yearSnap in studentsSnapshot.children) {
-                    val studentSnap = yearSnap.child(currentUserUid)
-                    if (studentSnap.exists()) {
-                        val subjectsSnap = studentSnap.child("subjects")
-                        for (semSnap in subjectsSnap.children) {
-                            for (subjSnap in semSnap.children) {
-                                val key = subjSnap.getValue(String::class.java)
-                                if (key != null) enrolledSubjectKeys.add(key)
-                            }
+                    for (semSnap in yearSnap.children) {
+                        for (subjSnap in semSnap.children) {
+                            val key = subjSnap.getValue(String::class.java)
+                            if (key != null) enrolledSubjectKeys.add(key)
                         }
                     }
                 }
 
                 // Now load timetable entries for enrolled subjects
-                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                db.child("school_years").child(selectedSchoolYear).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         if (!isAdded) return
                         val currentSemester = getCurrentSemester()
@@ -788,12 +790,16 @@ class TimetableFragment : Fragment() {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!isAdded) return
                 teacherNameCache.clear()
+                teacherEmailToUidMap.clear()
                 for (child in snapshot.children) {
                     val value = child.value as? String ?: continue
                     val parts = value.split(",").map { it.trim() }
                     val email = parts.getOrElse(0) { "" }
                     val name = parts.getOrElse(1) { email }
-                    if (email.isNotBlank()) teacherNameCache[email.lowercase()] = name
+                    if (email.isNotBlank()) {
+                        teacherNameCache[email.lowercase()] = name
+                        teacherEmailToUidMap[email.lowercase()] = child.key ?: ""
+                    }
                 }
                 buildSchedule()
             }
@@ -806,14 +812,26 @@ class TimetableFragment : Fragment() {
 
     // ── Day-off helpers ───────────────────────────────────────────────────────
 
+    /** Get the list of days off relevant to a specific timetable entry's teacher. */
+    private fun getDaysOffForEntry(entry: TimetableEntry): List<DayOff> {
+        val teacherEmail = subjectTeacherMap[entry.subjectKey]
+        if (teacherEmail != null) {
+            val teacherUid = teacherEmailToUidMap[teacherEmail.lowercase()]
+            if (teacherUid != null) {
+                return daysOffMap[teacherUid] ?: emptyList()
+            }
+        }
+        // Offline mode: single teacher, check all
+        if (isOffline) return daysOffMap.values.flatten()
+        return emptyList()
+    }
+
     private fun isDayOffForEntry(entry: TimetableEntry, date: LocalDate): Boolean {
         // Check if the entry's day matches the given date's day of week
         if (entry.day != date.dayOfWeek.toKey()) return false
 
-        for ((_, daysOff) in daysOffMap) {
-            for (dayOff in daysOff) {
-                if (isEntryInDayOff(date, entry.startTime, entry.endTime, dayOff)) return true
-            }
+        for (dayOff in getDaysOffForEntry(entry)) {
+            if (isEntryInDayOff(date, entry.startTime, entry.endTime, dayOff)) return true
         }
         return false
     }
@@ -822,11 +840,9 @@ class TimetableFragment : Fragment() {
     private fun dayOffNoteForEntry(entry: TimetableEntry, date: LocalDate): String? {
         if (entry.day != date.dayOfWeek.toKey()) return null
 
-        for ((_, daysOff) in daysOffMap) {
-            for (dayOff in daysOff) {
-                if (isEntryInDayOff(date, entry.startTime, entry.endTime, dayOff) && dayOff.note.isNotBlank()) {
-                    return dayOff.note
-                }
+        for (dayOff in getDaysOffForEntry(entry)) {
+            if (isEntryInDayOff(date, entry.startTime, entry.endTime, dayOff) && dayOff.note.isNotBlank()) {
+                return dayOff.note
             }
         }
         return null
@@ -1134,7 +1150,7 @@ class TimetableFragment : Fragment() {
     private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String) {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
-        val entryRef = db.child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
+        val entryRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
 
         if (isTeacher && !isAdmin) {
             // Teachers can only update classroom and note
@@ -1143,7 +1159,7 @@ class TimetableFragment : Fragment() {
                 "note" to note
             )
             if (isOffline) {
-                localDb.updateTimetableEntryFields(entry.subjectKey, entry.key, teacherData)
+                localDb.updateTimetableEntryFields(selectedSchoolYear, entry.subjectKey, entry.key, teacherData)
                 loadOfflineTimetable()
             } else {
                 entryRef.updateChildren(teacherData).addOnSuccessListener {
@@ -1161,8 +1177,8 @@ class TimetableFragment : Fragment() {
             )
             if (isOffline) {
                 val json = JSONObject(data)
-                localDb.removeTimetableEntry(entry.subjectKey, entry.key)
-                localDb.addTimetableEntry(entry.subjectKey, json)
+                localDb.removeTimetableEntry(selectedSchoolYear, entry.subjectKey, entry.key)
+                localDb.addTimetableEntry(selectedSchoolYear, entry.subjectKey, json)
                 loadOfflineTimetable()
             } else {
                 entryRef.setValue(data).addOnSuccessListener {
@@ -1565,10 +1581,10 @@ class TimetableFragment : Fragment() {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
         if (isOffline) {
-            localDb.removeTimetableEntry(entry.subjectKey, entry.key)
+            localDb.removeTimetableEntry(selectedSchoolYear, entry.subjectKey, entry.key)
             loadOfflineTimetable()
         } else {
-            db.child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
+            db.child("school_years").child(selectedSchoolYear).child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
                 .removeValue().addOnSuccessListener {
                     if (isAdded) loadOnlineTimetable()
                 }

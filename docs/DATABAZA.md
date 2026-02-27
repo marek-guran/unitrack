@@ -326,6 +326,8 @@ data class LoggedInUser(
 
 Keď učiteľ zmení semester predmetu (napríklad z „zimný" na „obidva"), `LocalDatabase.migrateSubjectSemester()` automaticky presunie všetky súvisiace dáta.
 
+> Pre kompletný prehľad všetkých typov migrácií (globálne predmety → per-year, per-year študenti → globálna štruktúra, migrácia semestrov) vrátane príkladov a bezpečnostných záruk pozri **[Migrácia databázy](MIGRACIA.md)**.
+
 ### Ako to funguje
 
 1. **Určí sa, čo sa mení** — aké semestre mal predmet predtým a aké bude mať teraz

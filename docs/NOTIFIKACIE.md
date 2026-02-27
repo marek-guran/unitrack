@@ -1,6 +1,6 @@
 # 🔔 Notifikačný systém
 
-Tento dokument popisuje, ako fungujú notifikácie v UniTracku — aké kanály existujú, ako sa plánujú, ako sa detegujú zmeny známok, neprítomnosti a zrušené hodiny, a ako to celé funguje aj v offline režime.
+Tento dokument popisuje, ako fungujú notifikácie v UniTracku — aké kanály existujú, ako sa plánujú, ako sa detekujú zmeny známok, neprítomnosti a zrušené hodiny, a ako to celé funguje aj v offline režime.
 
 ---
 

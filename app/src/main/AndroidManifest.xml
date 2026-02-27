@@ -39,6 +39,10 @@
             android:name=".MainActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|screenLayout" />
+        <activity
+            android:name=".BulkGradeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
 
         <receiver
             android:name=".notification.NextClassAlarmReceiver"

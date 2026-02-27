@@ -14,6 +14,7 @@ UniTrack pracuje v dvoch režimoch, z ktorých každý má odlišný bezpečnost
 | **Úložisko dát** | Firebase Realtime Database (cloud) | Lokálny JSON súbor na zariadení |
 | **Prenos dát** | HTTPS (šifrované cez TLS) | Žiadny prenos — dáta neopúšťajú zariadenie |
 | **Riadenie prístupu** | Firebase Security Rules + admin detekcia | Plný prístup (lokálny používateľ) |
+| **App Check** | Firebase App Check (Play Integrity / Debug) | Nepoužíva sa (lokálne dáta) |
 | **Zálohovanie** | Firebase zabezpečuje redundanciu | Manuálny export do JSON súboru |
 
 ---
@@ -70,7 +71,50 @@ db.child("admins").child(uid).get().addOnSuccessListener { snapshot ->
 }
 ```
 
-Toto je client-side kontrola, ktorá ovplyvňuje zobrazenie UI. Skutočná ochrana dát musí byť zabezpečená na strane Firebase cez Security Rules.
+Toto je client-side kontrola, ktorá ovplyvňuje zobrazenie UI. Skutočná ochrana dát musí byť zabezpečená na strane Firebase cez Security Rules a App Check.
+
+---
+
+## Firebase App Check
+
+UniTrack implementuje **Firebase App Check** na ochranu backendových zdrojov pred neoprávneným prístupom. App Check overuje, že každá požiadavka na Firebase pochádza z legitimnej inštancie aplikácie — nie z neoprávneného skriptu, bota alebo modifikovanej aplikácie.
+
+### Prečo je to dôležité
+
+Keďže UniTrack je open source projekt, zdrojový kód (vrátane Firebase konfigurácie) je verejne dostupný. Samotné Firebase Security Rules chránia dáta podľa autentifikácie a rolí, ale bez App Check by mohol ktokoľvek s platnými prihlasovacími údajmi pristupovať k databáze z ľubovoľnej aplikácie alebo skriptu. App Check pridáva ďalšiu vrstvu ochrany — overuje, že požiadavka pochádza z originálnej, nemodifikovanej aplikácie.
+
+### Implementácia
+
+App Check sa inicializuje pri štarte aplikácie v `UniTrackApplication.kt`:
+
+```kotlin
+val factory = if (BuildConfig.DEBUG) {
+    DebugAppCheckProviderFactory.getInstance()
+} else {
+    PlayIntegrityAppCheckProviderFactory.getInstance()
+}
+FirebaseAppCheck.getInstance().installAppCheckProviderFactory(factory)
+```
+
+### Provideri podľa prostredia
+
+| Prostredie | Provider | Princíp |
+|---|---|---|
+| **Release (produkcia)** | Play Integrity | Google Play Services overí integritu zariadenia a aplikácie pomocou SHA-256 podpisového certifikátu |
+| **Debug (vývoj)** | Debug App Check | Vývojár zaregistruje debug token z logcatu v Firebase Console |
+
+### Čo App Check zabezpečuje
+
+- **Online verzia je uzamknutá** — bez platného atestačného tokenu (Play Integrity alebo debug) nie je možné čítať ani zapisovať dáta do Firebase
+- **Offline režim nie je ovplyvnený** — lokálne dáta sú uložené priamo na zariadení a App Check sa na ne nevzťahuje
+- **Ochrana open source projektu** — aj keď je kód verejne dostupný, prístup k produkčnej databáze vyžaduje kombináciu Firebase Auth + App Check + Security Rules
+
+### Nastavenie pre vlastný Firebase projekt
+
+1. V [Firebase Console](https://console.firebase.google.com/) → **App Check** → zapnite **Play Integrity** provider
+2. Zaregistrujte SHA-256 odtlačok vášho podpisového certifikátu
+3. Pre vývoj: spustite debug build, skopírujte debug token z logcatu a zaregistrujte ho v Firebase Console → App Check → **Manage debug tokens**
+4. V nastaveniach Realtime Database zapnite **Enforce App Check** — od tohto momentu sú povolené len overené požiadavky
 
 ---
 
@@ -91,6 +135,8 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
 ```json
 {
   "rules": {
+    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+    ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
 
     "admins": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
@@ -223,17 +269,15 @@ Aplikácia **nevyžaduje** prístup ku kontaktom, fotoaparátu, mikrofónu, polo
 
 ### google-services.json
 
-Súbor `google-services.json` obsahuje konfiguráciu Firebase projektu (ID projektu, API kľúč, URL databázy). Nie je to tajný kľúč v pravom slova zmysle — API kľúč v tomto súbore slúži na identifikáciu projektu, nie na autorizáciu.
+Súbor `google-services.json` je súčasťou repozitára v priečinku `app/`. Obsahuje konfiguráciu Firebase projektu (ID projektu, API kľúč, URL databázy). Nie je to tajný kľúč v pravom slova zmysle — API kľúč v tomto súbore slúži na identifikáciu projektu, nie na autorizáciu. Skutočná ochrana dát je zabezpečená kombináciou Firebase Security Rules a App Check.
 
 Napriek tomu sa odporúča:
-- Neukladať `google-services.json` do verejných repozitárov
 - Obmedziť API kľúč v Google Cloud Console na konkrétne Android aplikácie (package name + SHA-1)
 - Nastaviť Firebase Security Rules (nie spoliehať sa len na client-side ochranu)
 
 ### Čo NIE je v repozitári
 
 Repozitár neobsahuje:
-- `google-services.json` — konfigurácia Firebase projektu
 - Firebase Security Rules — tieto sa nastavujú priamo vo Firebase Console
 - Žiadne prihlasovacie údaje ani tokeny
 
@@ -244,7 +288,7 @@ Repozitár neobsahuje:
 ### Pre administrátorov
 
 1. **Nastaviť Firebase Security Rules** podľa odporúčaní vyššie
-2. **Zapnúť App Check** vo Firebase Console — ochrana proti neoprávneným API volaniam
+2. **Zapnúť Enforce App Check** v nastaveniach Realtime Database — aplikácia už obsahuje implementáciu App Check s Play Integrity (release) a Debug (vývoj) providermi
 3. **Obmedziť API kľúč** v Google Cloud Console na konkrétny package name a SHA-1 certifikát
 4. **Pravidelne kontrolovať** Firebase Authentication konzolu — odstraňovať neaktívne účty
 5. **Zálohovať dáta** cez Firebase automatické zálohy
@@ -254,7 +298,7 @@ Repozitár neobsahuje:
 1. **Používať silné heslo** pri registrácii
 2. **Zabezpečiť zariadenie** PINom, odtlačkom prsta alebo face ID
 3. **V offline režime** pravidelne exportovať zálohy databázy
-4. **Nepostupovať zálohy** (JSON export) tretím stranám — obsahujú kompletné dáta
+4. **Neposkytovať zálohy** (JSON export) tretím stranám — obsahujú kompletné dáta
 
 ---
 

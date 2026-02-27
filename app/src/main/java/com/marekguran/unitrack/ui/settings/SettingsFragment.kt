@@ -33,11 +33,24 @@ import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Build
+import androidx.appcompat.widget.SwitchCompat
+import com.marekguran.unitrack.MainActivity
 import java.security.SecureRandom
 import java.util.UUID
 
 class SettingsFragment : Fragment() {
+
+    /** Delay before capturing the screenshot, giving the switch thumb time to animate. */
+    private val THEME_SWITCH_DELAY_MS = 300L
+    /** Material3 switch track width in dp (fallback for thumb position calculation). */
+    private val MATERIAL3_TRACK_WIDTH_DP = 52
+    /** Approximate half-width of the Material3 switch thumb in dp. */
+    private val THUMB_HALF_WIDTH_DP = 13
+    /** Duration for notification controls enable/disable fade animation. */
+    private val CONTROLS_FADE_DURATION_MS = 250L
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
@@ -47,6 +60,7 @@ class SettingsFragment : Fragment() {
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
 
     private var darkModeListener: ((View, Boolean) -> Unit)? = null
+    private var pendingThemeRunnable: Runnable? = null
 
     // Subject list for admin
     private val subjectList = mutableListOf<SubjectInfo>()
@@ -101,14 +115,67 @@ class SettingsFragment : Fragment() {
 
         prefs = requireContext().getSharedPreferences("app_settings", 0)
 
-        darkModeListener = { _, isChecked ->
-            prefs.edit().putBoolean("dark_mode", isChecked).apply()
-            AppCompatDelegate.setDefaultNightMode(
-                if (isChecked)
-                    AppCompatDelegate.MODE_NIGHT_YES
-                else
-                    AppCompatDelegate.MODE_NIGHT_NO
-            )
+        darkModeListener = { view, isChecked ->
+            // Save the switch's screen coordinates for the paint-drop animation
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+
+            // Let the switch thumb animate to its new position before capturing
+            // the screenshot, so the old-theme overlay shows the switch already
+            // toggled — making the transition feel intentional.
+            pendingThemeRunnable?.let { view.removeCallbacks(it) }
+            val runnable = Runnable {
+                if (!isAdded) return@Runnable
+
+                // Capture a snapshot of the current (old) theme before the recreation
+                try {
+                    val rootView = requireActivity().window.decorView.rootView
+                    if (rootView.width > 0 && rootView.height > 0) {
+                        val bitmap = Bitmap.createBitmap(
+                            rootView.width, rootView.height, Bitmap.Config.ARGB_8888
+                        )
+                        rootView.draw(Canvas(bitmap))
+                        MainActivity.pendingThemeBitmap = bitmap
+                    }
+                } catch (e: Exception) {
+                    Log.w("SettingsFragment", "Failed to capture theme screenshot", e)
+                }
+
+                // Read the actual thumb position from the switch widget.
+                // After the 300ms delay the thumb animation is done, so
+                // thumbDrawable.bounds reflects the final resting position.
+                val switchView = view as? SwitchCompat
+                val thumbBounds = switchView?.thumbDrawable?.bounds
+                val thumbCx = if (thumbBounds != null && thumbBounds.width() > 0) {
+                    location[0] + thumbBounds.centerX()
+                } else {
+                    // Fallback: both positions are relative to the right edge
+                    // of the view where the Material3 track sits.
+                    val density = resources.displayMetrics.density
+                    val trackWidthPx = (MATERIAL3_TRACK_WIDTH_DP * density).toInt()
+                    val trackRight = location[0] + view.width - view.paddingRight
+                    if (isChecked) {
+                        trackRight - (THUMB_HALF_WIDTH_DP * density).toInt()
+                    } else {
+                        trackRight - trackWidthPx + (THUMB_HALF_WIDTH_DP * density).toInt()
+                    }
+                }
+
+                prefs.edit()
+                    .putBoolean("dark_mode", isChecked)
+                    .putInt("theme_anim_cx", thumbCx)
+                    .putInt("theme_anim_cy", location[1] + view.height / 2)
+                    .apply()
+                MainActivity.themeChangeInProgress = true
+                AppCompatDelegate.setDefaultNightMode(
+                    if (isChecked)
+                        AppCompatDelegate.MODE_NIGHT_YES
+                    else
+                        AppCompatDelegate.MODE_NIGHT_NO
+                )
+            }
+            pendingThemeRunnable = runnable
+            view.postDelayed(runnable, THEME_SWITCH_DELAY_MS)
         }
 
         setDarkModeSwitchState()
@@ -144,10 +211,15 @@ class SettingsFragment : Fragment() {
 
         // Show export/import section
         binding.layoutExportImport.visibility = View.VISIBLE
+        binding.labelExportImport.visibility = View.VISIBLE
 
         // Show school year management in offline mode
         binding.layoutSchoolYears.visibility = View.VISIBLE
+        binding.labelSchoolYears.visibility = View.VISIBLE
         setupSchoolYearManagement()
+
+        // Show database migration in offline mode (only if needed)
+        setupMigrateDb()
 
         // Hide online-only UI elements
         binding.btnResetPassword.visibility = View.GONE
@@ -205,6 +277,7 @@ class SettingsFragment : Fragment() {
 
         // Hide export/import in online mode
         binding.layoutExportImport.visibility = View.GONE
+        binding.labelExportImport.visibility = View.GONE
 
         binding.textUserRole.text = "Študent"
         binding.switchIsTeacher.isChecked = false
@@ -246,15 +319,19 @@ class SettingsFragment : Fragment() {
             localDb.addTeacher(uid, "$email, $name")
             binding.textAddUserStatus.text = "Učiteľ pridaný lokálne."
         } else {
+            val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+            val savedYear = uniPrefs.getString("school_year", null)
             val yearsMap = localDb.getSchoolYears()
-            val latestYear = yearsMap.keys.maxOrNull() ?: ""
-            if (latestYear.isEmpty()) {
+            val selectedYear = if (!savedYear.isNullOrEmpty() && yearsMap.containsKey(savedYear)) savedYear
+                else yearsMap.keys.maxOrNull() ?: ""
+            if (selectedYear.isEmpty()) {
                 binding.textAddUserStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
                 return
             }
             val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
-            val allSubjects = localDb.getSubjects().keys.toList()
-            localDb.addStudent(latestYear, uid, email, name, mapOf(currentSemester to allSubjects))
+            val yearSubjects = localDb.getSubjects(selectedYear).keys.toList()
+            localDb.addStudent(uid, email, name)
+            localDb.updateStudentSubjects(uid, selectedYear, currentSemester, yearSubjects)
             binding.textAddUserStatus.text = "Študent pridaný lokálne."
         }
         binding.editNewUserName.text?.clear()
@@ -270,7 +347,13 @@ class SettingsFragment : Fragment() {
                 return@setOnClickListener
             }
             val key = UUID.randomUUID().toString().replace("-", "")
-            localDb.addSubject(key, subjectInput, teacherEmail)
+            val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+            val currentYear = uniPrefs.getString("school_year", null) ?: ""
+            if (currentYear.isEmpty()) {
+                binding.textAddSubjectStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
+                return@setOnClickListener
+            }
+            localDb.addSubject(currentYear, key, subjectInput, teacherEmail)
             binding.textAddSubjectStatus.text = if (teacherEmail.isEmpty()) {
                 "Predmet bol uložený bez učiteľa."
             } else {
@@ -287,13 +370,18 @@ class SettingsFragment : Fragment() {
                 binding.textAddSubjectStatus.text = "Zadajte názov predmetu na odstránenie."
                 return@setOnClickListener
             }
-            // Find subject by name
-            val subjects = localDb.getSubjects()
+            val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+            val currentYear = uniPrefs.getString("school_year", null) ?: ""
+            if (currentYear.isEmpty()) {
+                binding.textAddSubjectStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
+                return@setOnClickListener
+            }
+            val subjects = localDb.getSubjects(currentYear)
             val matchKey = subjects.entries.find {
                 it.value.optString("name", "").equals(subjectInput, ignoreCase = true)
             }?.key
             if (matchKey != null) {
-                localDb.removeSubject(matchKey)
+                localDb.removeSubject(currentYear, matchKey)
                 binding.textAddSubjectStatus.text = "Predmet odstránený."
             } else {
                 binding.textAddSubjectStatus.text = "Predmet nebol nájdený."
@@ -305,7 +393,9 @@ class SettingsFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun showSubjectListOffline() {
         subjectList.clear()
-        val subjects = localDb.getSubjects()
+        val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+        val currentYear = uniPrefs.getString("school_year", null) ?: ""
+        val subjects = if (currentYear.isNotEmpty()) localDb.getSubjects(currentYear) else emptyMap()
         for ((key, subjectJson) in subjects) {
             val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
             val teacherEmail = subjectJson.optString("teacherEmail", "")
@@ -342,12 +432,17 @@ class SettingsFragment : Fragment() {
                 binding.recyclerSubjects.visibility = View.GONE
                 // Keep school years management in settings
                 binding.layoutSchoolYears.visibility = View.VISIBLE
+                binding.labelSchoolYears.visibility = View.VISIBLE
                 setupSchoolYearManagement()
+                // Show database migration for admins (only if needed)
+                setupMigrateDb()
             } else {
                 binding.layoutAddUser.visibility = View.GONE
                 binding.layoutAddSubject.visibility = View.GONE
                 binding.recyclerSubjects.visibility = View.GONE
                 binding.layoutSchoolYears.visibility = View.GONE
+                binding.labelSchoolYears.visibility = View.GONE
+                binding.layoutMigrateDb.visibility = View.GONE
             }
         }
     }
@@ -392,7 +487,13 @@ class SettingsFragment : Fragment() {
             }
             // Find subject by name
             val dbRef = FirebaseDatabase.getInstance().reference
-            dbRef.child("predmety").orderByChild("name").equalTo(subjectInput)
+            val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+            val currentYear = uniPrefs.getString("school_year", null) ?: ""
+            if (currentYear.isEmpty()) {
+                binding.textAddSubjectStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
+                return@setOnClickListener
+            }
+            dbRef.child("school_years").child(currentYear).child("predmety").orderByChild("name").equalTo(subjectInput)
                 .addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         if (!snapshot.exists()) {
@@ -401,9 +502,7 @@ class SettingsFragment : Fragment() {
                         }
                         for (child in snapshot.children) {
                             val key = child.key ?: continue
-                            dbRef.child("predmety").child(key).removeValue()
-                            dbRef.child("hodnotenia").child(key).removeValue()
-                            dbRef.child("pritomnost").child(key).removeValue()
+                            dbRef.child("school_years").child(currentYear).child("predmety").child(key).removeValue()
                         }
                         binding.textAddSubjectStatus.text = "Predmet odstránený."
                     }
@@ -416,7 +515,11 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showSubjectList() {
-        val db = FirebaseDatabase.getInstance().reference.child("predmety")
+        val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+        val currentYear = uniPrefs.getString("school_year", null) ?: ""
+        if (currentYear.isEmpty()) return
+        val db = FirebaseDatabase.getInstance().reference
+            .child("school_years").child(currentYear).child("predmety")
         db.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val safeBinding = _binding ?: return
@@ -477,9 +580,10 @@ class SettingsFragment : Fragment() {
         val teacherNames = mutableListOf("(nepriradený)")
         val teacherEmails = mutableListOf("")
         val db = FirebaseDatabase.getInstance().reference
+        val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+        val currentYear = uniPrefs.getString("school_year", null) ?: ""
 
-        // Load current semester value from Firebase
-        db.child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
+        db.child("school_years").child(currentYear).child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
             val currentSemester = semSnap.getValue(String::class.java) ?: "both"
             val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
             spinnerSemester.setSelection(semIndex)
@@ -516,10 +620,8 @@ class SettingsFragment : Fragment() {
         }
         dialogView.findViewById<Button>(R.id.btnDelete).setOnClickListener {
             val key = subject.key
-            db.child("predmety").child(key).removeValue()
+            db.child("school_years").child(currentYear).child("predmety").child(key).removeValue()
                 .addOnSuccessListener {
-                    db.child("hodnotenia").child(key).removeValue()
-                    db.child("pritomnost").child(key).removeValue()
                     Toast.makeText(requireContext(), "Predmet odstránený.", Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
                 }
@@ -539,7 +641,7 @@ class SettingsFragment : Fragment() {
             }
 
             // Key never changes — just update name, teacher, and semester
-            db.child("predmety").child(subject.key).setValue(mapOf("name" to newNameUi, "teacherEmail" to assign, "semester" to selectedSemester))
+            db.child("school_years").child(currentYear).child("predmety").child(subject.key).setValue(mapOf("name" to newNameUi, "teacherEmail" to assign, "semester" to selectedSemester))
             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
@@ -561,8 +663,9 @@ class SettingsFragment : Fragment() {
         semesterAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
         spinnerSemester.adapter = semesterAdapter
 
-        // Pre-select current semester value
-        val subjectJson = localDb.getSubjects()[subject.key]
+        val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+        val currentYear = uniPrefs.getString("school_year", null) ?: ""
+        val subjectJson = if (currentYear.isNotEmpty()) localDb.getSubjects(currentYear)[subject.key] else null
         val currentSemester = subjectJson?.optString("semester", "both") ?: "both"
         val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
         spinnerSemester.setSelection(semIndex)
@@ -588,7 +691,11 @@ class SettingsFragment : Fragment() {
             dialog.dismiss()
         }
         dialogView.findViewById<Button>(R.id.btnDelete).setOnClickListener {
-            localDb.removeSubject(subject.key)
+            if (currentYear.isEmpty()) {
+                Toast.makeText(requireContext(), "Chyba: Nie je nastavený žiadny školský rok.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            localDb.removeSubject(currentYear, subject.key)
             Toast.makeText(requireContext(), "Predmet odstránený.", Toast.LENGTH_SHORT).show()
             showSubjectListOffline()
             dialog.dismiss()
@@ -609,7 +716,7 @@ class SettingsFragment : Fragment() {
             if (currentSemester != selectedSemester) {
                 localDb.migrateSubjectSemester(subject.key, currentSemester, selectedSemester)
             }
-            localDb.addSubject(subject.key, newNameUi, assign, selectedSemester)
+            localDb.addSubject(currentYear, subject.key, newNameUi, assign, selectedSemester)
             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
             showSubjectListOffline()
             dialog.dismiss()
@@ -619,7 +726,14 @@ class SettingsFragment : Fragment() {
     }
 
     private fun addOrEditSubject(subjectInput: String, teacherEmail: String?) {
-        val db = FirebaseDatabase.getInstance().reference.child("predmety")
+        val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+        val currentYear = uniPrefs.getString("school_year", null) ?: ""
+        if (currentYear.isEmpty()) {
+            binding.textAddSubjectStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
+            return
+        }
+        val db = FirebaseDatabase.getInstance().reference
+            .child("school_years").child(currentYear).child("predmety")
         val key = db.push().key ?: return
         val subjectObj = mapOf(
             "name" to subjectInput,
@@ -684,12 +798,15 @@ class SettingsFragment : Fragment() {
                                 secondaryAuth.signOut()
                             }
                     } else {
-                        // Find the latest school year!
+                        // Find the selected school year from preferences, with fallback to latest
                         val schoolYearsRef = FirebaseDatabase.getInstance().reference.child("school_years")
                         schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
-                            // Find max school_year key (sorted lexicographically, e.g. 2025_2026)
-                            val latestSchoolYear = schoolSnapshot.children.mapNotNull { it.key }.maxOrNull() ?: ""
-                            if (latestSchoolYear.isEmpty()) {
+                            val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
+                            val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
+                            val savedYear = uniPrefs.getString("school_year", null)
+                            val selectedYear = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
+                                else allYearKeys.maxOrNull() ?: ""
+                            if (selectedYear.isEmpty()) {
                                 binding.textAddUserStatus.text = "Chyba: Nie je nastavený žiadny školský rok."
                                 secondaryAuth.signOut()
                                 return@addOnSuccessListener
@@ -699,37 +816,34 @@ class SettingsFragment : Fragment() {
                             val prefs = requireContext().getSharedPreferences("app_settings", 0)
                             val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
 
-                            // Fetch all subjects from DB
-                            val dbSubjectsRef = FirebaseDatabase.getInstance().reference.child("predmety")
-                            dbSubjectsRef.get().addOnSuccessListener { snapshot ->
-                                val allSubjects = snapshot.children.mapNotNull { it.key }
-                                val subjectsMap = mapOf(currentSemester to allSubjects)
-
-                                val studentObj = mapOf(
-                                    "email" to email,
-                                    "name" to name,
-                                    "subjects" to subjectsMap
-                                )
-                                val dbRef = db.child("students").child(latestSchoolYear).child(userId)
-                                dbRef.setValue(studentObj)
-                                    .addOnSuccessListener {
-                                        secondaryAuth.sendPasswordResetEmail(email)
-                                            .addOnCompleteListener { resetTask ->
-                                                if (resetTask.isSuccessful) {
-                                                    binding.textAddUserStatus.text =
-                                                        "Študent pridaný do aktuálneho školského roku a semestra, e-mail na nastavenie hesla odoslaný."
-                                                } else {
-                                                    binding.textAddUserStatus.text =
-                                                        "Študent pridaný, ale e-mail nenastavený: ${resetTask.exception?.message}"
+                            db.child("school_years").child(selectedYear).child("predmety")
+                                .get().addOnSuccessListener { predSnap ->
+                                    val subjects = predSnap.children.mapNotNull { it.key }
+                                    val subjectsMap = mapOf(selectedYear to mapOf(currentSemester to subjects))
+                                    val studentObj = mapOf(
+                                        "email" to email,
+                                        "name" to name,
+                                        "subjects" to subjectsMap
+                                    )
+                                    db.child("students").child(userId).setValue(studentObj)
+                                        .addOnSuccessListener {
+                                            secondaryAuth.sendPasswordResetEmail(email)
+                                                .addOnCompleteListener { resetTask ->
+                                                    if (resetTask.isSuccessful) {
+                                                        binding.textAddUserStatus.text =
+                                                            "Študent pridaný do aktuálneho školského roku a semestra, e-mail na nastavenie hesla odoslaný."
+                                                    } else {
+                                                        binding.textAddUserStatus.text =
+                                                            "Študent pridaný, ale e-mail nenastavený: ${resetTask.exception?.message}"
+                                                    }
+                                                    secondaryAuth.signOut()
                                                 }
-                                                secondaryAuth.signOut()
-                                            }
-                                    }
-                                    .addOnFailureListener { ex ->
-                                        binding.textAddUserStatus.text = "Chyba pri ukladaní do DB: ${ex.message}"
-                                        secondaryAuth.signOut()
-                                    }
-                            }
+                                        }
+                                        .addOnFailureListener { ex ->
+                                            binding.textAddUserStatus.text = "Chyba pri ukladaní do DB: ${ex.message}"
+                                            secondaryAuth.signOut()
+                                        }
+                                }
                         }
                     }
                 } else {
@@ -770,6 +884,258 @@ class SettingsFragment : Fragment() {
     // --- Academic Year Management ---
 
     data class SchoolYearItem(val key: String, val name: String)
+
+    // --- Database Migration ---
+
+    private fun setupMigrateDb() {
+        // Only show migration card if migration is needed
+        binding.layoutMigrateDb.visibility = View.GONE
+        binding.iconMigrateSuccess.visibility = View.GONE
+        checkMigrationNeeded { needed ->
+            val safeBinding = _binding ?: return@checkMigrationNeeded
+            if (needed) {
+                safeBinding.layoutMigrateDb.visibility = View.VISIBLE
+            }
+        }
+
+        binding.btnMigrateDb.isEnabled = false
+        binding.checkMigrateBackup.setOnCheckedChangeListener { _, isChecked ->
+            binding.btnMigrateDb.isEnabled = isChecked
+        }
+
+        binding.btnMigrateDb.setOnClickListener {
+            binding.textMigrateStatus.visibility = View.VISIBLE
+            binding.textMigrateStatus.text = "Migrácia prebieha..."
+            binding.btnMigrateDb.isEnabled = false
+            binding.checkMigrateBackup.isEnabled = false
+            binding.iconMigrateSuccess.visibility = View.GONE
+
+            if (isOffline) {
+                migrateOfflineDb()
+            } else {
+                migrateOnlineDb()
+            }
+        }
+    }
+
+    private fun checkMigrationNeeded(callback: (Boolean) -> Unit) {
+        if (isOffline) {
+            val needsSubjectMigration = localDb.hasLegacyGlobalSubjects()
+            val needsStudentMigration = localDb.hasLegacyPerYearStudents()
+            callback(needsSubjectMigration || needsStudentMigration)
+        } else {
+            val db = FirebaseDatabase.getInstance().reference
+            db.child("predmety").get().addOnSuccessListener { predSnap ->
+                if (_binding == null) return@addOnSuccessListener
+                val needsSubjectMigration = predSnap.exists() && predSnap.childrenCount > 0
+                if (needsSubjectMigration) {
+                    callback(true)
+                    return@addOnSuccessListener
+                }
+                // Also check for per-year student structure
+                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                    if (_binding == null) return@addOnSuccessListener
+                    val yearPattern = Regex("\\d{4}_\\d{4}")
+                    val needsStudentMigration = studentsSnap.children.any {
+                        (it.key ?: "").matches(yearPattern)
+                    }
+                    callback(needsStudentMigration)
+                }.addOnFailureListener {
+                    if (_binding == null) return@addOnFailureListener
+                    callback(false)
+                }
+            }.addOnFailureListener {
+                if (_binding == null) return@addOnFailureListener
+                callback(false)
+            }
+        }
+    }
+
+    // Slovak pluralization: 1 = singular, 2-4 = few, 5+ = many
+    private fun migrationCountLabel(count: Int): String = when {
+        count == 1 -> "$count migrácia"
+        count in 2..4 -> "$count migrácie"
+        else -> "$count migrácií"
+    }
+
+    private fun showMigrationSuccess(appliedMigrations: List<String>) {
+        val safeBinding = _binding ?: return
+        safeBinding.btnMigrateDb.isEnabled = true
+        if (appliedMigrations.isEmpty()) {
+            safeBinding.textMigrateStatus.text = "Žiadne dáta nevyžadovali migráciu."
+            safeBinding.layoutMigrateDb.visibility = View.GONE
+            return
+        }
+        val count = appliedMigrations.size
+        val label = migrationCountLabel(count)
+        val details = appliedMigrations.joinToString(", ")
+        safeBinding.textMigrateStatus.text = "Aplikovaná $label: $details."
+        safeBinding.iconMigrateSuccess.visibility = View.VISIBLE
+        safeBinding.btnMigrateDb.postDelayed({
+            _binding?.layoutMigrateDb?.visibility = View.GONE
+        }, 3000)
+    }
+
+    private fun migrateOfflineDb() {
+        val hadLegacySubjects = localDb.hasLegacyGlobalSubjects()
+        val hadLegacyStudents = localDb.hasLegacyPerYearStudents()
+
+        localDb.migrateGlobalSubjectsToYears()
+        localDb.migrateStudentsToGlobal()
+
+        val applied = mutableListOf<String>()
+        if (hadLegacySubjects) applied.add("predmety migrované")
+        if (hadLegacyStudents) applied.add("študenti migrovaní")
+
+        if (applied.isNotEmpty()) {
+            showMigrationSuccess(applied)
+        } else {
+            val safeBinding = _binding ?: return
+            safeBinding.btnMigrateDb.isEnabled = true
+            safeBinding.textMigrateStatus.text = "Žiadne dáta nevyžadovali migráciu."
+            safeBinding.layoutMigrateDb.visibility = View.GONE
+        }
+    }
+
+    private fun migrateOnlineDb() {
+        val db = FirebaseDatabase.getInstance().reference
+        // Step 1: Migrate global subjects to school years
+        db.child("predmety").get().addOnSuccessListener { predSnap ->
+            val safeBinding = _binding ?: return@addOnSuccessListener
+            val hasGlobalSubjects = predSnap.exists() && predSnap.childrenCount > 0L
+
+            val globalSubjects = mutableMapOf<String, Any?>()
+            if (hasGlobalSubjects) {
+                for (child in predSnap.children) {
+                    val key = child.key ?: continue
+                    globalSubjects[key] = child.value
+                }
+            }
+
+            fun migrateStudentsOnline(appliedMigrations: MutableList<String>) {
+                // Step 2: Migrate per-year students to global structure
+                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                    val sb = _binding ?: return@addOnSuccessListener
+                    val yearPattern = Regex("\\d{4}_\\d{4}")
+                    val yearKeys = studentsSnap.children.filter { (it.key ?: "").matches(yearPattern) }
+
+                    if (yearKeys.isEmpty()) {
+                        if (appliedMigrations.isEmpty()) {
+                            sb.btnMigrateDb.isEnabled = true
+                            sb.textMigrateStatus.text = "Žiadne dáta nevyžadovali migráciu."
+                            sb.layoutMigrateDb.visibility = View.GONE
+                        } else {
+                            showMigrationSuccess(appliedMigrations)
+                        }
+                        return@addOnSuccessListener
+                    }
+
+                    val newStudents = mutableMapOf<String, Any?>()
+                    for (yearSnap in yearKeys) {
+                        val yearKey = yearSnap.key ?: continue
+                        for (studentSnap in yearSnap.children) {
+                            val uid = studentSnap.key ?: continue
+                            @Suppress("UNCHECKED_CAST")
+                            val existing = newStudents[uid] as? MutableMap<String, Any?> ?: mutableMapOf()
+                            val name = studentSnap.child("name").getValue(String::class.java) ?: ""
+                            val email = studentSnap.child("email").getValue(String::class.java) ?: ""
+                            if (existing["name"] == null || (existing["name"] as? String)?.isEmpty() == true) existing["name"] = name
+                            if (existing["email"] == null || (existing["email"] as? String)?.isEmpty() == true) existing["email"] = email
+
+                            @Suppress("UNCHECKED_CAST")
+                            val allSubjects = existing["subjects"] as? MutableMap<String, Any?> ?: mutableMapOf()
+                            val oldSubjects = studentSnap.child("subjects")
+                            if (oldSubjects.exists()) {
+                                val yearSubjects = mutableMapOf<String, Any?>()
+                                for (semSnap in oldSubjects.children) {
+                                    yearSubjects[semSnap.key ?: continue] = semSnap.value
+                                }
+                                allSubjects[yearKey] = yearSubjects
+                            }
+                            existing["subjects"] = allSubjects
+                            newStudents[uid] = existing
+                        }
+                    }
+
+                    db.child("students").setValue(newStudents).addOnSuccessListener {
+                        appliedMigrations.add("študenti migrovaní")
+                        showMigrationSuccess(appliedMigrations)
+                    }.addOnFailureListener {
+                        val b = _binding ?: return@addOnFailureListener
+                        b.btnMigrateDb.isEnabled = true
+                        b.textMigrateStatus.text = "Chyba pri migrácii študentov: ${it.message}"
+                    }
+                }.addOnFailureListener {
+                    val b = _binding ?: return@addOnFailureListener
+                    b.btnMigrateDb.isEnabled = true
+                    b.textMigrateStatus.text = "Chyba: ${it.message}"
+                }
+            }
+
+            if (!hasGlobalSubjects) {
+                migrateStudentsOnline(mutableListOf())
+                return@addOnSuccessListener
+            }
+
+            // Migrate subjects to school years first
+            db.child("school_years").get().addOnSuccessListener { yearsSnap ->
+                val sb = _binding ?: return@addOnSuccessListener
+                var migratedCount = 0
+                var checkedCount = 0
+                val totalYears = yearsSnap.childrenCount.toInt()
+
+                if (totalYears == 0) {
+                    // No school years, just remove global subjects and migrate students
+                    db.child("predmety").removeValue().addOnSuccessListener {
+                        migrateStudentsOnline(mutableListOf("globálne predmety odstránené"))
+                    }
+                    return@addOnSuccessListener
+                }
+
+                fun onAllSubjectsChecked() {
+                    db.child("predmety").removeValue().addOnSuccessListener {
+                        val applied = mutableListOf<String>()
+                        if (migratedCount > 0) {
+                            applied.add("predmety migrované ($migratedCount rokov)")
+                        } else {
+                            applied.add("globálne predmety odstránené")
+                        }
+                        migrateStudentsOnline(applied)
+                    }.addOnFailureListener {
+                        val b = _binding ?: return@addOnFailureListener
+                        b.btnMigrateDb.isEnabled = true
+                        b.textMigrateStatus.text = "Chyba pri odstraňovaní globálnych predmetov: ${it.message}"
+                    }
+                }
+
+                for (yearSnap in yearsSnap.children) {
+                    val yearKey = yearSnap.key ?: continue
+                    val hasPredmety = yearSnap.hasChild("predmety")
+
+                    if (!hasPredmety) {
+                        db.child("school_years").child(yearKey).child("predmety")
+                            .setValue(globalSubjects)
+                            .addOnCompleteListener {
+                                migratedCount++
+                                checkedCount++
+                                if (checkedCount >= totalYears) onAllSubjectsChecked()
+                            }
+                    } else {
+                        checkedCount++
+                        if (checkedCount >= totalYears) onAllSubjectsChecked()
+                    }
+                }
+            }.addOnFailureListener {
+                val b = _binding ?: return@addOnFailureListener
+                b.btnMigrateDb.isEnabled = true
+                b.textMigrateStatus.text = "Chyba: ${it.message}"
+            }
+        }.addOnFailureListener {
+            val b = _binding ?: return@addOnFailureListener
+            b.btnMigrateDb.isEnabled = true
+            b.textMigrateStatus.text = "Chyba: ${it.message}"
+        }
+    }
 
     private val schoolYearItems = mutableListOf<SchoolYearItem>()
 
@@ -883,7 +1249,11 @@ class SettingsFragment : Fragment() {
         confirmBtn.setOnClickListener {
             if (isOffline) {
                 localDb.remove("school_years/${item.key}")
-                localDb.remove("students/${item.key}")
+                // Remove enrollment data for the deleted year from all students
+                val students = localDb.getStudents()
+                for ((uid, _) in students) {
+                    localDb.remove("students/$uid/subjects/${item.key}")
+                }
                 // Clean up marks and attendance for this year
                 for (semester in listOf("zimny", "letny")) {
                     localDb.remove("hodnotenia/${item.key}/$semester")
@@ -895,7 +1265,17 @@ class SettingsFragment : Fragment() {
             } else {
                 val db = FirebaseDatabase.getInstance().reference
                 db.child("school_years").child(item.key).removeValue().addOnSuccessListener {
-                    db.child("students").child(item.key).removeValue()
+                    // Remove enrollment data for deleted year from each student
+                    db.child("students").get().addOnSuccessListener { studentsSnap ->
+                        val updates = mutableMapOf<String, Any?>()
+                        for (studentSnap in studentsSnap.children) {
+                            val uid = studentSnap.key ?: continue
+                            updates["students/$uid/subjects/${item.key}"] = null
+                        }
+                        if (updates.isNotEmpty()) {
+                            db.updateChildren(updates)
+                        }
+                    }
                     Toast.makeText(requireContext(), "Akademický rok odstránený.", Toast.LENGTH_SHORT).show()
                     loadSchoolYears()
                     dialog.dismiss()
@@ -906,11 +1286,31 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupNotificationSettings() {
+        // Hide changes notification settings for teachers (only timetable live is relevant)
+        if (isOffline) {
+            // Offline mode user is always a teacher/admin
+            binding.layoutNotifChangesGroup.visibility = View.GONE
+        } else {
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
+                FirebaseDatabase.getInstance().reference.child("teachers").child(currentUser.uid).get()
+                    .addOnSuccessListener { snap ->
+                        if (_binding == null) return@addOnSuccessListener
+                        if (snap.exists()) {
+                            binding.layoutNotifChangesGroup.visibility = View.GONE
+                        }
+                    }
+            }
+        }
+
         // Live notification switch
         val liveEnabled = prefs.getBoolean("notif_enabled_live", true)
         binding.switchNotifLive.isChecked = liveEnabled
+        updateLiveNotifControls(liveEnabled)
         binding.switchNotifLive.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("notif_enabled_live", isChecked).apply()
+            updateLiveNotifControls(isChecked, animate = true)
             rescheduleNotifications()
         }
 
@@ -948,8 +1348,10 @@ class SettingsFragment : Fragment() {
         // Changes notification switch
         val changesEnabled = prefs.getBoolean("notif_enabled_changes", true)
         binding.switchNotifChanges.isChecked = changesEnabled
+        updateChangesNotifControls(changesEnabled)
         binding.switchNotifChanges.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("notif_enabled_changes", isChecked).apply()
+            updateChangesNotifControls(isChecked, animate = true)
             rescheduleNotifications()
         }
 
@@ -986,13 +1388,87 @@ class SettingsFragment : Fragment() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val pm = requireContext().getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
                 if (!pm.isIgnoringBatteryOptimizations(requireContext().packageName)) {
-                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    intent.data = Uri.parse("package:${requireContext().packageName}")
-                    startActivity(intent)
+                    val dialogView = layoutInflater.inflate(R.layout.dialog_confirm, null)
+                    dialogView.findViewById<TextView>(R.id.dialogTitle).text =
+                        "Vypnúť optimalizáciu batérie"
+                    dialogView.findViewById<TextView>(R.id.dialogMessage).text =
+                        "Optimalizácia batérie môže spôsobiť, že Android pozdrží alebo úplne zablokuje notifikácie o rozvrhu, známkach a dochádzke.\n\nPre spoľahlivé doručovanie notifikácií je potrebné túto optimalizáciu vypnúť."
+                    val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+                    confirmBtn.text = "Vypnúť"
+                    val dialog = AlertDialog.Builder(requireContext())
+                        .setView(dialogView)
+                        .create()
+                    dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                    dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+                        .setOnClickListener { dialog.dismiss() }
+                    confirmBtn.setOnClickListener {
+                        dialog.dismiss()
+                        val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        intent.data = Uri.parse("package:${requireContext().packageName}")
+                        startActivity(intent)
+                    }
+                    dialog.show()
                 } else {
                     Toast.makeText(requireContext(), "Optimalizácia batérie je už vypnutá", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    private fun updateLiveNotifControls(enabled: Boolean, animate: Boolean = false) {
+        val alpha = if (enabled) 1.0f else 0.5f
+        val views: List<View> = listOf(
+            binding.labelLiveInterval,
+            binding.frameLiveInterval,
+            binding.labelMinutesBefore,
+            binding.frameMinutesBefore,
+            binding.switchNotifClassroom,
+            binding.switchNotifUpcoming
+        )
+        val setEnabled = {
+            binding.labelLiveInterval.isEnabled = enabled
+            binding.frameLiveInterval.isEnabled = enabled
+            binding.spinnerLiveInterval.isEnabled = enabled
+            binding.labelMinutesBefore.isEnabled = enabled
+            binding.frameMinutesBefore.isEnabled = enabled
+            binding.spinnerMinutesBefore.isEnabled = enabled
+            binding.switchNotifClassroom.isEnabled = enabled
+            binding.switchNotifUpcoming.isEnabled = enabled
+        }
+        if (animate) {
+            if (enabled) setEnabled()
+            views.forEachIndexed { i, v ->
+                val anim = v.animate().alpha(alpha).setDuration(CONTROLS_FADE_DURATION_MS)
+                if (!enabled && i == views.lastIndex) anim.withEndAction { setEnabled() }
+                anim.start()
+            }
+        } else {
+            views.forEach { it.alpha = alpha }
+            setEnabled()
+        }
+    }
+
+    private fun updateChangesNotifControls(enabled: Boolean, animate: Boolean = false) {
+        val alpha = if (enabled) 1.0f else 0.5f
+        val views: List<View> = listOf(
+            binding.labelChangesInterval,
+            binding.frameChangesInterval
+        )
+        val setEnabled = {
+            binding.labelChangesInterval.isEnabled = enabled
+            binding.frameChangesInterval.isEnabled = enabled
+            binding.spinnerChangesInterval.isEnabled = enabled
+        }
+        if (animate) {
+            if (enabled) setEnabled()
+            views.forEachIndexed { i, v ->
+                val anim = v.animate().alpha(alpha).setDuration(CONTROLS_FADE_DURATION_MS)
+                if (!enabled && i == views.lastIndex) anim.withEndAction { setEnabled() }
+                anim.start()
+            }
+        } else {
+            views.forEach { it.alpha = alpha }
+            setEnabled()
         }
     }
 
@@ -1008,6 +1484,8 @@ class SettingsFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        pendingThemeRunnable?.let { _binding?.switchDarkMode?.removeCallbacks(it) }
+        pendingThemeRunnable = null
         _binding = null
     }
 }

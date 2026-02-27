@@ -14,33 +14,59 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingStart="10dp"
         android:paddingEnd="10dp"
         android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:gravity="center_vertical">
+        android:paddingBottom="4dp">
 
-        <TextView
-            android:id="@+id/textStudentName"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Student Name"
-            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-            android:textColor="?attr/colorOnSurface" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/checkBoxPresent"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/textStudentName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Student Name"
+                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textColor="?attr/colorOnSurface" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/checkBoxPresent"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Prítomný"
+                android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                app:chipIconVisible="false"
+                app:checkedIconVisible="true"
+                app:chipStrokeWidth="1dp"
+                app:chipStrokeColor="?attr/colorOutlineVariant" />
+
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/noteInputLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Prítomný"
-            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
-            app:chipIconVisible="false"
-            app:checkedIconVisible="true"
-            app:chipStrokeWidth="1dp"
-            app:chipStrokeColor="?attr/colorOutlineVariant" />
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp"
+            android:hint="Poznámka (dôvod neprítomnosti)"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/noteInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textSize="13sp" />
+        </com.google.android.material.textfield.TextInputLayout>
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -45,8 +45,6 @@ class PillNavigationBar @JvmOverloads constructor(
         private const val MAX_ICON_SIZE_DP = 28f
         private const val MAGNIFY_RADIUS_DP = 90f
         private const val MAX_TEXT_SCALE = 1.35f
-        private const val SQUISH_ZONE_DP = 20f // px from edge where squish starts
-        private const val MAX_SQUISH = 0.55f   // min pill width ratio at edge
         private const val BOLD_THRESHOLD = 0.5f // overlap ratio above which text becomes bold
     }
 
@@ -72,7 +70,6 @@ class PillNavigationBar @JvmOverloads constructor(
     private val iconSizePx = (ICON_SIZE_DP * density).toInt()
     private val maxIconSizePx = (MAX_ICON_SIZE_DP * density).toInt()
     private val magnifyRadius = MAGNIFY_RADIUS_DP * density
-    private val squishZone = SQUISH_ZONE_DP * density
 
     // ── Theme colours (mutable for config-change refresh) ──────────────────
 
@@ -130,10 +127,6 @@ class PillNavigationBar @JvmOverloads constructor(
     private val pillGlassPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val pillGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-    private val pillRefractionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-
     private val selectedTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = baseTextSize
         textAlign = Paint.Align.CENTER
@@ -157,11 +150,6 @@ class PillNavigationBar @JvmOverloads constructor(
         pillPaint.color = pillColor
         pillGlassPaint.color = ColorUtils.setAlphaComponent(pillColor, 160)
         pillGlowPaint.color = ColorUtils.setAlphaComponent(pillColor, 60)
-        // Refraction uses a subtle tint of the pill's own colour, not hardcoded white.
-        // 0.3f = 30 % blend toward white; alpha 30 keeps it barely perceptible.
-        pillRefractionPaint.color = ColorUtils.setAlphaComponent(
-            ColorUtils.blendARGB(pillColor, 0xFFFFFFFF.toInt(), 0.3f), 30
-        )
         selectedTextPaint.color = colorPrimary
         unselectedTextPaint.color = ColorUtils.setAlphaComponent(colorOnSurface, 140)
     }
@@ -184,7 +172,6 @@ class PillNavigationBar @JvmOverloads constructor(
     private val bgRect = RectF()
     private val pillRect = RectF()
     private val glowRect = RectF()
-    private val refractionRect = RectF()
 
     private var pillCenterX: Float = 0f
     private var pillWidth: Float = 0f
@@ -353,29 +340,10 @@ class PillNavigationBar @JvmOverloads constructor(
         // Stroke — same rect, so it sits perfectly on the edge
         canvas.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgStrokePaint)
 
-        // 2. Compute squish factor: compress pill when near edges (scaled by interactionFraction)
-        val halfBase = pillWidth / 2f
-        val leftEdge = barLeft + cornerRadius / 2f
-        val rightEdge = barRight - cornerRadius / 2f
-        val pillLeft = pillCenterX - halfBase
-        val pillRight = pillCenterX + halfBase
-
-        var squishLeft = 1f
-        var squishRight = 1f
-        if (interactionFraction > 0f) {
-            if (pillLeft < leftEdge + squishZone) {
-                val t = 1f - ((pillLeft - leftEdge) / squishZone).coerceIn(0f, 1f)
-                squishLeft = 1f - t * (1f - MAX_SQUISH) * interactionFraction
-            }
-            if (pillRight > rightEdge - squishZone) {
-                val t = 1f - ((rightEdge - pillRight) / squishZone).coerceIn(0f, 1f)
-                squishRight = 1f - t * (1f - MAX_SQUISH) * interactionFraction
-            }
-        }
-
-        val drawPillHalfW = halfBase * min(squishLeft, squishRight)
-        val clampedCenter = pillCenterX.coerceIn(barLeft + drawPillHalfW + pillVPad,
-                                                  barRight - drawPillHalfW - pillVPad)
+        // 2. Pill half-width and clamped center (no edge squish)
+        val drawPillHalfW = pillWidth / 2f
+        val clampedCenter = pillCenterX.coerceIn(barLeft + drawPillHalfW,
+                                                  barRight - drawPillHalfW)
 
         // 3. Glow halo (glass distortion) — fades with interactionFraction
         if (interactionFraction > 0f) {
@@ -402,29 +370,7 @@ class PillNavigationBar @JvmOverloads constructor(
         )
         canvas.drawRoundRect(pillRect, cornerRadius, cornerRadius, pillDrawPaint)
 
-        // 5. Glass refraction highlights on sides — fade with interactionFraction
-        if (interactionFraction > 0f) {
-            val refrW = 3f * density
-            pillRefractionPaint.alpha = (30 * interactionFraction).toInt()
-            // Left refraction
-            refractionRect.set(
-                pillRect.left + 2 * density,
-                pillRect.top + 4 * density,
-                pillRect.left + 2 * density + refrW,
-                pillRect.bottom - 4 * density
-            )
-            canvas.drawRoundRect(refractionRect, refrW, refrW, pillRefractionPaint)
-            // Right refraction
-            refractionRect.set(
-                pillRect.right - 2 * density - refrW,
-                pillRect.top + 4 * density,
-                pillRect.right - 2 * density,
-                pillRect.bottom - 4 * density
-            )
-            canvas.drawRoundRect(refractionRect, refrW, refrW, pillRefractionPaint)
-        }
-
-        // 6. Draw items (icons or text) — with real-time pill overlap colour blending
+        // 5. Draw items (icons or text) — with real-time pill overlap colour blending
         for (i in 0 until count) {
             val logicalIdx = if (isRtl) count - 1 - i else i
             val cx = barLeft + itemWidth * i + itemWidth / 2f
@@ -456,16 +402,12 @@ class PillNavigationBar @JvmOverloads constructor(
         } else 1f
 
         val size = (adaptiveIconSize * scale).toInt()
-        val halfSize = size / 2
-        // Center vertically within the padded content area, not full view height
-        val cy = paddingTop + (height - paddingTop - paddingBottom) / 2
+        // Center within the padded content area using float math for precision
+        val cy = paddingTop + (height - paddingTop - paddingBottom) / 2f
+        val left = (cx - size / 2f).toInt()
+        val top = (cy - size / 2f).toInt()
 
-        drawable.setBounds(
-            (cx - halfSize).toInt(),
-            cy - halfSize,
-            (cx + halfSize).toInt(),
-            cy + halfSize
-        )
+        drawable.setBounds(left, top, left + size, top + size)
         // Blend tint from unselected to selected based on pill overlap
         val unselectedColor = ColorUtils.setAlphaComponent(colorOnSurface, 140)
         val blendedColor = ColorUtils.blendARGB(unselectedColor, colorPrimary, overlapRatio)
@@ -530,8 +472,8 @@ class PillNavigationBar @JvmOverloads constructor(
                 if (isDragging) {
                     // Clamp pill center inside bar bounds (pill can't escape)
                     val halfPill = pillWidth / 2f
-                    val minCenter = barLeft + halfPill + pillVPad
-                    val maxCenter = barRight - halfPill - pillVPad
+                    val minCenter = barLeft + halfPill
+                    val maxCenter = barRight - halfPill
                     pillCenterX = (dragPillStartX + dx).coerceIn(minCenter, maxCenter)
                 }
                 invalidate()

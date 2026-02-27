@@ -162,7 +162,7 @@ class SubjectsManageFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val items = withContext(Dispatchers.IO) {
                 val result = mutableListOf<SubjectManageItem>()
-                val subjects = localDb.getSubjects()
+                val subjects = localDb.getSubjects(selectedSchoolYear)
                 for ((key, json) in subjects) {
                     val name = json.optString("name", key.replaceFirstChar { it.uppercaseChar() })
                     val teacherEmail = json.optString("teacherEmail", "")
@@ -181,31 +181,32 @@ class SubjectsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun loadSubjectsOnline() {
-        val db = FirebaseDatabase.getInstance().reference.child("predmety")
-        db.addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val items = withContext(Dispatchers.Default) {
-                        val result = mutableListOf<SubjectManageItem>()
-                        for (subjectSnap in snapshot.children) {
-                            val key = subjectSnap.key ?: continue
-                            val name = subjectSnap.child("name").getValue(String::class.java)
-                                ?: key.replaceFirstChar { it.uppercaseChar() }
-                            val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                            val semester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
-                            result.add(SubjectManageItem(key, name, teacherEmail, semester))
+        val db = FirebaseDatabase.getInstance().reference
+        db.child("school_years").child(selectedSchoolYear).child("predmety")
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val items = withContext(Dispatchers.Default) {
+                            val result = mutableListOf<SubjectManageItem>()
+                            for (subjectSnap in snapshot.children) {
+                                val key = subjectSnap.key ?: continue
+                                val name = subjectSnap.child("name").getValue(String::class.java)
+                                    ?: key.replaceFirstChar { it.uppercaseChar() }
+                                val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                                val semester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
+                                result.add(SubjectManageItem(key, name, teacherEmail, semester))
+                            }
+                            result.sortWith(compareBy(skCollator) { it.name })
+                            result
                         }
-                        result.sortWith(compareBy(skCollator) { it.name })
-                        result
-                    }
 
-                    allSubjectItems.clear()
-                    allSubjectItems.addAll(items)
-                    applyFilters()
+                        allSubjectItems.clear()
+                        allSubjectItems.addAll(items)
+                        applyFilters()
+                    }
                 }
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
+                override fun onCancelled(error: DatabaseError) {}
+            })
     }
 
     private fun updateEmptyState() {
@@ -305,6 +306,7 @@ class SubjectsManageFragment : Fragment() {
             override fun onItemSelected(parent: AdapterView<*>, v: View?, position: Int, id: Long) {
                 selectedSchoolYear = schoolYearKeys.getOrElse(position) { "" }
                 prefs.edit().putString("school_year", selectedSchoolYear).apply()
+                loadSubjects()
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
@@ -355,13 +357,15 @@ class SubjectsManageFragment : Fragment() {
             val selectedSemester = semesterKeys.getOrElse(semesterSpinner?.selectedItemPosition ?: 0) { "both" }
             if (isOffline) {
                 val key = UUID.randomUUID().toString().replace("-", "")
-                localDb.addSubject(key, name, "", selectedSemester)
+                localDb.addSubject(selectedSchoolYear, key, name, "", selectedSemester)
                 loadSubjects()
             } else {
-                val db = FirebaseDatabase.getInstance().reference.child("predmety")
-                val key = db.push().key ?: return@setOnClickListener
-                db.child(key).setValue(mapOf("name" to name, "teacherEmail" to "", "semester" to selectedSemester))
-                    .addOnSuccessListener { loadSubjects() }
+                val db = FirebaseDatabase.getInstance().reference
+                val key = db.child("school_years").child(selectedSchoolYear).child("predmety").push().key ?: return@setOnClickListener
+                db.child("school_years").child(selectedSchoolYear).child("predmety").child(key).setValue(mapOf("name" to name, "teacherEmail" to "", "semester" to selectedSemester))
+                    .addOnSuccessListener {
+                        loadSubjects()
+                    }
             }
             dialog.dismiss()
         }
@@ -394,7 +398,7 @@ class SubjectsManageFragment : Fragment() {
         ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
         // Pre-select current semester value
-        val subjectJson = localDb.getSubjects()[subject.key]
+        val subjectJson = localDb.getSubjects(selectedSchoolYear)[subject.key]
         val currentSemester = subjectJson?.optString("semester", "both") ?: "both"
         val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
         semesterSpinner?.setSelection(semIndex)
@@ -469,7 +473,7 @@ class SubjectsManageFragment : Fragment() {
             if (currentSemester != selectedSemester) {
                 localDb.migrateSubjectSemester(subject.key, currentSemester, selectedSemester)
             }
-            localDb.addSubject(subject.key, newName, teacherEmail, selectedSemester)
+            localDb.addSubject(selectedSchoolYear, subject.key, newName, teacherEmail, selectedSemester)
             loadSubjects()
             dialog.dismiss()
         }
@@ -495,7 +499,7 @@ class SubjectsManageFragment : Fragment() {
         val db = FirebaseDatabase.getInstance().reference
 
         // Load current semester value from Firebase
-        db.child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
+        db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
             val currentSemester = semSnap.getValue(String::class.java) ?: "both"
             val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
             spinnerSemester.setSelection(semIndex)
@@ -549,17 +553,8 @@ class SubjectsManageFragment : Fragment() {
             dialog.dismiss()
         }
         dialogView.findViewById<android.widget.Button>(R.id.btnDelete).setOnClickListener {
-            db.child("predmety").child(subject.key).removeValue()
-                .addOnSuccessListener {
-                    db.child("hodnotenia").child(subject.key).removeValue()
-                    db.child("pritomnost").child(subject.key).removeValue()
-                    Toast.makeText(requireContext(), "Predmet odstránený.", Toast.LENGTH_SHORT).show()
-                    loadSubjects()
-                    dialog.dismiss()
-                }
-                .addOnFailureListener {
-                    Toast.makeText(requireContext(), "Chyba pri odstraňovaní: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
+            dialog.dismiss()
+            confirmDeleteSubject(subject)
         }
         dialogView.findViewById<android.widget.Button>(R.id.btnSave).setOnClickListener {
             val newNameUi = editTextSubjectName.text.toString().trim()
@@ -573,9 +568,9 @@ class SubjectsManageFragment : Fragment() {
             }
 
             // Preserve timetable data when saving
-            db.child("predmety").child(subject.key).child("name").setValue(newNameUi)
-            db.child("predmety").child(subject.key).child("teacherEmail").setValue(assign)
-            db.child("predmety").child(subject.key).child("semester").setValue(selectedSemester)
+            db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("name").setValue(newNameUi)
+            db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("teacherEmail").setValue(assign)
+            db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("semester").setValue(selectedSemester)
             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
             loadSubjects()
             dialog.dismiss()
@@ -602,13 +597,11 @@ class SubjectsManageFragment : Fragment() {
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
             if (isOffline) {
-                localDb.removeSubject(subject.key)
+                localDb.removeSubject(selectedSchoolYear, subject.key)
                 loadSubjects()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
-                db.child("predmety").child(subject.key).removeValue().addOnSuccessListener {
-                    db.child("hodnotenia").child(subject.key).removeValue()
-                    db.child("pritomnost").child(subject.key).removeValue()
+                db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).removeValue().addOnSuccessListener {
                     loadSubjects()
                 }
             }
@@ -674,7 +667,7 @@ class SubjectsManageFragment : Fragment() {
 
     private fun loadTimetableEntriesOnline(subjectKey: String, container: LinearLayout, db: DatabaseReference) {
         container.removeAllViews()
-        db.child("predmety").child(subjectKey).child("timetable")
+        db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     if (!isAdded) return
@@ -709,7 +702,7 @@ class SubjectsManageFragment : Fragment() {
 
     private fun loadTimetableEntriesOffline(subjectKey: String, container: LinearLayout) {
         container.removeAllViews()
-        val entries = localDb.getTimetableEntries(subjectKey)
+        val entries = localDb.getTimetableEntries(selectedSchoolYear, subjectKey)
         for ((key, json) in entries) {
             val day = json.optString("day", "")
             val start = json.optString("startTime", "")
@@ -844,12 +837,12 @@ class SubjectsManageFragment : Fragment() {
             )
 
             if (isOfflineMode) {
-                localDb.removeTimetableEntry(subjectKey, entryKey)
-                localDb.addTimetableEntry(subjectKey, JSONObject(entryMap))
+                localDb.removeTimetableEntry(selectedSchoolYear, subjectKey, entryKey)
+                localDb.addTimetableEntry(selectedSchoolYear, subjectKey, JSONObject(entryMap))
                 onUpdated()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
-                db.child("predmety").child(subjectKey).child("timetable").child(entryKey)
+                db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(entryKey)
                     .setValue(entryMap).addOnSuccessListener { onUpdated() }
             }
             dialog.dismiss()
@@ -863,10 +856,10 @@ class SubjectsManageFragment : Fragment() {
                 .setMessage(getString(R.string.timetable_delete_entry_confirm))
                 .setPositiveButton("Odstrániť") { _, _ ->
                     if (isOfflineMode) {
-                        localDb.removeTimetableEntry(subjectKey, entryKey)
+                        localDb.removeTimetableEntry(selectedSchoolYear, subjectKey, entryKey)
                     } else {
                         FirebaseDatabase.getInstance().reference
-                            .child("predmety").child(subjectKey).child("timetable").child(entryKey)
+                            .child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(entryKey)
                             .removeValue()
                     }
                     dialog.dismiss()
@@ -934,7 +927,7 @@ class SubjectsManageFragment : Fragment() {
                     put("classroom", classroom)
                     put("note", note)
                 }
-                localDb.addTimetableEntry(subjectKey, entry)
+                localDb.addTimetableEntry(selectedSchoolYear, subjectKey, entry)
                 onAdded()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
@@ -946,8 +939,8 @@ class SubjectsManageFragment : Fragment() {
                     "classroom" to classroom,
                     "note" to note
                 )
-                val key = db.child("predmety").child(subjectKey).child("timetable").push().key ?: return@setOnClickListener
-                db.child("predmety").child(subjectKey).child("timetable").child(key).setValue(entryMap)
+                val key = db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").push().key ?: return@setOnClickListener
+                db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(key).setValue(entryMap)
                     .addOnSuccessListener { onAdded() }
             }
             dialog.dismiss()
@@ -976,14 +969,14 @@ class SubjectsManageFragment : Fragment() {
         }
 
         if (isOfflineMode) {
-            val subjects = localDb.getSubjects()
+            val subjects = localDb.getSubjects(selectedSchoolYear)
             for ((sKey, sJson) in subjects) {
                 // Skip subjects from the other semester
                 val subjectSemester = sJson.optString("semester", "both")
                 if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
 
                 val subjectName = sJson.optString("name", sKey)
-                val entries = localDb.getTimetableEntries(sKey)
+                val entries = localDb.getTimetableEntries(selectedSchoolYear, sKey)
                 for ((eKey, eJson) in entries) {
                     if (sKey == subjectKey && eKey == entryKey) continue
                     if (eJson.optString("day") != day) continue

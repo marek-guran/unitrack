@@ -33,7 +33,7 @@ class SubjectAdapter(
         holder.average.text = "Priemer: ${subject.average}"
         val presentCount = subject.attendanceCount.values.count { !it.absent }
         val totalCount = subject.attendanceCount.size
-        holder.attendance.text = "Prítomnosť: $presentCount/$totalCount"
+        holder.attendance.text = "Dochádzka: $presentCount/$totalCount"
 
         // Whole card click opens marks dialog
         holder.itemView.setOnClickListener { onViewDetails(subject) }

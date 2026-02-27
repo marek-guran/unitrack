@@ -36,32 +36,14 @@
                 android:textColor="?attr/colorOnSurface"
                 android:layout_marginBottom="4dp" />
 
-            <LinearLayout
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addMarkBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/viewDetailsBtn"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:text="Známky"
-                    android:textSize="11sp"
-                    android:layout_marginEnd="6dp"
-                    app:cornerRadius="10dp"
-                    app:strokeWidth="1dp"
-                    app:strokeColor="?attr/colorOutline" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/addMarkBtn"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:text="+ Známka"
-                    android:textSize="11sp"
-                    app:cornerRadius="10dp" />
-            </LinearLayout>
+                android:layout_height="36dp"
+                android:text="+ Známka"
+                android:textSize="11sp"
+                app:cornerRadius="10dp" />
         </LinearLayout>
 
         <!-- Right side: average + attendance -->
@@ -78,7 +60,8 @@
                 android:layout_height="36dp"
                 android:text="Priemer: -"
                 android:textSize="12sp"
-                android:clickable="false"
+                android:clickable="true"
+                android:focusable="true"
                 app:chipMinHeight="36dp"
                 app:chipCornerRadius="10dp"
                 app:chipBackgroundColor="?attr/colorSecondaryContainer"

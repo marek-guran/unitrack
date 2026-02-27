@@ -230,18 +230,20 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
         val currentSemester = getCurrentSemester(context)
+        val prefs = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+        val year = prefs.getString("school_year", "") ?: ""
 
         val daysOff = localDb.getDaysOff("offline_admin")
         val daysOffList = daysOff.values.toList()
 
         val todaySlots = mutableListOf<ScheduleSlot>()
 
-        val subjects = localDb.getSubjects()
+        val subjects = localDb.getSubjects(year)
         for ((subjectKey, subjectJson) in subjects) {
             val subjectSemester = subjectJson.optString("semester", "both")
             if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
             val subjectName = subjectJson.optString("name", subjectKey)
-            val entries = localDb.getTimetableEntries(subjectKey)
+            val entries = localDb.getTimetableEntries(year, subjectKey)
             for ((_, entryJson) in entries) {
                 val day = entryJson.optString("day", "")
                 if (day != todayKey) continue
@@ -269,6 +271,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val todayKey = today.dayOfWeek.toKey()
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
+        val year = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+            .getString("school_year", "") ?: ""
 
         db.child("days_off").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(daysOffSnap: DataSnapshot) {
@@ -284,7 +288,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                     }
                 }
 
-                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                db.child("school_years").child(year).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         val todaySlots = mutableListOf<ScheduleSlot>()
                         val currentSemester = getCurrentSemester(context)
@@ -556,6 +560,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val todayKey = today.dayOfWeek.toKey()
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
+        val year = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+            .getString("school_year", "") ?: ""
 
         db.child("days_off").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(daysOffSnap: DataSnapshot) {
@@ -601,7 +607,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 if (lastCancelledDate == todayFormatted) return
 
                 // Find which subjects are cancelled today
-                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                db.child("school_years").child(year).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(subjectsSnap: DataSnapshot) {
                         val cancelledSubjects = mutableListOf<String>()
                         val currentSemester = getCurrentSemester(context)
@@ -636,6 +642,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
     // ── Grade change detection ──────────────────────────────────────────
 
     private fun checkGradeChanges(context: Context, db: com.google.firebase.database.DatabaseReference, prefs: android.content.SharedPreferences, userUid: String) {
+        val year = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+            .getString("school_year", "") ?: ""
         // Load all grades for this user across all years/semesters/subjects
         db.child("hodnotenia").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -690,7 +698,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 if (added.isEmpty() && removed.isEmpty() && edited.isEmpty()) return
 
                 // Resolve subject names for notification text
-                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                db.child("school_years").child(year).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(predmetySnap: DataSnapshot) {
                         val subjectNameMap = mutableMapOf<String, String>()
                         for (subjSnap in predmetySnap.children) {
@@ -734,6 +742,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
     // ── Absence detection ───────────────────────────────────────────────
 
     private fun checkAbsenceChanges(context: Context, db: com.google.firebase.database.DatabaseReference, prefs: android.content.SharedPreferences, userUid: String) {
+        val year = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
+            .getString("school_year", "") ?: ""
         db.child("pritomnost").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 // Build a fingerprint of all absence entries for this student
@@ -786,7 +796,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
                 // Resolve subject names
                 val absentSubjectKeys = newAbsenceKeys.map { it.split("/").getOrNull(2) ?: "" }.toSet()
-                db.child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
+                db.child("school_years").child(year).child("predmety").addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(predmetySnap: DataSnapshot) {
                         val subjectNameMap = mutableMapOf<String, String>()
                         for (subjSnap in predmetySnap.children) {

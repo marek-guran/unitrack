@@ -139,4 +139,15 @@
         <item name="android:textStyle">bold</item>
         <item name="android:checkable">true</item>
     </style>
+
+    <!-- Compact grade chip for bulk grader -->
+    <style name="Widget.UniTrack.GradeChip.Compact" parent="Widget.Material3.Chip.Suggestion">
+        <item name="chipMinHeight">32dp</item>
+        <item name="chipMinTouchTargetSize">32dp</item>
+        <item name="chipCornerRadius">16dp</item>
+        <item name="chipStrokeWidth">0dp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:checkable">true</item>
+    </style>
 </resources>

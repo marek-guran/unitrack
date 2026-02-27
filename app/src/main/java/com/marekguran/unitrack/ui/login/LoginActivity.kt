@@ -1,6 +1,5 @@
 package com.marekguran.unitrack.ui.login
 
-import android.app.Activity
 import android.content.Intent
 import android.view.animation.DecelerateInterpolator
 import androidx.annotation.StringRes
@@ -20,22 +19,28 @@ import com.marekguran.unitrack.data.OfflineMode
 
 class LoginActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_DB_UNAVAILABLE = "db_unavailable"
+    }
+
     private lateinit var binding: ActivityLoginBinding
     private lateinit var firebaseAuth: FirebaseAuth
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val dbUnavailable = intent.getBooleanExtra(EXTRA_DB_UNAVAILABLE, false)
+
         // Check if already in offline mode
-        if (OfflineMode.isOffline(this)) {
+        if (!dbUnavailable && OfflineMode.isOffline(this)) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
         }
 
         firebaseAuth = FirebaseAuth.getInstance()
-        // Check if user is already logged in
-        if (firebaseAuth.currentUser != null) {
+        // Check if user is already logged in (skip if showing unavailable screen)
+        if (!dbUnavailable && firebaseAuth.currentUser != null) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
@@ -43,6 +48,11 @@ class LoginActivity : AppCompatActivity() {
 
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        if (dbUnavailable) {
+            showDatabaseUnavailableMode()
+            return
+        }
 
         // Animate entrance of login elements
         animateEntrance()
@@ -98,6 +108,10 @@ class LoginActivity : AppCompatActivity() {
             return
         }
 
+        firebaseLogin(email, password)
+    }
+
+    private fun firebaseLogin(email: String, password: String) {
         firebaseAuth.signInWithEmailAndPassword(email, password)
             .addOnCompleteListener(this) { task ->
                 binding.loading.visibility = View.GONE
@@ -123,6 +137,52 @@ class LoginActivity : AppCompatActivity() {
 
     private fun showLoginFailed(@StringRes errorString: Int) {
         Toast.makeText(applicationContext, errorString, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showDatabaseUnavailableMode() {
+        // Hide login fields and offline mode button
+        binding.usernameLayout.visibility = View.GONE
+        binding.passwordLayout.visibility = View.GONE
+        binding.login.visibility = View.GONE
+        binding.loading.visibility = View.GONE
+        binding.dividerText.visibility = View.GONE
+        binding.btnOfflineMode.visibility = View.GONE
+
+        // Update subtitle
+        binding.subtitleText.text = "Aplikácia dočasne nedostupná"
+
+        // Show unavailability message and logout button
+        binding.unavailableMessage.visibility = View.VISIBLE
+        binding.unavailableMessage.text =
+            "Databáza vyžaduje aktualizáciu. Počkajte, kým administrátor vykoná migráciu v nastaveniach."
+        binding.btnLogoutUnavailable.visibility = View.VISIBLE
+        binding.btnLogoutUnavailable.setOnClickListener {
+            firebaseAuth.signOut()
+            // Restart LoginActivity in normal login mode
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+        }
+
+        // Animate entrance with unavailable-specific views
+        val views = listOf(
+            binding.logoCard,
+            binding.titleText,
+            binding.subtitleText,
+            binding.unavailableMessage,
+            binding.btnLogoutUnavailable
+        )
+        views.forEachIndexed { index, view ->
+            view.alpha = 0f
+            view.translationY = 60f
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(500)
+                .setStartDelay((index * 80).toLong())
+                .setInterpolator(DecelerateInterpolator(2f))
+                .start()
+        }
     }
 
     private fun animateEntrance() {

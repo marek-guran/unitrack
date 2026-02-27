@@ -2,6 +2,9 @@ package com.marekguran.unitrack
 
 import android.app.Application
 import androidx.appcompat.app.AppCompatDelegate
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 
 class UniTrackApplication : Application() {
     override fun onCreate() {
@@ -16,5 +19,21 @@ class UniTrackApplication : Application() {
             if (useDark) AppCompatDelegate.MODE_NIGHT_YES
             else AppCompatDelegate.MODE_NIGHT_NO
         )
+
+        val firebaseAppCheck = FirebaseAppCheck.getInstance()
+        if (BuildConfig.DEBUG) {
+            // Debug builds use the App Check debug provider.
+            // On first run the debug token is printed to logcat —
+            // register it in Firebase Console → App Check → Debug tokens.
+            firebaseAppCheck.installAppCheckProviderFactory(
+                DebugAppCheckProviderFactory.getInstance()
+            )
+        } else {
+            // Release builds are signed by Google Play (SHA-256),
+            // so Play Integrity attestation is used automatically.
+            firebaseAppCheck.installAppCheckProviderFactory(
+                PlayIntegrityAppCheckProviderFactory.getInstance()
+            )
+        }
     }
 }

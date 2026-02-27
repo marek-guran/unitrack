@@ -16,7 +16,7 @@ Nastavenia sú prístupné cez navigačnú lištu (posledná záložka). Obsah s
 
 - **Typ ovládania:** Switch (zapnuté/vypnuté)
 - **Uloženie:** `SharedPreferences` (kľúč `dark_mode`)
-- **Aplikácia:** Okamžitá — `AppCompatDelegate.setDefaultNightMode()` sa volá priamo pri zmene
+- **Aplikácia:** Okamžitá — `AppCompatDelegate.setDefaultNightMode()` sa volá priamo pri zmene, prepnutie spúšťa trojfázovú paint-drop animáciu (kvapka padá → splash efekt → kruhový reveal novej témy)
 - **Inicializácia:** Tmavý režim sa načíta a aplikuje už v `UniTrackApplication.onCreate()`, čo zaručuje, že aj `SplashActivity` sa zobrazí v správnej téme
 - **Stavový riadok:** Ikony stavového riadku sa automaticky aktualizujú podľa zvolenej témy pomocou `WindowInsetsControllerCompat.isAppearanceLightStatusBars`
 
@@ -100,6 +100,17 @@ Tieto funkcie sa zobrazujú len prihlásenému adminovi:
 Rovnaká funkcionalita ako v offline režime — vytváranie nových školských rokov.
 
 > Správa používateľov a predmetov bola v novšej verzii presunutá z nastavení do samostatných navigačných záložiek „Účty" a „Predmety", ktoré sa zobrazia len adminovi.
+
+---
+
+## Migrácia databázy
+
+V nastaveniach je k dispozícii tlačidlo **„Migrovať databázu"**, ktoré spustí migráciu štruktúry dát. Migrácia je dostupná v online aj offline režime a rieši:
+
+- **Globálne predmety → per-year** — presun predmetov z globálneho uzla do štruktúry podľa školských rokov
+- **Per-year študenti → globálna štruktúra** — zlúčenie študentov do jednej kolekcie
+
+Po dokončení sa zobrazí prehľad vykonaných zmien. Ak nie sú potrebné žiadne migrácie, aplikácia to oznámi. Podrobná dokumentácia je v [Migrácia databázy](MIGRACIA.md).
 
 ---
 

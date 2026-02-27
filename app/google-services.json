@@ -10,6 +10,25 @@
       "client_info": {
         "mobilesdk_app_id": "1:697818428315:android:1b81ad55bc65fea2eee73e",
         "android_client_info": {
+          "package_name": "com.marek.guran.unitrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGDoHizNQ-gHdUXg_BLRsOJnTkdO_dgB0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:697818428315:android:f3ebb8ee7e34852feee73e",
+        "android_client_info": {
           "package_name": "com.marekguran.unitrack"
         }
       },

@@ -225,10 +225,12 @@ class StudentsManageFragment : Fragment() {
     private fun loadStudentsOffline() {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                val year = getLatestYearOffline()
-                if (year.isEmpty()) return@withContext null
+                val allYears = localDb.getSchoolYears()
+                if (allYears.isEmpty()) return@withContext null
 
-                val subjects = localDb.getSubjects()
+                val savedYear = prefs.getString("school_year", null)
+                val selectedYear = if (!savedYear.isNullOrEmpty() && allYears.containsKey(savedYear)) savedYear else allYears.keys.max()
+                val subjects = localDb.getSubjects(selectedYear)
                 val keys = mutableListOf<String>()
                 val names = mutableListOf<String>()
                 for ((key, subjectJson) in subjects) {
@@ -240,7 +242,7 @@ class StudentsManageFragment : Fragment() {
 
                 val items = mutableListOf<StudentManageItem>()
                 val subjectsMap = mutableMapOf<String, MutableSet<String>>()
-                val students = localDb.getStudents(year)
+                val students = localDb.getStudents()
                 for ((uid, json) in students) {
                     val name = json.optString("name", "(bez mena)")
                     val email = json.optString("email", "")
@@ -248,9 +250,12 @@ class StudentsManageFragment : Fragment() {
                     val subjectsObj = json.optJSONObject("subjects")
                     if (subjectsObj != null) {
                         val enrolled = mutableSetOf<String>()
-                        for (semKey in subjectsObj.keys()) {
-                            val semSubjects = subjectsObj.optJSONArray(semKey) ?: continue
-                            for (i in 0 until semSubjects.length()) enrolled.add(semSubjects.optString(i))
+                        for (yearKey in subjectsObj.keys()) {
+                            val yearObj = subjectsObj.optJSONObject(yearKey) ?: continue
+                            for (semKey in yearObj.keys()) {
+                                val semSubjects = yearObj.optJSONArray(semKey) ?: continue
+                                for (i in 0 until semSubjects.length()) enrolled.add(semSubjects.optString(i))
+                            }
                         }
                         if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                     }
@@ -289,78 +294,52 @@ class StudentsManageFragment : Fragment() {
         subjectNamesList.clear()
 
         db.child("admins").get().addOnSuccessListener { adminSnap ->
-            db.child("school_years").get().addOnSuccessListener { schoolSnap ->
-                db.child("teachers").get().addOnSuccessListener { teacherSnap ->
-                    val latestYear = schoolSnap.children.mapNotNull { it.key }.maxOrNull() ?: ""
+            db.child("teachers").get().addOnSuccessListener { teacherSnap ->
+                db.child("students").get().addOnSuccessListener { allStudentsSnap ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val result = withContext(Dispatchers.Default) {
+                            val admins = adminSnap.children.mapNotNull { it.key }.toSet()
+                            val semester = prefs.getString("semester", "zimny") ?: "zimny"
+                            val teacherUids = mutableSetOf<String>()
+                            val items = mutableListOf<StudentManageItem>()
+                            val subjectsMap = mutableMapOf<String, MutableSet<String>>()
 
-                    if (latestYear.isEmpty()) {
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            val items = withContext(Dispatchers.Default) {
-                                val admins = adminSnap.children.mapNotNull { it.key }.toSet()
-                                val result = mutableListOf<StudentManageItem>()
-                                for (child in teacherSnap.children) {
-                                    val uid = child.key ?: continue
-                                    val value = child.value as? String ?: continue
-                                    val parts = value.split(",").map { it.trim() }
-                                    val email = parts.getOrElse(0) { "" }
-                                    val name = parts.getOrElse(1) { email }
-                                    result.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
-                                }
-                                result.sortWith(compareBy(skCollator) { it.name })
-                                Pair(admins, result)
+                            for (child in teacherSnap.children) {
+                                val uid = child.key ?: continue
+                                val value = child.value as? String ?: continue
+                                val parts = value.split(",").map { it.trim() }
+                                val email = parts.getOrElse(0) { "" }
+                                val name = parts.getOrElse(1) { email }
+                                teacherUids.add(uid)
+                                items.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
                             }
-                            adminUids = items.first
-                            allStudentItems.clear()
-                            allStudentItems.addAll(items.second)
-                            loadSubjectNamesOnline(db)
-                        }
-                        return@addOnSuccessListener
-                    }
 
-                    db.child("students").child(latestYear).get().addOnSuccessListener { studentSnap ->
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            val result = withContext(Dispatchers.Default) {
-                                val admins = adminSnap.children.mapNotNull { it.key }.toSet()
-                                val semester = prefs.getString("semester", "zimny") ?: "zimny"
-                                val teacherUids = mutableSetOf<String>()
-                                val items = mutableListOf<StudentManageItem>()
-                                val subjectsMap = mutableMapOf<String, MutableSet<String>>()
-
-                                for (child in teacherSnap.children) {
-                                    val uid = child.key ?: continue
-                                    val value = child.value as? String ?: continue
-                                    val parts = value.split(",").map { it.trim() }
-                                    val email = parts.getOrElse(0) { "" }
-                                    val name = parts.getOrElse(1) { email }
-                                    teacherUids.add(uid)
-                                    items.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
-                                }
-
-                                for (child in studentSnap.children) {
-                                    val uid = child.key ?: continue
-                                    if (uid in teacherUids) continue
-                                    val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
-                                    val email = child.child("email").getValue(String::class.java) ?: ""
-                                    items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
-                                    val enrolled = mutableSetOf<String>()
-                                    child.child("subjects").child(semester).children.forEach { subjectChild ->
+                            for (child in allStudentsSnap.children) {
+                                val uid = child.key ?: continue
+                                if (uid in teacherUids) continue
+                                val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
+                                val email = child.child("email").getValue(String::class.java) ?: ""
+                                items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
+                                val enrolled = mutableSetOf<String>()
+                                for (yearSnap in child.child("subjects").children) {
+                                    yearSnap.child(semester).children.forEach { subjectChild ->
                                         val subjectKey = subjectChild.getValue(String::class.java)
                                         if (subjectKey != null) enrolled.add(subjectKey)
                                     }
-                                    if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                                 }
-
-                                items.sortWith(compareBy(skCollator) { it.name })
-                                Triple(admins, items, subjectsMap)
+                                if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                             }
 
-                            adminUids = result.first
-                            allStudentItems.clear()
-                            allStudentItems.addAll(result.second)
-                            studentSubjectsMap.clear()
-                            studentSubjectsMap.putAll(result.third)
-                            loadSubjectNamesOnline(db)
+                            items.sortWith(compareBy(skCollator) { it.name })
+                            Triple(admins, items, subjectsMap)
                         }
+
+                        adminUids = result.first
+                        allStudentItems.clear()
+                        allStudentItems.addAll(result.second)
+                        studentSubjectsMap.clear()
+                        studentSubjectsMap.putAll(result.third)
+                        loadSubjectNamesOnline(db)
                     }
                 }
             }
@@ -411,12 +390,7 @@ class StudentsManageFragment : Fragment() {
 
     private fun addStudentOffline(name: String) {
         val uid = UUID.randomUUID().toString().replace("-", "")
-        val year = getLatestYearOffline()
-        if (year.isEmpty()) {
-            Toast.makeText(requireContext(), "Chyba: Nie je nastavený žiadny školský rok.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        localDb.addStudent(year, uid, "", name, emptyMap())
+        localDb.addStudent(uid, "", name)
         loadStudents()
     }
 
@@ -527,15 +501,12 @@ class StudentsManageFragment : Fragment() {
                         dialog.dismiss()
                     }
             } else {
-                db.child("school_years").get().addOnSuccessListener { snap ->
-                    val years = snap.children.mapNotNull { it.key }
-                    for (year in years) {
-                        db.child("students").child(year).child(student.uid).child("name").setValue(newName)
+                db.child("students").child(student.uid).child("name").setValue(newName)
+                    .addOnSuccessListener {
+                        Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                        loadStudents()
+                        dialog.dismiss()
                     }
-                    Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
-                    loadStudents()
-                    dialog.dismiss()
-                }
             }
         }
     }
@@ -585,8 +556,11 @@ class StudentsManageFragment : Fragment() {
                     } else {
                         val schoolYearsRef = db.child("school_years")
                         schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
-                            val latestSchoolYear = schoolSnapshot.children.mapNotNull { it.key }.maxOrNull() ?: ""
-                            if (latestSchoolYear.isEmpty()) {
+                            val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
+                            val savedYear = prefs.getString("school_year", null)
+                            val selectedYear = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
+                                else allYearKeys.maxOrNull() ?: ""
+                            if (selectedYear.isEmpty()) {
                                 secondaryAuth.signOut()
                                 onResult("Chyba: Nie je nastavený žiadny školský rok.")
                                 return@addOnSuccessListener
@@ -595,7 +569,7 @@ class StudentsManageFragment : Fragment() {
                                 "email" to email,
                                 "name" to name
                             )
-                            db.child("students").child(latestSchoolYear).child(userId).setValue(studentObj)
+                            db.child("students").child(userId).setValue(studentObj)
                                     .addOnSuccessListener {
                                         secondaryAuth.sendPasswordResetEmail(email)
                                             .addOnCompleteListener { resetTask ->
@@ -639,11 +613,8 @@ class StudentsManageFragment : Fragment() {
         dialogView.findViewById<MaterialButton>(R.id.cancelButton)
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
-            val year = getLatestYearOffline()
-            if (year.isNotEmpty()) {
-                localDb.removeStudent(year, student.uid)
-                loadStudents()
-            }
+            localDb.removeStudent(student.uid)
+            loadStudents()
             dialog.dismiss()
         }
     }
@@ -657,7 +628,8 @@ class StudentsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun showTeacherSubjectsDialogOffline(teacher: StudentManageItem) {
-        val subjects = localDb.getSubjects()
+        val year = getSelectedYearOffline()
+        val subjects = localDb.getSubjects(year)
         val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_teacher_subjects, null)
         val searchEdit = dialogView.findViewById<EditText>(R.id.searchSubjectEditText)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.subjectsRecyclerView)
@@ -703,16 +675,16 @@ class StudentsManageFragment : Fragment() {
         cancelButton.setOnClickListener { dialog.dismiss() }
 
         saveButton.setOnClickListener {
-            val allSubjects = localDb.getSubjects()
+            val allSubjects = localDb.getSubjects(year)
             for (item in items) {
                 val subjectJson = allSubjects[item.key] ?: continue
                 val currentTeacher = subjectJson.optString("teacherEmail", "")
                 val subjectName = subjectJson.optString("name", "")
                 val semester = subjectJson.optString("semester", "both")
                 if (item.enrolled && !currentTeacher.equals(teacher.email, ignoreCase = true)) {
-                    localDb.addSubject(item.key, subjectName, teacher.email, semester)
+                    localDb.addSubject(year, item.key, subjectName, teacher.email, semester)
                 } else if (!item.enrolled && currentTeacher.equals(teacher.email, ignoreCase = true)) {
-                    localDb.addSubject(item.key, subjectName, "", semester)
+                    localDb.addSubject(year, item.key, subjectName, "", semester)
                 }
             }
             Toast.makeText(requireContext(), "Predmety učiteľa uložené.", Toast.LENGTH_SHORT).show()
@@ -723,64 +695,70 @@ class StudentsManageFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun showTeacherSubjectsDialogOnline(teacher: StudentManageItem) {
         val db = FirebaseDatabase.getInstance().reference
-        db.child("predmety").get().addOnSuccessListener { subjectsSnap ->
-            val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_teacher_subjects, null)
-            val searchEdit = dialogView.findViewById<EditText>(R.id.searchSubjectEditText)
-            val recyclerView = dialogView.findViewById<RecyclerView>(R.id.subjectsRecyclerView)
-            val saveButton = dialogView.findViewById<Button>(R.id.saveButton)
-            val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
+        db.child("school_years").get().addOnSuccessListener { schoolSnap ->
+            val allYearKeys = schoolSnap.children.mapNotNull { it.key }
+            val savedYear = prefs.getString("school_year", null)
+            val year = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
+                else allYearKeys.maxOrNull() ?: return@addOnSuccessListener
+            db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+                val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_teacher_subjects, null)
+                val searchEdit = dialogView.findViewById<EditText>(R.id.searchSubjectEditText)
+                val recyclerView = dialogView.findViewById<RecyclerView>(R.id.subjectsRecyclerView)
+                val saveButton = dialogView.findViewById<Button>(R.id.saveButton)
+                val cancelButton = dialogView.findViewById<Button>(R.id.cancelButton)
 
-            // Only show subjects with no teacher or this teacher's subjects
-            val items = mutableListOf<SubjectEnrollItem>()
-            for (subjectSnap in subjectsSnap.children) {
-                val key = subjectSnap.key ?: continue
-                val name = subjectSnap.child("name").getValue(String::class.java)
-                    ?: key.replaceFirstChar { it.uppercaseChar() }
-                val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                if (teacherEmail.isBlank() || teacherEmail.equals(teacher.email, ignoreCase = true)) {
-                    val assigned = teacherEmail.equals(teacher.email, ignoreCase = true)
-                    items.add(SubjectEnrollItem(key, name, assigned))
-                }
-            }
-            items.sortWith(compareBy(skCollator) { it.name })
-
-            var filtered = items.toMutableList()
-            recyclerView.layoutManager = LinearLayoutManager(requireContext())
-            recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
-
-            searchEdit.addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) {
-                    val query = s?.toString()?.lowercase() ?: ""
-                    filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
-                    recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
-                }
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            })
-
-            val dialog = Dialog(requireContext())
-            dialog.setContentView(dialogView)
-            dialog.show()
-            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-            dialog.window?.let { window ->
-                val margin = (10 * resources.displayMetrics.density).toInt()
-                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                window.decorView.setPadding(margin, margin, margin, margin)
-            }
-
-            cancelButton.setOnClickListener { dialog.dismiss() }
-
-            saveButton.setOnClickListener {
-                for (item in items) {
-                    val original = subjectsSnap.child(item.key).child("teacherEmail").getValue(String::class.java) ?: ""
-                    if (item.enrolled && !original.equals(teacher.email, ignoreCase = true)) {
-                        db.child("predmety").child(item.key).child("teacherEmail").setValue(teacher.email)
-                    } else if (!item.enrolled && original.equals(teacher.email, ignoreCase = true)) {
-                        db.child("predmety").child(item.key).child("teacherEmail").setValue("")
+                // Only show subjects with no teacher or this teacher's subjects
+                val items = mutableListOf<SubjectEnrollItem>()
+                for (subjectSnap in subjectsSnap.children) {
+                    val key = subjectSnap.key ?: continue
+                    val name = subjectSnap.child("name").getValue(String::class.java)
+                        ?: key.replaceFirstChar { it.uppercaseChar() }
+                    val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                    if (teacherEmail.isBlank() || teacherEmail.equals(teacher.email, ignoreCase = true)) {
+                        val assigned = teacherEmail.equals(teacher.email, ignoreCase = true)
+                        items.add(SubjectEnrollItem(key, name, assigned))
                     }
                 }
-                Toast.makeText(requireContext(), "Predmety učiteľa uložené.", Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
+                items.sortWith(compareBy(skCollator) { it.name })
+
+                var filtered = items.toMutableList()
+                recyclerView.layoutManager = LinearLayoutManager(requireContext())
+                recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+
+                searchEdit.addTextChangedListener(object : TextWatcher {
+                    override fun afterTextChanged(s: Editable?) {
+                        val query = s?.toString()?.lowercase() ?: ""
+                        filtered = items.filter { it.name.lowercase().contains(query) }.toMutableList()
+                        recyclerView.adapter = SubjectEnrollAdapter(filtered) { pos, checked -> filtered[pos].enrolled = checked }
+                    }
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                })
+
+                val dialog = Dialog(requireContext())
+                dialog.setContentView(dialogView)
+                dialog.show()
+                dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                dialog.window?.let { window ->
+                    val margin = (10 * resources.displayMetrics.density).toInt()
+                    window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    window.decorView.setPadding(margin, margin, margin, margin)
+                }
+
+                cancelButton.setOnClickListener { dialog.dismiss() }
+
+                saveButton.setOnClickListener {
+                    for (item in items) {
+                        val original = subjectsSnap.child(item.key).child("teacherEmail").getValue(String::class.java) ?: ""
+                        if (item.enrolled && !original.equals(teacher.email, ignoreCase = true)) {
+                            db.child("school_years").child(year).child("predmety").child(item.key).child("teacherEmail").setValue(teacher.email)
+                        } else if (!item.enrolled && original.equals(teacher.email, ignoreCase = true)) {
+                            db.child("school_years").child(year).child("predmety").child(item.key).child("teacherEmail").setValue("")
+                        }
+                    }
+                    Toast.makeText(requireContext(), "Predmety učiteľa uložené.", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                }
             }
         }
     }
@@ -846,10 +824,11 @@ class StudentsManageFragment : Fragment() {
             val year = yearKeys[yearIdx]
             val semester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "zimny" }
 
-            val subjects = localDb.getSubjects()
-            val studentJson = localDb.getJson("students/$year/${student.uid}")
+            val subjects = localDb.getSubjects(year)
+            val studentJson = localDb.getJson("students/${student.uid}")
             val subjectsObj = studentJson?.optJSONObject("subjects") ?: org.json.JSONObject()
-            val semSubjects = subjectsObj.optJSONArray(semester)
+            val yearObj = subjectsObj.optJSONObject(year)
+            val semSubjects = yearObj?.optJSONArray(semester)
             val currentList = mutableListOf<String>()
             if (semSubjects != null) {
                 for (i in 0 until semSubjects.length()) currentList.add(semSubjects.optString(i))
@@ -903,7 +882,7 @@ class StudentsManageFragment : Fragment() {
             val year = yearKeys[yearIdx]
             val semester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "zimny" }
             val enrolled = items.filter { it.enrolled }.map { it.key }
-            localDb.updateStudentSubjects(year, student.uid, semester, enrolled)
+            localDb.updateStudentSubjects(student.uid, year, semester, enrolled)
             Toast.makeText(requireContext(), "Zápisy uložené", Toast.LENGTH_SHORT).show()
             dialog.dismiss()
         }
@@ -971,8 +950,8 @@ class StudentsManageFragment : Fragment() {
                 val year = yearKeys[yearIdx]
                 val semester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "zimny" }
 
-                db.child("predmety").get().addOnSuccessListener { subjectsSnap ->
-                    db.child("students").child(year).child(student.uid).child("subjects").child(semester)
+                db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+                    db.child("students").child(student.uid).child("subjects").child(year).child(semester)
                         .get().addOnSuccessListener { enrollSnap ->
                             val currentList = mutableListOf<String>()
                             for (child in enrollSnap.children) {
@@ -1032,8 +1011,8 @@ class StudentsManageFragment : Fragment() {
                 val year = yearKeys[yearIdx]
                 val semester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "zimny" }
                 val enrolled = items.filter { it.enrolled }.map { it.key }
-                db.child("students").child(year).child(student.uid)
-                    .child("subjects").child(semester).setValue(enrolled)
+                db.child("students").child(student.uid)
+                    .child("subjects").child(year).child(semester).setValue(enrolled)
                     .addOnSuccessListener {
                         Toast.makeText(requireContext(), "Zápisy uložené", Toast.LENGTH_SHORT).show()
                         dialog.dismiss()
@@ -1091,11 +1070,8 @@ class StudentsManageFragment : Fragment() {
                     return@setPositiveButton
                 }
                 if (isOffline) {
-                    val year = getLatestYearOffline()
-                    if (year.isNotEmpty()) {
-                        localDb.updateStudentName(year, student.uid, newName)
-                        loadStudents()
-                    }
+                    localDb.updateStudentName(student.uid, newName)
+                    loadStudents()
                 } else {
                     val db = FirebaseDatabase.getInstance().reference
                     if (student.isTeacher) {
@@ -1105,14 +1081,11 @@ class StudentsManageFragment : Fragment() {
                                 loadStudents()
                             }
                     } else {
-                        db.child("school_years").get().addOnSuccessListener { snap ->
-                            val years = snap.children.mapNotNull { it.key }
-                            for (year in years) {
-                                db.child("students").child(year).child(student.uid).child("name").setValue(newName)
+                        db.child("students").child(student.uid).child("name").setValue(newName)
+                            .addOnSuccessListener {
+                                Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                                loadStudents()
                             }
-                            Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
-                            loadStudents()
-                        }
                     }
                 }
             }
@@ -1135,37 +1108,50 @@ class StudentsManageFragment : Fragment() {
     }
 
     private fun loadSubjectNamesOnline(db: DatabaseReference) {
-        db.child("predmety").get().addOnSuccessListener { subjectsSnap ->
-            val studentItemsSnapshot = allStudentItems.toList()
-            viewLifecycleOwner.lifecycleScope.launch {
-                val result = withContext(Dispatchers.Default) {
-                    val keys = mutableListOf<String>()
-                    val names = mutableListOf<String>()
-                    val teacherSubjects = mutableMapOf<String, MutableSet<String>>()
-                    for (subjectSnap in subjectsSnap.children) {
-                        val key = subjectSnap.key ?: continue
-                        val name = subjectSnap.child("name").getValue(String::class.java)
-                            ?: key.replaceFirstChar { it.uppercaseChar() }
-                        keys.add(key)
-                        names.add(name)
-                        val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
-                        if (teacherEmail.isNotEmpty()) {
-                            val teacher = studentItemsSnapshot.find { it.isTeacher && it.email == teacherEmail }
-                            if (teacher != null) {
-                                teacherSubjects.getOrPut(teacher.uid) { mutableSetOf() }.add(key)
+        db.child("school_years").get().addOnSuccessListener { schoolSnap ->
+            val allYearKeys = schoolSnap.children.mapNotNull { it.key }
+            val savedYear = prefs.getString("school_year", null)
+            val year = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
+                else allYearKeys.maxOrNull() ?: run {
+                    populateSubjectSpinner()
+                    applyFilters()
+                    return@addOnSuccessListener
+                }
+            db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+                val studentItemsSnapshot = allStudentItems.toList()
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        val keys = mutableListOf<String>()
+                        val names = mutableListOf<String>()
+                        val teacherSubjects = mutableMapOf<String, MutableSet<String>>()
+                        for (subjectSnap in subjectsSnap.children) {
+                            val key = subjectSnap.key ?: continue
+                            val name = subjectSnap.child("name").getValue(String::class.java)
+                                ?: key.replaceFirstChar { it.uppercaseChar() }
+                            keys.add(key)
+                            names.add(name)
+                            val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
+                            if (teacherEmail.isNotEmpty()) {
+                                val teacher = studentItemsSnapshot.find { it.isTeacher && it.email == teacherEmail }
+                                if (teacher != null) {
+                                    teacherSubjects.getOrPut(teacher.uid) { mutableSetOf() }.add(key)
+                                }
                             }
                         }
+                        val sortedPairs = keys.zip(names).sortedWith(compareBy(skCollator) { it.second })
+                        Pair(sortedPairs, teacherSubjects)
                     }
-                    val sortedPairs = keys.zip(names).sortedWith(compareBy(skCollator) { it.second })
-                    Pair(sortedPairs, teacherSubjects)
-                }
 
-                subjectKeysList.clear()
-                subjectNamesList.clear()
-                result.first.forEach { (key, name) -> subjectKeysList.add(key); subjectNamesList.add(name) }
-                for ((uid, subjects) in result.second) {
-                    studentSubjectsMap.getOrPut(uid) { mutableSetOf() }.addAll(subjects)
+                    subjectKeysList.clear()
+                    subjectNamesList.clear()
+                    result.first.forEach { (key, name) -> subjectKeysList.add(key); subjectNamesList.add(name) }
+                    for ((uid, subjects) in result.second) {
+                        studentSubjectsMap.getOrPut(uid) { mutableSetOf() }.addAll(subjects)
+                    }
+                    populateSubjectSpinner()
+                    applyFilters()
                 }
+            }.addOnFailureListener {
                 populateSubjectSpinner()
                 applyFilters()
             }
@@ -1176,8 +1162,10 @@ class StudentsManageFragment : Fragment() {
     }
 
     // --- Helpers ---
-    private fun getLatestYearOffline(): String {
+    private fun getSelectedYearOffline(): String {
+        val saved = prefs.getString("school_year", null)
         val yearsMap = localDb.getSchoolYears()
+        if (!saved.isNullOrEmpty() && yearsMap.containsKey(saved)) return saved
         return yearsMap.keys.maxOrNull() ?: ""
     }
 
@@ -1207,12 +1195,21 @@ class StudentsManageFragment : Fragment() {
                 if (grades.isEmpty()) return "—"
                 val avg = grades.average()
                 val letter = when {
-                    avg <= 1.5 -> "A"
-                    avg <= 2.5 -> "B"
-                    avg <= 3.5 -> "C"
-                    avg <= 4.5 -> "D"
-                    avg <= 5.5 -> "E"
-                    else -> "FX"
+                    Math.abs(avg - 1.5) < 1e-9 -> "A/B"
+                    Math.abs(avg - 2.5) < 1e-9 -> "B/C"
+                    Math.abs(avg - 3.5) < 1e-9 -> "C/D"
+                    Math.abs(avg - 4.5) < 1e-9 -> "D/E"
+                    Math.abs(avg - 5.5) < 1e-9 -> "E/Fx"
+                    avg <= 1.25 -> "A"
+                    avg <= 1.75 -> "B+"
+                    avg <= 2.25 -> "B"
+                    avg <= 2.75 -> "C+"
+                    avg <= 3.25 -> "C"
+                    avg <= 3.75 -> "D+"
+                    avg <= 4.25 -> "D"
+                    avg <= 4.75 -> "E+"
+                    avg <= 5.25 -> "E"
+                    else -> "Fx"
                 }
                 return "Priemer: $letter"
             }
@@ -1304,9 +1301,10 @@ class StudentsManageFragment : Fragment() {
                     holder.averageText.text = "—"
                     return
                 }
-                val studentJson = localDb.getJson("students/$year/${student.uid}")
+                val studentJson = localDb.getJson("students/${student.uid}")
                 val subjectsObj = studentJson?.optJSONObject("subjects")
-                val semSubjects = subjectsObj?.optJSONArray(semester)
+                val yearObj = subjectsObj?.optJSONObject(year)
+                val semSubjects = yearObj?.optJSONArray(semester)
                 val subjectKeys = mutableListOf<String>()
                 if (semSubjects != null) {
                     for (i in 0 until semSubjects.length()) subjectKeys.add(semSubjects.optString(i))
@@ -1331,7 +1329,7 @@ class StudentsManageFragment : Fragment() {
                     return
                 }
                 val db = FirebaseDatabase.getInstance().reference
-                db.child("students").child(year).child(student.uid).child("subjects").child(semester)
+                db.child("students").child(student.uid).child("subjects").child(year).child(semester)
                     .get().addOnSuccessListener { subjectsSnap ->
                         val subjectKeys = mutableListOf<String>()
                         for (child in subjectsSnap.children) {

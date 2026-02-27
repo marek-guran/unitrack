@@ -17,8 +17,8 @@
     <string name="or_divider">alebo</string>
     <string name="reset_app">Resetovať aplikáciu</string>
     <string name="reset_app_confirm">Naozaj chcete resetovať aplikáciu? Tým sa vymažú všetky lokálne dáta a prepnete sa na online režim.</string>
-    <string name="export_database">Exportovať databázu</string>
-    <string name="import_database">Importovať databázu</string>
+    <string name="export_database">Export</string>
+    <string name="import_database">Import</string>
     <string name="export_success">Databáza bola úspešne exportovaná.</string>
     <string name="export_failed">Chyba pri exporte databázy.</string>
     <string name="import_success">Databáza bola úspešne importovaná.</string>
@@ -69,7 +69,7 @@
     <string name="timetable_edit_entry">Upraviť čas</string>
     <string name="timetable_delete_entry_confirm">Naozaj chcete odstrániť tento čas z rozvrhu?</string>
     <string name="timetable_time_conflict">Časový konflikt: %1$s je v rovnakom čase (%2$s %3$s-%4$s). Zvoľte iný čas.</string>
-    <string name="timetable_add_day_off">Pridať voľno</string>
+    <string name="timetable_add_day_off">Pridať neprítomnosť</string>
     <string name="timetable_actions_title">Akcie rozvrhu</string>
     <string name="timetable_day_off_date_from">Od (napr. 23.02.2026)</string>
     <string name="timetable_day_off_date_to">Do (voliteľné, napr. 04.03.2026)</string>
@@ -78,10 +78,10 @@
     <string name="timetable_day_off_note">Dôvod (voliteľné)</string>
     <string name="timetable_no_classes">Žiadne hodiny</string>
     <string name="timetable_free_day">Dnes máš voľno, užívaj si!</string>
-    <string name="timetable_day_off_label">Voľno</string>
-    <string name="timetable_my_days_off">Moje Voľno</string>
-    <string name="timetable_no_days_off">Žiadne naplánované voľno</string>
-    <string name="timetable_delete_day_off_confirm">Naozaj chcete odstrániť toto voľno?</string>
+    <string name="timetable_day_off_label">Neprítomnosť</string>
+    <string name="timetable_my_days_off">Moja neprítomnosť</string>
+    <string name="timetable_no_days_off">Žiadna naplánovaná neprítomnosť</string>
+    <string name="timetable_delete_day_off_confirm">Naozaj chcete odstrániť túto neprítomnosť?</string>
     <string name="timetable_class_cancelled">Hodina zrušená</string>
     <string name="timetable_week_label">Týždeň %d</string>
     <string name="timetable_filter_all">Všetky</string>
