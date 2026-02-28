@@ -55,7 +55,8 @@ class BulkGradeActivity : AppCompatActivity() {
 
     // Per-student grading state
     private val selectedGrades = mutableMapOf<Int, String>()   // position -> grade
-    private val studentNotes = mutableMapOf<Int, String>()     // position -> note
+    private val studentNotes = mutableMapOf<Int, String>()     // position -> note for student
+    private val teacherNotes = mutableMapOf<Int, String>()     // position -> note for teacher
 
     private var pickedDateMillis = System.currentTimeMillis()
     private var globalGradeName = ""
@@ -192,7 +193,7 @@ class BulkGradeActivity : AppCompatActivity() {
                     grade = grade,
                     name = globalGradeName.trim(),
                     desc = (studentNotes[position] ?: "").trim(),
-                    note = "",
+                    note = (teacherNotes[position] ?: "").trim(),
                     timestamp = pickedDateMillis
                 )
                 val markJson = JSONObject()
@@ -214,7 +215,7 @@ class BulkGradeActivity : AppCompatActivity() {
                     grade = grade,
                     name = globalGradeName.trim(),
                     desc = (studentNotes[position] ?: "").trim(),
-                    note = "",
+                    note = (teacherNotes[position] ?: "").trim(),
                     timestamp = pickedDateMillis
                 )
                 db.child("hodnotenia")
@@ -242,6 +243,8 @@ class BulkGradeActivity : AppCompatActivity() {
             val gradeChipGroup: ChipGroup = view.findViewById(R.id.bulkGradeChipGroup)
             val noteInput: EditText = view.findViewById(R.id.bulkStudentNote)
             val noteLayout: View = view.findViewById(R.id.bulkNoteLayout)
+            val teacherNoteInput: EditText = view.findViewById(R.id.bulkTeacherNote)
+            val teacherNoteLayout: View = view.findViewById(R.id.bulkTeacherNoteLayout)
             val noteToggle: android.widget.ImageButton = view.findViewById(R.id.bulkNoteToggle)
             val card: com.google.android.material.card.MaterialCardView =
                 view as com.google.android.material.card.MaterialCardView
@@ -281,9 +284,11 @@ class BulkGradeActivity : AppCompatActivity() {
             // Remove previous listeners to avoid recycling issues
             holder.gradeChipGroup.setOnCheckedStateChangeListener(null)
             holder.noteInput.removeTextChangedListener(holder.noteInput.tag as? android.text.TextWatcher)
+            holder.teacherNoteInput.removeTextChangedListener(holder.teacherNoteInput.tag as? android.text.TextWatcher)
 
             // Cancel any running note animation
             (holder.noteLayout.tag as? ValueAnimator)?.cancel()
+            (holder.teacherNoteLayout.tag as? ValueAnimator)?.cancel()
 
             // Restore grade selection state
             val savedGrade = selectedGrades[originalIndex]
@@ -298,23 +303,46 @@ class BulkGradeActivity : AppCompatActivity() {
                 holder.gradeChipGroup.clearCheck()
             }
 
-            // Restore note and toggle state (no animation on bind)
+            val isOfflineMode = OfflineMode.isOffline(holder.card.context)
+
+            // Restore student note and toggle state (no animation on bind)
+            // In offline mode, hide student note entirely
             val noteText = studentNotes[originalIndex] ?: ""
             holder.noteInput.setText(noteText)
-            val noteVisible = noteText.isNotBlank()
-            holder.noteLayout.visibility = if (noteVisible) View.VISIBLE else View.GONE
-            holder.noteLayout.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            updateNoteToggleTint(holder.noteToggle, noteVisible)
+            if (isOfflineMode) {
+                holder.noteLayout.visibility = View.GONE
+            } else {
+                val noteVisible = noteText.isNotBlank()
+                holder.noteLayout.visibility = if (noteVisible) View.VISIBLE else View.GONE
+                holder.noteLayout.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+
+            // Restore teacher note state (no animation on bind)
+            val teacherNoteText = teacherNotes[originalIndex] ?: ""
+            holder.teacherNoteInput.setText(teacherNoteText)
+            val teacherNoteVisible = teacherNoteText.isNotBlank()
+            holder.teacherNoteLayout.visibility = if (teacherNoteVisible) View.VISIBLE else View.GONE
+            holder.teacherNoteLayout.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+
+            val isStudentNoteShown = !isOfflineMode && holder.noteLayout.visibility == View.VISIBLE
+            val isTeacherNoteShown = holder.teacherNoteLayout.visibility == View.VISIBLE
+            updateNoteToggleTint(holder.noteToggle, isStudentNoteShown || isTeacherNoteShown)
 
             // Toggle note visibility on button click with slide animation
             holder.noteToggle.setOnClickListener {
-                if (holder.noteLayout.visibility == View.GONE) {
-                    animateExpand(holder.noteLayout)
-                    holder.noteInput.requestFocus()
-                    updateNoteToggleTint(holder.noteToggle, true)
-                } else {
-                    animateCollapse(holder.noteLayout)
+                val notesCurrentlyVisible = holder.teacherNoteLayout.visibility == View.VISIBLE
+                if (notesCurrentlyVisible) {
+                    if (!isOfflineMode) animateCollapse(holder.noteLayout)
+                    animateCollapse(holder.teacherNoteLayout)
                     updateNoteToggleTint(holder.noteToggle, false)
+                } else {
+                    if (!isOfflineMode) {
+                        animateExpand(holder.noteLayout)
+                        holder.noteInput.requestFocus()
+                    }
+                    animateExpand(holder.teacherNoteLayout)
+                    if (isOfflineMode) holder.teacherNoteInput.requestFocus()
+                    updateNoteToggleTint(holder.noteToggle, true)
                 }
             }
 
@@ -330,7 +358,7 @@ class BulkGradeActivity : AppCompatActivity() {
                 hasUnsavedChanges = true
             }
 
-            // Listen for note changes
+            // Listen for student note changes
             val textWatcher = object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -342,6 +370,19 @@ class BulkGradeActivity : AppCompatActivity() {
             }
             holder.noteInput.addTextChangedListener(textWatcher)
             holder.noteInput.tag = textWatcher
+
+            // Listen for teacher note changes
+            val teacherTextWatcher = object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    val idx = filteredIndices[holder.bindingAdapterPosition]
+                    teacherNotes[idx] = s?.toString() ?: ""
+                    hasUnsavedChanges = true
+                }
+            }
+            holder.teacherNoteInput.addTextChangedListener(teacherTextWatcher)
+            holder.teacherNoteInput.tag = teacherTextWatcher
         }
 
         private fun updateNoteToggleTint(toggle: android.widget.ImageButton, active: Boolean) {

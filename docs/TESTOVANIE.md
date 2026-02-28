@@ -73,6 +73,19 @@ Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
 | 3.3 | Percentuálny výpočet dochádzky | Správne percento (prítomní/celkom) | ✅ |
 | 3.4 | Dochádzka v offline režime | Záznamy sa ukladajú lokálne | ✅ |
 
+### 3a. QR kód dochádzka
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 3a.1 | Spustenie QR relácie učiteľom | QR kód sa zobrazí na obrazovke | ✅ |
+| 3a.2 | Skenovanie platného QR kódu študentom | Dochádzka sa zaznamená, učiteľ vidí potvrdenie | ✅ |
+| 3a.3 | Rotácia QR kódu po úspešnom skene | Nový QR kód sa vygeneruje do 1 sekundy | ✅ |
+| 3a.4 | Skenovanie neplatného/expirovaného kódu | Zobrazenie chybovej správy | ✅ |
+| 3a.5 | Študent nie je zapísaný v predmete | Odmietnutie so správou, záznam v qr_fail | ✅ |
+| 3a.6 | Duplicitný sken toho istého študenta | Nový QR kód sa vygeneruje, študent je už zaznamenaný | ✅ |
+| 3a.7 | Ukončenie relácie učiteľom | Dochádzka sa uloží, dočasné uzly sa vymažú | ✅ |
+| 3a.8 | Oprávnenie fotoaparátu zamietnuté | Zobrazenie informácie o potrebe oprávnenia | ✅ |
+
 ### 4. Rozvrh a voľné dni
 
 | # | Scenár | Očakávaný výsledok | Stav |

@@ -147,13 +147,13 @@
             </com.google.android.material.chip.ChipGroup>
         </HorizontalScrollView>
 
-        <!-- Note for student (hidden by default, toggled by notes button) -->
+        <!-- Note for student (hidden by default, toggled by notes button; hidden entirely in offline mode) -->
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/bulkNoteLayout"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Poznámka"
+            android:hint="Poznámka pre študenta"
             android:visibility="gone"
             app:boxCornerRadiusTopStart="8dp"
             app:boxCornerRadiusTopEnd="8dp"
@@ -162,6 +162,28 @@
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/bulkStudentNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Note for teacher (hidden by default, toggled by notes button) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/bulkTeacherNoteLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Poznámka pre učiteľa"
+            android:visibility="gone"
+            android:layout_marginTop="4dp"
+            app:boxCornerRadiusTopStart="8dp"
+            app:boxCornerRadiusTopEnd="8dp"
+            app:boxCornerRadiusBottomStart="8dp"
+            app:boxCornerRadiusBottomEnd="8dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/bulkTeacherNote"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="text"

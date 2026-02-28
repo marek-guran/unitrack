@@ -306,12 +306,36 @@ class TimetableFragment : Fragment() {
      * Central navigation method: updates selected date, chip highlight,
      * header, glassmorphic box, and ViewPager2 page in one place.
      */
+    /**
+     * Find the nearest date that is visible in the chip list.
+     * If the given date falls on a hidden day (e.g. weekend with no classes),
+     * returns the next visible weekday (typically Monday).
+     */
+    private fun findNearestVisibleDate(date: LocalDate): LocalDate {
+        val daysOfWeekWithClasses = dayOrder.filter { dayKey ->
+            allEntries.any { it.day == dayKey }
+        }.toSet()
+        val baseDayIndices = (0..4).toMutableSet() // Mon–Fri always visible
+        for (dayKey in daysOfWeekWithClasses) {
+            baseDayIndices.add(dayOrder.indexOf(dayKey))
+        }
+        var candidate = date
+        for (i in 0..6) {
+            val dayIdx = candidate.dayOfWeek.value - 1
+            if (dayIdx in baseDayIndices) return candidate
+            candidate = candidate.plusDays(1)
+        }
+        return date // fallback if no visible day found within a week
+    }
+
     private fun navigateToDay(date: LocalDate, scrollToChip: Boolean = false) {
-        selectedDate = date
+        // If the requested date is not visible (e.g. hidden weekend), snap to nearest visible day
+        val effectiveDate = findNearestVisibleDate(date)
+        selectedDate = effectiveDate
         updateHeader()
         updateGlassmorphicBox()
 
-        if (!dayChipAdapter.selectDate(date)) {
+        if (!dayChipAdapter.selectDate(effectiveDate)) {
             buildDayChips()
         } else if (scrollToChip) {
             val selectedPos = dayChipAdapter.getSelectedPosition()
@@ -324,7 +348,7 @@ class TimetableFragment : Fragment() {
         }
 
         // Navigate ViewPager2 to the selected date
-        val position = pagerAdapter.getPositionForDate(date)
+        val position = pagerAdapter.getPositionForDate(effectiveDate)
         if (position >= 0) {
             binding.viewPager.setCurrentItem(position, true)
         }
@@ -357,7 +381,8 @@ class TimetableFragment : Fragment() {
 
     private fun updateGlassmorphicBox() {
         if (!isAdded || _binding == null) return
-        val isViewingToday = selectedDate == LocalDate.now()
+        val effectiveToday = findNearestVisibleDate(LocalDate.now())
+        val isViewingToday = selectedDate == effectiveToday
         val stateChanged = glassmorphicShowingToday != null && glassmorphicShowingToday != isViewingToday
         glassmorphicShowingToday = isViewingToday
 

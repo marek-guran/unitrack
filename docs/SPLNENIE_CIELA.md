@@ -34,8 +34,8 @@ Aplikácia je plne funkčná a pripravená na reálne nasadenie. Všetky navrhnu
 
 | Metrika | Hodnota |
 |---|---|
-| Celkový počet Kotlin súborov | 30+ |
-| Počet XML layoutov | 55 (vrátane 18 tabletových variantov) |
+| Celkový počet Kotlin súborov | 50+ |
+| Počet XML layoutov | 70 (vrátane 19 tabletových variantov) |
 | Počet dátových modelov | 9 |
 | Počet RecyclerView adaptérov | 10 |
 | Počet notifikačných kanálov | 4 |
@@ -51,6 +51,7 @@ Toto je prvá kľúčová časť cieľa. Aplikácia implementuje kompletný syst
 | Funkcia | Popis | Umiestnenie v kóde |
 |---|---|---|
 | **Zaznamenanie dochádzky** | Učiteľ označí študentov ako prítomných/neprítomných | `SubjectDetailFragment.showMarkAttendanceDialog()` |
+| **QR kód dochádzka** | Učiteľ zobrazí rotujúci QR kód, študenti ho naskenujú a dochádzka sa zaznamená automaticky | `QrAttendanceActivity`, `QrScannerActivity` |
 | **Hromadné zaznamenanie** | Dialóg so zoznamom všetkých študentov, chipové tlačidlá prítomný/neprítomný, tlačidlo „Označiť všetkých" | `SubjectDetailFragment.showMarkAttendanceDialog()` |
 | **Výber dátumu** | DatePicker pre ľubovoľný dátum záznamu | `SubjectDetailFragment` — DatePickerDialog |
 | **Úprava záznamu** | Zmena dátumu, času, poznámky a stavu prítomnosti | `SubjectDetailFragment.showEditAttendanceDialog()` |
@@ -129,6 +130,7 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 | **Optimalizácia batérie** | Nastavenie výnimky pre spoľahlivé notifikácie |
 | **Firebase App Check** | Ochrana backendových zdrojov pred neoprávneným prístupom (Play Integrity + Debug provider) |
 | **Hromadné hodnotenie** | BulkGradeActivity — rýchle zadanie známok viacerým študentom naraz s chip komponentmi a expand/collapse animáciami |
+| **QR kód dochádzka** | Automatické zaznamenanie dochádzky cez rotujúci QR kód — učiteľ generuje, študenti skenujú, výsledky v reálnom čase |
 | **Migrácia databázy** | Automatické aj manuálne migrácie štruktúry dát (globálne predmety → per-year, per-year študenti → globálna štruktúra) |
 | **Pokročilé animácie** | Paint-drop efekt pri zmene tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, 1:1 peek navigácia v rozvrhu |
 
@@ -136,7 +138,7 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 
 ## Záver
 
-Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
+Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Evidencia prítomnosti bola rozšírená o QR kód dochádzku — učiteľ zobrazí rotujúci QR kód a študenti ho naskenujú, čím sa dochádzka zaznamená automaticky v reálnom čase. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
 
 ---
 

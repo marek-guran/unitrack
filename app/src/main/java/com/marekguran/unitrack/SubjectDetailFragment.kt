@@ -406,6 +406,14 @@ class SubjectDetailFragment : Fragment() {
         }
     }
 
+    private val qrAttendanceLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == AppCompatActivity.RESULT_OK) {
+            refreshFragmentView()
+        }
+    }
+
     companion object {
         val CHIP_TO_GRADE = mapOf(
             R.id.chipGradeA to "A",
@@ -503,6 +511,7 @@ class SubjectDetailFragment : Fragment() {
                         isStatsVisible = true
                         isStudentsVisible = false
                         binding.markAttendanceButton.hide()
+                        binding.qrAttendanceButton?.hide()
                         binding.bulkGradeButton.show()
                         showMainMarksTable()
                     }
@@ -510,6 +519,7 @@ class SubjectDetailFragment : Fragment() {
                         isStatsVisible = false
                         isStudentsVisible = false
                         binding.markAttendanceButton.show()
+                        if (!isOffline) binding.qrAttendanceButton?.show()
                         binding.bulkGradeButton.hide()
                         showAttendanceOverview()
                     }
@@ -518,6 +528,7 @@ class SubjectDetailFragment : Fragment() {
                         isStudentsVisible = true
                         pagerEnrollStudentsButton?.visibility = View.VISIBLE
                         binding.markAttendanceButton.hide()
+                        binding.qrAttendanceButton?.hide()
                         binding.bulkGradeButton.hide()
                     }
                 }
@@ -1165,7 +1176,6 @@ class SubjectDetailFragment : Fragment() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         currentStudentDialog = dialog
-        activeDialogs.add(dialog)
 
         val closeMarksBtn = dialogView.findViewById<Button>(R.id.closeMarksBtn)
         val addMarkBtn = dialogView.findViewById<Button>(R.id.addMarkBtn)
@@ -1195,6 +1205,7 @@ class SubjectDetailFragment : Fragment() {
             window.decorView.setPadding(margin, margin, margin, margin)
         }
         dialog.show()
+        activeDialogs.add(dialog)
     }
 
     @SuppressLint("InflateParams")
@@ -1253,7 +1264,6 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-        activeDialogs.add(dialog)
         val submitButton = dialogView.findViewById<MaterialButton>(R.id.submitButton)
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
 
@@ -1398,8 +1408,8 @@ class SubjectDetailFragment : Fragment() {
         }
         cancelButton.setOnClickListener { dialog.dismiss() }
         dialog.setOnDismissListener { activeDialogs.remove(dialog) }
-        activeDialogs.add(dialog)
         dialog.show()
+        activeDialogs.add(dialog)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
         dialog.window?.let { window ->
@@ -1478,7 +1488,6 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-        activeDialogs.add(dialog)
 
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
         cancelButton.setOnClickListener {
@@ -1583,7 +1592,6 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-        activeDialogs.add(dialog)
 
         submitButton.setOnClickListener {
             addAttendance(
@@ -1707,8 +1715,8 @@ class SubjectDetailFragment : Fragment() {
         if (isOffline) {
             localDb.removeAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, entryKey)
             refreshFragmentView()
-            Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
-                .setAction("Undo") {
+            Snackbar.make(view, "Dochádzka vymazaná", Snackbar.LENGTH_LONG)
+                .setAction("Späť") {
                     val entryJson = JSONObject()
                     entryJson.put("date", entry.date)
                     entryJson.put("time", entry.time)
@@ -1716,7 +1724,7 @@ class SubjectDetailFragment : Fragment() {
                     entryJson.put("absent", entry.absent)
                     localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, entryKey, entryJson)
                     refreshFragmentView()
-                }.show()
+                }.also { styleSnackbar(it) }.show()
         } else {
             val ref = db.child("pritomnost")
                 .child(selectedSchoolYear)
@@ -1726,10 +1734,10 @@ class SubjectDetailFragment : Fragment() {
                 .child(entryKey)
             ref.removeValue { _, _ ->
                 refreshFragmentView()
-                Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
-                    .setAction("Undo") {
+                Snackbar.make(view, "Dochádzka vymazaná", Snackbar.LENGTH_LONG)
+                    .setAction("Späť") {
                         ref.setValue(entry) { _, _ -> refreshFragmentView() }
-                    }.show()
+                    }.also { styleSnackbar(it) }.show()
             }
         }
     }
@@ -1777,7 +1785,6 @@ class SubjectDetailFragment : Fragment() {
             dialog.setCancelable(true)
             dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-            activeDialogs.add(dialog)
 
             submitButton.setOnClickListener {
                 editAttendance(
@@ -1959,7 +1966,6 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-        activeDialogs.add(dialog)
 
         saveButton.setOnClickListener {
             val result =
@@ -2042,7 +2048,9 @@ class SubjectDetailFragment : Fragment() {
     private fun showMainMarksTable() {
         pagerSubjectMarksContainer?.visibility = View.VISIBLE
         val recyclerView = pagerMarksRecyclerView ?: return
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        if (recyclerView.layoutManager == null) {
+            recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        }
         recyclerView.adapter = object : RecyclerView.Adapter<StudentMarkSummaryViewHolder>() {
             override fun onCreateViewHolder(
                 parent: ViewGroup,
@@ -2108,7 +2116,9 @@ class SubjectDetailFragment : Fragment() {
     private fun showAttendanceOverview() {
         pagerAttendanceOverviewContainer?.visibility = View.VISIBLE
         val recyclerView = pagerAttendanceOverviewRecyclerView ?: return
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        if (recyclerView.layoutManager == null) {
+            recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        }
         recyclerView.adapter = object : RecyclerView.Adapter<AttendanceOverviewViewHolder>() {
             override fun onCreateViewHolder(
                 parent: ViewGroup,
@@ -2189,12 +2199,33 @@ class SubjectDetailFragment : Fragment() {
             )
         }
 
-        // Hide/show FAB on scroll
+        // Wire up the QR Attendance button (online only)
+        if (!isOffline) {
+            binding.qrAttendanceButton?.setOnClickListener {
+                if (students.isEmpty()) {
+                    Snackbar.make(requireView(), "Žiadni študenti na prezenčku", Snackbar.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                val intent = Intent(requireContext(), QrAttendanceActivity::class.java).apply {
+                    putExtra(QrAttendanceActivity.EXTRA_SUBJECT_KEY, openedSubjectKey ?: "")
+                    putExtra(QrAttendanceActivity.EXTRA_SUBJECT_NAME, openedSubject ?: "")
+                    putExtra(QrAttendanceActivity.EXTRA_SCHOOL_YEAR, selectedSchoolYear)
+                    putExtra(QrAttendanceActivity.EXTRA_SEMESTER, selectedSemester)
+                    putExtra(QrAttendanceActivity.EXTRA_STUDENT_UIDS, students.map { it.studentUid }.toTypedArray())
+                    putExtra(QrAttendanceActivity.EXTRA_STUDENT_NAMES, students.map { it.studentName }.toTypedArray())
+                }
+                qrAttendanceLauncher.launch(intent)
+            }
+        }
+
+        // Hide/show FABs on scroll
         pagerAttendanceOverviewScroll?.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
-            if (scrollY > oldScrollY && binding.markAttendanceButton.isShown) {
-                binding.markAttendanceButton.hide()
-            } else if (scrollY < oldScrollY && !binding.markAttendanceButton.isShown) {
-                binding.markAttendanceButton.show()
+            if (scrollY > oldScrollY) {
+                if (binding.markAttendanceButton.isShown) binding.markAttendanceButton.hide()
+                if (binding.qrAttendanceButton?.isShown == true) binding.qrAttendanceButton?.hide()
+            } else if (scrollY < oldScrollY) {
+                if (!binding.markAttendanceButton.isShown) binding.markAttendanceButton.show()
+                if (!isOffline && binding.qrAttendanceButton?.isShown == false) binding.qrAttendanceButton?.show()
             }
         }
     }
@@ -2433,6 +2464,44 @@ class SubjectDetailFragment : Fragment() {
             LocalDate.parse(dateString, inputFormatter).format(outputFormatter)
         } catch (e: Exception) {
             dateString // fallback to original if parse fails
+        }
+    }
+
+    private fun styleSnackbar(snackbar: Snackbar) {
+        val context = snackbar.view.context
+        val typedValue = android.util.TypedValue()
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceContainerLow, typedValue, true)
+        val bgColor = typedValue.data
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorOutlineVariant, typedValue, true)
+        val strokeColor = typedValue.data
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, typedValue, true)
+        val textColor = typedValue.data
+
+        context.theme.resolveAttribute(androidx.appcompat.R.attr.colorPrimary, typedValue, true)
+        val actionColor = typedValue.data
+
+        val radius = (16 * context.resources.displayMetrics.density)
+        val strokeWidth = (1 * context.resources.displayMetrics.density).toInt()
+
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(bgColor)
+            cornerRadius = radius
+            setStroke(strokeWidth, strokeColor)
+        }
+
+        snackbar.view.background = bg
+        snackbar.view.backgroundTintList = null
+        snackbar.setTextColor(textColor)
+        snackbar.setActionTextColor(actionColor)
+
+        val params = snackbar.view.layoutParams
+        if (params is android.view.ViewGroup.MarginLayoutParams) {
+            val margin = (12 * context.resources.displayMetrics.density).toInt()
+            params.setMargins(margin, margin, margin, margin)
+            snackbar.view.layoutParams = params
         }
     }
 }

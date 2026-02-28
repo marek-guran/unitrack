@@ -203,6 +203,27 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Vyhľadávanie a filtrovanie študentov
 - Podpora online aj offline režimu
 
+### QrAttendanceActivity
+**Účel:** QR kód dochádzka — strana učiteľa.
+
+- Generovanie rotujúceho QR kódu (nový kód po každom úspešnom skene)
+- Zobrazenie QR kódu na obrazovke (512×512 px bitmap cez ZXing QRCodeWriter)
+- Monitorovanie skenov v reálnom čase cez Firebase listenery (`qr_last_scan`, `qr_fail`)
+- Log skenov s filtrovaním (Všetci / Prítomní / Chyby)
+- Relatívne zobrazenie času skenov (Teraz, 30s, 5 min...)
+- Po ukončení relácie uloženie dochádzky a vyčistenie dočasných Firebase uzlov
+- Obrazovka zostáva zapnutá počas relácie (wake lock)
+
+### QrScannerActivity
+**Účel:** QR kód skener — strana študenta.
+
+- Skenovanie QR kódu fotoaparátom cez ZXing `DecoratedBarcodeView`
+- Validácia formátu QR kódu (`UNITRACK|{rok}|{semester}|{predmet}|{kód}`)
+- Overenie zápisu študenta v predmete
+- Atomické overenie kódu cez Firebase transakciu (ochrana pred replay útokmi)
+- Zápis do `qr_last_scan` s UID prihláseného používateľa
+- Vizuálna spätná väzba (úspech/chyba) s animáciou
+
 ---
 
 ## RecyclerView adaptéry

@@ -34,6 +34,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 - **Evidencia známok** — pridávanie, úprava a mazanie hodnotení (A až Fx) s názvom, popisom a váhou
 - **Hromadné hodnotenie (Bulk Grading)** — zadávanie známok viacerým študentom naraz s výberom známky cez chip komponenty, spoločným dátumom a voliteľnými poznámkami pre každého študenta
 - **Sledovanie dochádzky** — zaznamenávanie prítomnosti/neprítomnosti študentov podľa dátumu
+- **QR kód dochádzka** — učiteľ zobrazí rotujúci QR kód, študenti ho naskenujú fotoaparátom a dochádzka sa zaznamená automaticky v reálnom čase
 - **Správa rozvrhu** — týždenný rozvrh s filtrami (párny/nepárny týždeň, dnes), podpora voľných dní
 - **Správa predmetov** — vytváranie, editácia a priradenie predmetov k semestrom (zimný/letný/obidva)
 - **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent)
@@ -65,6 +66,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 | UI efekty | Vlastný PillNavigationBar s glass-morphism efektom, magnifikáciou a tieňmi |
 | Animácie | Programatické animácie (ValueAnimator, circular reveal, fade, slide-up) |
 | Rozvrh | ViewPager2 s DayChipAdapter, ScheduleAdapter a stavovými kartami hodín |
+| QR kódy | ZXing (generovanie a skenovanie QR kódov pre dochádzku) |
 | Build systém | Gradle (Kotlin DSL) s Version Catalog |
 
 ---
@@ -99,6 +101,8 @@ UniTrack/
 │       │   │   └── OfflineMode.kt      # Prepínanie online/offline
 │       │   ├── notification/           # Notifikácie (rozvrh, známky, zrušené hodiny, neprítomnosť)
 │       │   ├── BulkGradeActivity.kt    # Hromadné zadávanie známok viacerým študentom
+│       │   ├── QrAttendanceActivity.kt # QR kód dochádzka (strana učiteľa — generovanie a monitorovanie)
+│       │   ├── QrScannerActivity.kt    # QR kód skener (strana študenta — skenovanie a overenie)
 │       │   ├── SplashActivity.kt       # Animovaná splash obrazovka (slide-up + fade)
 │       │   ├── MainActivity.kt         # Hlavná aktivita s navigáciou a paint-drop animáciou
 │       │   └── UniTrackApplication.kt  # Application trieda (inicializácia tmavého režimu + App Check)
@@ -200,7 +204,11 @@ Vstupná obrazovka s emailom a heslom. Prihlásenie prebieha cez Firebase Auth. 
 
 Hlavná obrazovka po prihlásení. Učitelia a admini vidia prehľad svojich predmetov — počet študentov, priemerné hodnotenie a dochádzku. Študenti vidia svoje zapísané predmety a známky. Filtrovanie podľa akademického roka a semestra.
 
-Po kliknutí na predmet sa otvorí **detail predmetu** s ViewPager2 rozložením — tri záložky pre známky, dochádzku a zoznam študentov. Z detailu je možné spustiť aj **hromadné hodnotenie** pre rýchle zadanie známok celej skupine.
+Po kliknutí na predmet sa otvorí **detail predmetu** s ViewPager2 rozložením — tri záložky pre známky, dochádzku a zoznam študentov. Z detailu je možné spustiť aj **hromadné hodnotenie** pre rýchle zadanie známok celej skupine alebo **QR kód dochádzku** pre automatické zaznamenanie prítomnosti.
+
+### 📷 QR kód dochádzka
+
+Učiteľ môže spustiť QR kód dochádzku z detailu predmetu. Aplikácia vygeneruje rotujúci QR kód, ktorý sa zobrazí na obrazovke učiteľa. Študenti naskenujú QR kód svojím zariadením a dochádzka sa automaticky zaznamená. Učiteľ vidí v reálnom čase, kto sa prihlásil, a po ukončení sa výsledky uložia do databázy.
 
 ### 📝 Hromadné hodnotenie (Bulk Grading)
 
@@ -352,6 +360,9 @@ Aplikácia vyžaduje tieto Android oprávnenia:
 - `POST_PROMOTED_NOTIFICATIONS` — rozšírené notifikácie (Live Update na Android 16)
 - `FOREGROUND_SERVICE` — beh notifikačnej služby na pozadí
 - `RECEIVE_BOOT_COMPLETED` — plánovanie notifikácií po reštarte zariadenia
+- `SCHEDULE_EXACT_ALARM` — plánovanie presných alarmov pre notifikácie
+- `USE_EXACT_ALARM` — používanie presných alarmov
+- `CAMERA` — prístup k fotoaparátu pre skenovanie QR kódov (dochádzka)
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — výnimka z optimalizácie batérie pre spoľahlivé doručovanie notifikácií
 
 ---
@@ -364,6 +375,7 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 |---|---|
 | [Architektúra aplikácie](docs/ARCHITEKTURA.md) | Celková architektúra, MVVM vzor, priebeh dát medzi vrstvami, životný cyklus komponentov, SplashActivity |
 | [Databáza a dátová vrstva](docs/DATABAZA.md) | Firebase Realtime Database cesty, lokálna JSON databáza, dátové modely, convenience metódy, migrácia semestrov |
+| [Dochádzka a QR kódy](docs/DOCHADZKA.md) | Manuálna dochádzka, QR kód dochádzka (učiteľ/študent), formát QR kódu, Firebase pravidlá, bezpečnosť |
 | [Migrácia databázy](docs/MIGRACIA.md) | Typy migrácií, kedy a prečo sa spúšťajú, ako fungujú pre online aj offline režim, bezpečnosť dát pri migrácii |
 | [Navigácia a UI komponenty](docs/NAVIGACIA.md) | Navigation Component, PillNavigationBar, role-based navigácia, fragmenty a adaptéry |
 | [Rozvrh hodín](docs/ROZVRH.md) | ViewPager2 navigácia, stavové karty (PAST/CURRENT/NEXT/FUTURE), živý progress bar, chip navigátor, voľné dni, filtrovanie parity |
@@ -378,8 +390,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.0.1
-- **Kód verzie (Google):** 32
+- **Verzia aplikácie:** 3.1.0
+- **Kód verzie (Google):** 33
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:name=".UniTrackApplication"
@@ -41,6 +42,14 @@
             android:configChanges="orientation|screenSize|screenLayout" />
         <activity
             android:name=".BulkGradeActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".QrAttendanceActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".QrScannerActivity"
             android:exported="false"
             android:theme="@style/Theme.UniTrack" />
 

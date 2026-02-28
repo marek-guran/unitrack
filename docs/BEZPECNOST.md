@@ -197,6 +197,18 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
         "$semester": {
           "$subjectKey": {
             ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+            "qr_code": {
+              ".read": "auth != null",
+              ".write": "auth != null && !newData.exists()"
+            },
+            "qr_last_scan": {
+              ".write": "auth != null",
+              ".validate": "newData.hasChildren(['uid', 'name', 'time']) && newData.child('uid').val() === auth.uid"
+            },
+            "qr_fail": {
+              ".write": "auth != null",
+              ".validate": "newData.hasChildren(['name', 'reason', 'time'])"
+            },
             "$studentUid": {
               ".read": "auth != null && $studentUid === auth.uid"
             }
@@ -231,7 +243,10 @@ Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní 
 - **students** — Čítať údaje o študentoch môže každý prihlásený používateľ (potrebné pre rozvrh a zobrazenie zapísaných predmetov). Zapisovať môžu len admini a učitelia.
 - **predmety** — Čítať môže každý prihlásený používateľ. Celé predmety (vytvorenie, mazanie, zmena štruktúry) môžu zapisovať len admini. Učitelia majú povolený zápis výlučne do polí `classroom` a `note` existujúcich rozvrhových záznamov (`timetable/$entryKey/classroom` a `timetable/$entryKey/note`), a to len ak daný záznam už existuje (`data.parent().exists()`). Nemôžu vytvárať ani mazať rozvrhové záznamy.
 - **hodnotenia** — Čítanie známok je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre zobrazenie známok všetkých študentov v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastné známky (`$studentUid === auth.uid`). Žiaden študent nemôže čítať známky iného študenta. Zapisovať môžu len admini a učitelia.
-- **pritomnost** — Čítanie dochádzky je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre správu dochádzky v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastnú dochádzku (`$studentUid === auth.uid`). Žiaden študent nemôže čítať dochádzku iného študenta. Zapisovať môžu len admini a učitelia.
+- **pritomnost** — Čítanie dochádzky je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre správu dochádzky v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastnú dochádzku (`$studentUid === auth.uid`). Žiaden študent nemôže čítať dochádzku iného študenta. Zapisovať môžu len admini a učitelia. Špeciálne uzly pre QR kód dochádzku majú vlastné pravidlá:
+  - **`qr_code`** — čítať môže každý prihlásený používateľ (študent potrebuje vidieť aktívny kód na overenie). Zapisovať môže každý prihlásený používateľ, ale len na mazanie (`!newData.exists()`) — tým sa zabezpečí, že študent po úspešnom skene „spotrebuje" kód a vymaže ho, čo spustí generovanie nového kódu na strane učiteľa.
+  - **`qr_last_scan`** — zapisovať môže každý prihlásený používateľ, ale validácia vynucuje, že záznam musí obsahovať `uid`, `name` a `time`, a UID musí zodpovedať prihlásenému používateľovi (`newData.child('uid').val() === auth.uid`). Študent tak nemôže zaznamenať dochádzku za niekoho iného.
+  - **`qr_fail`** — zapisovať môže každý prihlásený používateľ, validácia vynucuje prítomnosť polí `name`, `reason` a `time`.
 - **school_years** — Čítať môže každý prihlásený používateľ. Vytvárať a upravovať školské roky môžu len admini.
 - **days_off** — Čítať môže každý prihlásený používateľ. Zapisovať voľné dni môže učiteľ len pre seba (`$teacherUid === auth.uid`), alebo admin pre kohokoľvek.
 
@@ -259,9 +274,12 @@ UniTrack vyžaduje minimálnu sadu Android oprávnení:
 | `POST_PROMOTED_NOTIFICATIONS` | Normálne | Live Update notifikácie (Android 16) | Nízke |
 | `FOREGROUND_SERVICE` | Normálne | Beh notifikačnej služby na pozadí | Nízke |
 | `RECEIVE_BOOT_COMPLETED` | Normálne | Plánovanie alarmov po reštarte | Nízke |
+| `SCHEDULE_EXACT_ALARM` | Normálne | Plánovanie presných alarmov pre notifikácie | Nízke |
+| `USE_EXACT_ALARM` | Normálne | Používanie presných alarmov | Nízke |
+| `CAMERA` | Runtime | Skenovanie QR kódov pre dochádzku | Nízke — len na čítanie QR kódov |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Špeciálne | Výnimka z optimalizácie batérie | Stredné — zvýšená spotreba batérie |
 
-Aplikácia **nevyžaduje** prístup ku kontaktom, fotoaparátu, mikrofónu, polohe ani iným citlivým zdrojom.
+Aplikácia **nevyžaduje** prístup ku kontaktom, mikrofónu, polohe ani iným citlivým zdrojom. Fotoaparát sa používa výhradne na skenovanie QR kódov.
 
 ---
 

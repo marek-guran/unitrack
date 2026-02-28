@@ -220,6 +220,8 @@ Každý typ notifikácií (živá aktualizácia aj kontrola zmien) sa dá indivi
 | `POST_PROMOTED_NOTIFICATIONS` | Rozšírené Live Update notifikácie (Android 16) |
 | `FOREGROUND_SERVICE` | Beh notifikačnej služby na pozadí |
 | `RECEIVE_BOOT_COMPLETED` | Plánovanie alarmov po reštarte |
+| `SCHEDULE_EXACT_ALARM` | Plánovanie presných alarmov pre notifikácie |
+| `USE_EXACT_ALARM` | Používanie presných alarmov |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Výnimka z optimalizácie batérie pre spoľahlivé doručovanie |
 
 Pri Android 13+ sa oprávnenie `POST_NOTIFICATIONS` vyžiada runtime dialógom v `MainActivity`. V nastaveniach je k dispozícii tlačidlo na vypnutie optimalizácie batérie, čo zabraňuje systému obmedziť doručovanie notifikácií.

@@ -37,6 +37,7 @@ import com.marekguran.unitrack.databinding.FragmentHomeBinding
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.ui.login.LoginActivity
+import com.marekguran.unitrack.QrScannerActivity
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import org.json.JSONObject
 import android.text.Editable
@@ -163,8 +164,14 @@ class HomeFragment : Fragment() {
         binding.subjectRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (!exportFabEnabled) return
-                if (dy > 0 && binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.hide()
-                else if (dy < 0 && !binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.show()
+                if (dy > 0) {
+                    if (binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.hide()
+                    if (binding.qrScannerBtn?.isShown == true) binding.qrScannerBtn?.hide()
+                } else if (dy < 0) {
+                    if (!binding.exportStudentResultsBtn.isShown) binding.exportStudentResultsBtn.show()
+                    val shouldShowScanner = !isOffline && binding.qrScannerBtn?.visibility == View.VISIBLE
+                    if (shouldShowScanner && binding.qrScannerBtn?.isShown == false) binding.qrScannerBtn?.show()
+                }
             }
         })
 
@@ -1069,6 +1076,15 @@ class HomeFragment : Fragment() {
                                         binding.exportStudentResultsBtn.setOnClickListener {
                                             exportStudentResults(studentName, year, semester, tempSubjects)
                                         }
+
+                                        // Show QR scanner FAB for students (online only)
+                                        if (!isOffline) {
+                                            binding.qrScannerBtn?.visibility = View.VISIBLE
+                                            binding.qrScannerBtn?.setOnClickListener {
+                                                val intent = android.content.Intent(requireContext(), QrScannerActivity::class.java)
+                                                startActivity(intent)
+                                            }
+                                        }
                                     }
                                 }
                         }
@@ -1082,6 +1098,7 @@ class HomeFragment : Fragment() {
         val year = selectedSchoolYear
         val semester = selectedSemester
         binding.exportStudentResultsBtn.visibility = View.GONE
+        binding.qrScannerBtn?.visibility = View.GONE
         exportFabEnabled = false
 
         db.child("teachers").child(teacherUid).get().addOnSuccessListener { teacherSnap ->
@@ -1172,6 +1189,8 @@ class HomeFragment : Fragment() {
                             var totalPresent = 0
                             var totalEntries = 0
                             attSnap.children.forEach { studentSnap ->
+                                val key = studentSnap.key ?: return@forEach
+                                if (key == "qr_code" || key == "qr_last_scan" || key == "qr_fail") return@forEach
                                 studentSnap.children.forEach { dateSnap ->
                                     val entry = dateSnap.getValue(AttendanceEntry::class.java)
                                     if (entry != null) {
@@ -1203,6 +1222,7 @@ class HomeFragment : Fragment() {
     private fun showSubjectMenuOffline() {
         subjectSummaries.clear()
         binding.exportStudentResultsBtn.visibility = View.GONE
+        binding.qrScannerBtn?.visibility = View.GONE
         exportFabEnabled = false
         val year = selectedSchoolYear
         val semester = selectedSemester
@@ -1764,8 +1784,8 @@ class HomeFragment : Fragment() {
         if (isOffline) {
             localDb.removeAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, entryKey)
             openSubjectDetail(subject, sanitized)
-            Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
-                .setAction("Undo") {
+            Snackbar.make(view, "Dochádzka vymazaná", Snackbar.LENGTH_LONG)
+                .setAction("Späť") {
                     val entryJson = JSONObject()
                     entryJson.put("date", entry.date)
                     entryJson.put("time", entry.time)
@@ -1773,7 +1793,7 @@ class HomeFragment : Fragment() {
                     entryJson.put("absent", entry.absent)
                     localDb.setAttendance(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, entryKey, entryJson)
                     openSubjectDetail(subject, sanitized)
-                }.show()
+                }.also { styleSnackbar(it) }.show()
         } else {
             val ref = db.child("pritomnost")
                 .child(selectedSchoolYear)
@@ -1783,10 +1803,10 @@ class HomeFragment : Fragment() {
                 .child(entryKey)
             ref.removeValue { _, _ ->
                 openSubjectDetail(subject, sanitized)
-                Snackbar.make(view, "Attendance deleted", Snackbar.LENGTH_LONG)
-                    .setAction("Undo") {
+                Snackbar.make(view, "Dochádzka vymazaná", Snackbar.LENGTH_LONG)
+                    .setAction("Späť") {
                         ref.setValue(entry) { _, _ -> openSubjectDetail(subject, sanitized) }
-                    }.show()
+                    }.also { styleSnackbar(it) }.show()
             }
         }
     }
@@ -2079,6 +2099,44 @@ class HomeFragment : Fragment() {
         val typedValue = android.util.TypedValue()
         context.theme.resolveAttribute(attr, typedValue, true)
         return typedValue.data
+    }
+
+    private fun styleSnackbar(snackbar: Snackbar) {
+        val context = snackbar.view.context
+        val typedValue = android.util.TypedValue()
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorSurfaceContainerLow, typedValue, true)
+        val bgColor = typedValue.data
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorOutlineVariant, typedValue, true)
+        val strokeColor = typedValue.data
+
+        context.theme.resolveAttribute(com.google.android.material.R.attr.colorOnSurface, typedValue, true)
+        val textColor = typedValue.data
+
+        context.theme.resolveAttribute(androidx.appcompat.R.attr.colorPrimary, typedValue, true)
+        val actionColor = typedValue.data
+
+        val radius = (16 * context.resources.displayMetrics.density)
+        val strokeWidth = (1 * context.resources.displayMetrics.density).toInt()
+
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(bgColor)
+            cornerRadius = radius
+            setStroke(strokeWidth, strokeColor)
+        }
+
+        snackbar.view.background = bg
+        snackbar.view.backgroundTintList = null
+        snackbar.setTextColor(textColor)
+        snackbar.setActionTextColor(actionColor)
+
+        val params = snackbar.view.layoutParams
+        if (params is android.view.ViewGroup.MarginLayoutParams) {
+            val margin = (12 * context.resources.displayMetrics.density).toInt()
+            params.setMargins(margin, margin, margin, margin)
+            snackbar.view.layoutParams = params
+        }
     }
 
     private fun exportStudentResults(studentName: String, year: String, semester: String, subjectsList: List<SubjectInfo>) {

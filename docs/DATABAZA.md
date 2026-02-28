@@ -80,6 +80,15 @@ root/
 │   └── {yearKey}/
 │       └── {semester}/
 │           └── {subjectKey}/
+│               ├── qr_code: "abc123..."     # Aktívny QR kód (dočasný, počas relácie)
+│               ├── qr_last_scan/            # Posledný úspešný sken
+│               │   ├── uid: "{studentUid}"
+│               │   ├── name: "Ján Novák"
+│               │   └── time: 1708700000000  # ServerValue.TIMESTAMP
+│               ├── qr_fail/                 # Posledný neúspešný pokus
+│               │   ├── name: "Ján Novák"
+│               │   ├── reason: "Študent nie je zapísaný"
+│               │   └── time: 1708700000000
 │               └── {studentUid}/
 │                   └── {date}/              # napr. "23.02.2026"
 │                       ├── time: "08:00"
@@ -104,6 +113,9 @@ root/
 - **`predmety`** = predmety (subjects)
 - **`hodnotenia`** = hodnotenia/známky (grades/marks)
 - **`pritomnost`** = prítomnosť/dochádzka (attendance)
+- **`qr_code`** = aktívny QR kód pre dochádzku (dočasný, existuje len počas relácie)
+- **`qr_last_scan`** = posledný úspešný sken študenta (používa sa na monitorovanie v reálnom čase)
+- **`qr_fail`** = posledný neúspešný pokus o sken (nezapísaný študent, neplatný kód)
 - **`days_off`** = voľné dni (days off)
 - **`school_years`** = školské roky
 

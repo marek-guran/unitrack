@@ -148,6 +148,23 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/qrAttendanceButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="90dp"
+        android:layout_marginBottom="100dp"
+        android:contentDescription="QR prezenčka"
+        android:src="@drawable/ic_qr_code"
+        android:visibility="gone"
+        app:fabSize="normal"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.UniTrack.SmallComponent"
+        app:backgroundTint="?attr/colorTertiary"
+        app:tint="?attr/colorOnTertiary"
+        app:elevation="2dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/bulkGradeButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
