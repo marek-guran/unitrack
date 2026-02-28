@@ -86,6 +86,8 @@ com.marekguran.unitrack/
 ├── MainActivity.kt              # Vstupný bod po splashi, navigácia, internet check
 ├── UniTrackApplication.kt       # Application trieda (inicializácia témy + App Check)
 ├── BulkGradeActivity.kt         # Hromadné zadávanie známok (expand/collapse animácie)
+├── QrAttendanceActivity.kt      # QR kód dochádzka — strana učiteľa (generovanie, monitorovanie)
+├── QrScannerActivity.kt         # QR kód skener — strana študenta (skenovanie, overenie)
 ├── SubjectDetailFragment.kt     # Detail predmetu (ViewPager2 — známky, dochádzka, študenti)
 ├── data/                        # Dátová vrstva
 │   ├── LocalDatabase.kt         # Offline JSON databáza s convenience a migračnými metódami
@@ -157,6 +159,8 @@ Projekt používa **Gradle Kotlin DSL** s **Version Catalog** (`gradle/libs.vers
 | `firebase-database` | Firebase Realtime Database |
 | `firebase-auth` | Firebase Authentication |
 | `firebase-appcheck` | Firebase App Check (Play Integrity + Debug provider) |
+| `zxing-core` | Generovanie QR kódov (knižnica pre čiarové a QR kódy) |
+| `zxing-android-embedded` | Skenovanie QR kódov fotoaparátom (JourneyApps wrapper) |
 | `blurview` | BlurView pre glass-morphism efekty (PillNavigationBar) |
 
 
