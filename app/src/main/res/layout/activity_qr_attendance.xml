@@ -134,19 +134,21 @@
             android:layout_weight="1"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
+            android:paddingBottom="72dp"
             android:clipToPadding="false" />
 
-        <!-- End attendance button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnEndAttendance"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="100dp"
-            android:text="Ukončiť prezenčku"
-            app:cornerRadius="24dp" />
-
     </LinearLayout>
+
+    <!-- End attendance button pinned to bottom -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnEndAttendance"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:text="Ukončiť prezenčku"
+        app:cornerRadius="24dp" />
 
     <!-- Confirmation overlay (shown briefly when student scans) -->
     <FrameLayout

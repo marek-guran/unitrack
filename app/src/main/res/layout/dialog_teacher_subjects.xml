@@ -29,16 +29,23 @@
             android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="16dp" />
 
-        <EditText
-            android:id="@+id/searchSubjectEditText"
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Hľadať predmet..."
-            android:textColor="?attr/colorOnSurface"
-            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-            android:inputType="text"
-            android:drawableStart="@android:drawable/ic_menu_search"
-            android:padding="12dp" />
+            android:layout_marginBottom="8dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusBottomEnd="12dp">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/searchSubjectEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Hľadať predmet..."
+                android:inputType="text"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/subjectsRecyclerView"

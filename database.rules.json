@@ -22,7 +22,13 @@
 
     "students": {
       ".read": "auth != null",
-      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$uid": {
+        "consultation_timetable": {
+          ".read": "auth != null && $uid === auth.uid",
+          ".write": "auth != null && $uid === auth.uid"
+        }
+      }
     },
 
     "predmety": {
@@ -84,7 +90,14 @@
 
     "school_years": {
       ".read": "auth != null",
-      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$yearKey": {
+        "predmety": {
+          "$subjectKey": {
+            ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+          }
+        }
+      }
     },
 
     "days_off": {
@@ -92,6 +105,28 @@
       "$teacherUid": {
         ".write": "auth != null && ($teacherUid === auth.uid || root.child('admins').child(auth.uid).exists())"
       }
+    },
+
+    "consultation_bookings": {
+      ".read": "auth != null",
+      "$subjectKey": {
+        ".write": "auth != null",
+        "$bookingKey": {
+          ".write": "auth != null && (!data.exists() || data.child('studentUid').val() === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+        }
+      }
+    },
+
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null"
+      }
+    },
+
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
     }
   }
 }

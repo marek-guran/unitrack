@@ -9,5 +9,8 @@ data class TimetableEntry(
     val classroom: String = "",     // e.g. "A402"
     val note: String = "",          // optional note
     val subjectKey: String = "",
-    val subjectName: String = ""
+    val subjectName: String = "",
+    val specificDate: String = "",  // optional: "15.03.2026" for one-time events (DD.MM.YYYY)
+    val specificDates: String = "", // optional: comma-separated dates "15.03.2026,22.03.2026" for multi-date events
+    val isConsultingHours: Boolean = false // teacher consulting hours entry
 )

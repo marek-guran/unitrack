@@ -26,7 +26,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
+import com.google.android.material.datepicker.MaterialDatePicker
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import com.marekguran.unitrack.R
@@ -42,6 +45,8 @@ import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import org.json.JSONObject
 import android.text.Editable
 import android.text.TextWatcher
+import androidx.activity.result.contract.ActivityResultContracts
+import com.marekguran.unitrack.NewSemesterActivity
 import java.text.Collator
 import java.time.LocalDate
 import java.time.LocalTime
@@ -95,6 +100,18 @@ class HomeFragment : Fragment() {
     private var exportFabEnabled: Boolean = false
 
     private lateinit var prefs: SharedPreferences
+
+    private val newSemesterLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val yearKey = result.data?.getStringExtra(NewSemesterActivity.RESULT_YEAR_KEY)
+            if (yearKey != null) {
+                selectedSchoolYear = yearKey
+                prefs.edit().putString("school_year", selectedSchoolYear).apply()
+            }
+            if (isOffline) loadSchoolYearsOffline()
+            else loadSchoolYearsWithNames { keys, names -> setupSpinners(keys, names) }
+        }
+    }
 
     private fun formatSchoolYear(key: String, schoolYearNames: Map<String, String>): String {
         return schoolYearNames[key] ?: key.replace("_", "/")
@@ -279,7 +296,7 @@ class HomeFragment : Fragment() {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 val selectedKey = allYearKeys[position]
                 if (selectedKey == NEW_SEMESTER_MARKER) {
-                    showNewSemesterDialog()
+                    launchNewSemesterActivity()
                     // Reset spinner to previous selection
                     val prevIndex = allYearKeys.indexOf(selectedSchoolYear).let { if (it == -1) defaultYearIndex else it }
                     binding.schoolYearSpinner.setSelection(prevIndex)
@@ -303,155 +320,19 @@ class HomeFragment : Fragment() {
         reloadData()
     }
 
-    private fun showNewSemesterDialog() {
-        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_new_semester, null)
-        val inputYear = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.inputYear)
-        val yearPreview = dialogView.findViewById<TextView>(R.id.yearPreview)
-        val copyFromSpinner = dialogView.findViewById<Spinner>(R.id.copyFromSpinner)
-        val confirmBtn = dialogView.findViewById<MaterialButton>(R.id.confirmButton)
-        val cancelBtn = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
-
-        // Build copy-from options
-        val copyOptions = mutableListOf(getString(R.string.new_semester_no_copy))
-        val copyYearKeys = mutableListOf("")
-        if (isOffline) {
-            val existingYears = localDb.getSchoolYears()
-            for ((key, name) in existingYears.entries.sortedByDescending { it.key }) {
-                copyOptions.add(name)
-                copyYearKeys.add(key)
-            }
-            copyFromSpinner.adapter = ArrayAdapter(
-                requireContext(), R.layout.spinner_item, copyOptions
-            ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
-        } else {
-            copyFromSpinner.adapter = ArrayAdapter(
-                requireContext(), R.layout.spinner_item, copyOptions
-            ).also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
-            db.child("school_years").get().addOnSuccessListener { snap ->
-                snap.children.sortedByDescending { it.key }.forEach { yearSnap ->
-                    val key = yearSnap.key ?: return@forEach
-                    val name = yearSnap.child("name").getValue(String::class.java) ?: key.replace("_", "/")
-                    copyOptions.add(name)
-                    copyYearKeys.add(key)
-                }
-                (copyFromSpinner.adapter as? ArrayAdapter<*>)?.notifyDataSetChanged()
-            }
-        }
-
-        // Auto-preview year as user types
-        inputYear.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                val yearStr = s?.toString()?.trim() ?: ""
-                val year = yearStr.toIntOrNull()
-                if (year != null && year in 2000..2099) {
-                    val displayName = "$year/${year + 1}"
-                    yearPreview.text = getString(R.string.new_semester_preview, displayName)
-                    yearPreview.visibility = View.VISIBLE
-                } else {
-                    yearPreview.visibility = View.GONE
-                }
-            }
-        })
-
-        val dialog = Dialog(requireContext())
-        dialog.setContentView(dialogView)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
-        dialog.show()
-
-        cancelBtn.setOnClickListener { dialog.dismiss() }
-        confirmBtn.setOnClickListener {
-            val yearStr = inputYear.text.toString().trim()
-            val year = yearStr.toIntOrNull()
-            if (year == null || year !in 2000..2099) {
-                Toast.makeText(requireContext(), getString(R.string.new_semester_invalid_year), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            val key = "${year}_${year + 1}"
-            val displayName = "$year/${year + 1}"
-            val copyIndex = copyFromSpinner.selectedItemPosition
-
-            // Check if already exists
-            if (isOffline) {
-                if (localDb.getSchoolYears().containsKey(key)) {
-                    Toast.makeText(requireContext(), getString(R.string.new_semester_exists), Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                localDb.addSchoolYear(key, displayName)
-
-                if (copyIndex > 0) {
-                    val sourceYearKey = copyYearKeys[copyIndex]
-                    copySubjectsFromYear(sourceYearKey, key)
-                }
-
-                Toast.makeText(requireContext(), getString(R.string.new_semester_added, displayName), Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
-
-                // Select the new year and reload
-                selectedSchoolYear = key
-                prefs.edit().putString("school_year", selectedSchoolYear).apply()
-                loadSchoolYearsOffline()
-            } else {
-                db.child("school_years").child(key).get().addOnSuccessListener { snap ->
-                    if (snap.exists()) {
-                        Toast.makeText(requireContext(), getString(R.string.new_semester_exists), Toast.LENGTH_SHORT).show()
-                        return@addOnSuccessListener
-                    }
-                    val yearObj = mutableMapOf<String, Any>("name" to displayName)
-
-                    if (copyIndex > 0) {
-                        val sourceYearKey = copyYearKeys[copyIndex]
-                        db.child("school_years").child(sourceYearKey).child("predmety").get()
-                            .addOnSuccessListener { sourceSnap ->
-                                if (sourceSnap.exists()) {
-                                    yearObj["predmety"] = sourceSnap.value as Any
-                                } else {
-                                    yearObj["predmety"] = emptyMap<String, Any>()
-                                }
-                                db.child("school_years").child(key).setValue(yearObj).addOnSuccessListener {
-                                    Toast.makeText(requireContext(), getString(R.string.new_semester_added, displayName), Toast.LENGTH_SHORT).show()
-                                    dialog.dismiss()
-                                    selectedSchoolYear = key
-                                    prefs.edit().putString("school_year", selectedSchoolYear).apply()
-                                    loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
-                                        setupSpinners(schoolYearKeys, schoolYearNames)
-                                    }
-                                }
-                            }
-                    } else {
-                        yearObj["predmety"] = emptyMap<String, Any>()
-                        db.child("school_years").child(key).setValue(yearObj).addOnSuccessListener {
-                            Toast.makeText(requireContext(), getString(R.string.new_semester_added, displayName), Toast.LENGTH_SHORT).show()
-                            dialog.dismiss()
-                            selectedSchoolYear = key
-                            prefs.edit().putString("school_year", selectedSchoolYear).apply()
-                            loadSchoolYearsWithNames { schoolYearKeys, schoolYearNames ->
-                                setupSpinners(schoolYearKeys, schoolYearNames)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun copySubjectsFromYear(sourceYearKey: String, targetYearKey: String) {
-        val sourceSubjects = localDb.getJson("school_years/$sourceYearKey/predmety")
-        if (sourceSubjects != null) {
-            for (subjectKey in sourceSubjects.keys()) {
-                val subjectObj = sourceSubjects.optJSONObject(subjectKey) ?: continue
-                localDb.put("school_years/$targetYearKey/predmety/$subjectKey", JSONObject(subjectObj.toString()))
-            }
-        }
+    private fun launchNewSemesterActivity() {
+        val intent = Intent(requireContext(), NewSemesterActivity::class.java)
+        intent.putExtra(NewSemesterActivity.EXTRA_MODE, NewSemesterActivity.MODE_CREATE)
+        newSemesterLauncher.launch(intent)
     }
 
     private fun checkDatabaseMigrationNeeded() {
         if (isOffline) {
             if (localDb.hasLegacyGlobalSubjects() || localDb.hasLegacyPerYearStudents()) {
                 showAdminMigrationPrompt()
+            } else if (localDb.hasStudentsMissingSchoolYears()) {
+                // Silent migration for school_years field
+                localDb.migrateStudentSchoolYears()
             }
             return
         }
@@ -469,6 +350,27 @@ class HomeFragment : Fragment() {
                 val firstKey = studentsSnap.children.firstOrNull()?.key ?: return@addOnSuccessListener
                 if (firstKey.matches(LocalDatabase.YEAR_KEY_PATTERN)) {
                     if (isAdminUser) showAdminMigrationPrompt() else redirectToUnavailableScreen()
+                } else {
+                    // Silent migration: populate school_years if missing
+                    val firstStudent = studentsSnap.children.firstOrNull()
+                    if (firstStudent != null && !firstStudent.hasChild("school_years")) {
+                        db.child("students").get().addOnSuccessListener { allStudents ->
+                            if (!isAdded) return@addOnSuccessListener
+                            val updates = mutableMapOf<String, Any>()
+                            for (snap in allStudents.children) {
+                                val uid = snap.key ?: continue
+                                if (snap.hasChild("school_years")) continue
+                                val yearKeys = mutableListOf<String>()
+                                for (yearSnap in snap.child("subjects").children) {
+                                    yearSnap.key?.let { yearKeys.add(it) }
+                                }
+                                updates["students/$uid/school_years"] = yearKeys
+                            }
+                            if (updates.isNotEmpty()) {
+                                db.updateChildren(updates)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -544,6 +446,7 @@ class HomeFragment : Fragment() {
         val hadLegacy = localDb.hasLegacyGlobalSubjects()
         localDb.migrateGlobalSubjectsToYears()
         localDb.migrateStudentsToGlobal()
+        localDb.migrateStudentSchoolYears()
         val migratedCount = if (hadLegacy) localDb.getSchoolYears().size else 0
         if (!isAdded) return
         Toast.makeText(requireContext(), "Migrácia dokončená.", Toast.LENGTH_LONG).show()
@@ -554,12 +457,32 @@ class HomeFragment : Fragment() {
         if (!isAdded) return
         Toast.makeText(requireContext(), "Migrácia prebieha...", Toast.LENGTH_SHORT).show()
 
+        fun migrateStudentSchoolYearsOnline(studentsSnap: DataSnapshot, onDone: () -> Unit) {
+            val updates = mutableMapOf<String, Any>()
+            for (studentSnap in studentsSnap.children) {
+                val uid = studentSnap.key ?: continue
+                if (studentSnap.hasChild("school_years")) continue
+                val subjectsSnap = studentSnap.child("subjects")
+                val yearKeys = mutableListOf<String>()
+                for (yearSnap in subjectsSnap.children) {
+                    yearSnap.key?.let { yearKeys.add(it) }
+                }
+                updates["students/$uid/school_years"] = yearKeys
+            }
+            if (updates.isEmpty()) {
+                onDone()
+                return
+            }
+            db.updateChildren(updates).addOnSuccessListener { onDone() }.addOnFailureListener { onDone() }
+        }
+
         fun migrateStudentsOnline(onDone: () -> Unit) {
             db.child("students").get().addOnSuccessListener { studentsSnap ->
                 if (!isAdded) return@addOnSuccessListener
                 val firstKey = studentsSnap.children.firstOrNull()?.key
                 if (firstKey == null || !firstKey.matches(LocalDatabase.YEAR_KEY_PATTERN)) {
-                    onDone()
+                    // Not legacy per-year format – still populate school_years if missing
+                    migrateStudentSchoolYearsOnline(studentsSnap, onDone)
                     return@addOnSuccessListener
                 }
                 // Old format detected: students/{year}/{uid} → students/{uid}
@@ -584,6 +507,10 @@ class HomeFragment : Fragment() {
                             }
                             allSubjects[yearKey] = yearSubjects
                         }
+                        // Track school_years
+                        @Suppress("UNCHECKED_CAST")
+                        val schoolYears = existing.getOrPut("school_years") { mutableListOf<String>() } as MutableList<String>
+                        if (yearKey !in schoolYears) schoolYears.add(yearKey)
                     }
                 }
                 db.child("students").setValue(newStudents).addOnSuccessListener {
@@ -907,7 +834,7 @@ class HomeFragment : Fragment() {
         val sanitized = openedSubjectKey ?: return
         submitButton.setOnClickListener {
             if (selectedGrade.isEmpty()) {
-                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                 return@setOnClickListener
             }
             val updatedMark = markWithKey.mark.copy(
@@ -1111,6 +1038,9 @@ class HomeFragment : Fragment() {
                 val subjectKeys = mutableListOf<String>()
                 for (subjectSnap in predSnap.children) {
                     val key = subjectSnap.key ?: continue
+                    // Skip consulting hours entries — they belong only in timetable
+                    val isConsulting = subjectSnap.child("isConsultingHours").getValue(Boolean::class.java) ?: false
+                    if (isConsulting) continue
                     val teacherEmailDb = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
                     if (teacherEmailDb != teacherEmail) continue
                     val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
@@ -1228,8 +1158,10 @@ class HomeFragment : Fragment() {
         val semester = selectedSemester
         val subjects = localDb.getSubjects(selectedSchoolYear)
 
-        // Filter subjects by semester: show if subject's semester matches, or is "both"/empty
+        // Filter subjects by semester and skip consulting hours entries
         val filteredSubjects = subjects.filter { (_, json) ->
+            val isConsulting = json.optBoolean("isConsultingHours", false)
+            if (isConsulting) return@filter false
             val subjectSemester = json.optString("semester", "both")
             subjectSemester.isEmpty() || subjectSemester == "both" || subjectSemester == semester
         }
@@ -1360,7 +1292,7 @@ class HomeFragment : Fragment() {
         val sanitized = openedSubjectKey ?: return
         submitButton.setOnClickListener {
             if (selectedGrade.isEmpty()) {
-                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                 return@setOnClickListener
             }
             val mark = Mark(
@@ -1530,18 +1462,34 @@ class HomeFragment : Fragment() {
         timeField.text = pickedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 
         dateField.setOnClickListener {
-            Calendar.getInstance()
-            DatePickerDialog(context, { _, year, month, day ->
-                pickedDate = LocalDate.of(year, month + 1, day)
+            val datePicker = MaterialDatePicker.Builder.datePicker()
+                .setSelection(pickedDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli())
+                .build()
+            datePicker.addOnPositiveButtonClickListener { selection ->
+                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.timeInMillis = selection
+                pickedDate = LocalDate.of(
+                    utcCal.get(java.util.Calendar.YEAR),
+                    utcCal.get(java.util.Calendar.MONTH) + 1,
+                    utcCal.get(java.util.Calendar.DAY_OF_MONTH)
+                )
                 dateField.text = pickedDate.toString()
-            }, pickedDate.year, pickedDate.monthValue - 1, pickedDate.dayOfMonth).show()
+            }
+            datePicker.show(childFragmentManager, "date_picker_attendance")
         }
 
         timeField.setOnClickListener {
-            TimePickerDialog(context, { _, hour, minute ->
-                pickedTime = LocalTime.of(hour, minute)
+            val timePicker = MaterialTimePicker.Builder()
+                .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                .setTimeFormat(TimeFormat.CLOCK_24H)
+                .setHour(pickedTime.hour)
+                .setMinute(pickedTime.minute)
+                .build()
+            timePicker.addOnPositiveButtonClickListener {
+                pickedTime = LocalTime.of(timePicker.hour, timePicker.minute)
                 timeField.text = pickedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-            }, pickedTime.hour, pickedTime.minute, true).show()
+            }
+            timePicker.show(childFragmentManager, "time_picker_attendance")
         }
 
         val dialog = Dialog(context)
@@ -1672,47 +1620,50 @@ class HomeFragment : Fragment() {
 
     fun showRemoveAttendanceDialog(student: StudentDetail, rootView: View) {
         val context = rootView.context
-        val calendar = Calendar.getInstance()
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val pickedDate = "%04d-%02d-%02d".format(year, month + 1, dayOfMonth)
-                val entriesForDate = student.attendanceMap.values.filter { it.date == pickedDate }
+        val datePicker = MaterialDatePicker.Builder.datePicker()
+            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+            .build()
+        datePicker.addOnPositiveButtonClickListener { selection ->
+            val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            utcCal.timeInMillis = selection
+            val pickedDate = "%04d-%02d-%02d".format(
+                utcCal.get(java.util.Calendar.YEAR),
+                utcCal.get(java.util.Calendar.MONTH) + 1,
+                utcCal.get(java.util.Calendar.DAY_OF_MONTH)
+            )
+            val entriesForDate = student.attendanceMap.values.filter { it.date == pickedDate }
 
-                if (entriesForDate.isEmpty()) {
-                    AlertDialog.Builder(context)
-                        .setTitle("Žiadna dochádzka")
-                        .setMessage("Pre tento dátum neexistuje záznam dochádzky.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                } else if (entriesForDate.size == 1) {
-                    val entry = entriesForDate.first()
-                    AlertDialog.Builder(context)
-                        .setTitle("Odstrániť záznam dochádzky pre $pickedDate?")
-                        .setPositiveButton("Odstrániť") { _, _ ->
-                            removeAttendance(student, entry.entryKey, entry, rootView)
-                        }
-                        .setNegativeButton("Zrušiť", null)
-                        .show()
-                } else {
-                    val items = entriesForDate.mapIndexed { index, e ->
-                        val status = if (e.absent) "Neprítomný" else "Prítomný"
-                        "${index + 1}. ${e.time.ifBlank { "—" }} - $status${if (e.note.isNotEmpty()) " (${e.note})" else ""}"
-                    }.toTypedArray()
-                    AlertDialog.Builder(context)
-                        .setTitle("Vyberte záznam na odstránenie ($pickedDate)")
-                        .setItems(items) { _, which ->
-                            val entry = entriesForDate[which]
-                            removeAttendance(student, entry.entryKey, entry, rootView)
-                        }
-                        .setNegativeButton("Zrušiť", null)
-                        .show()
-                }
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        ).show()
+            if (entriesForDate.isEmpty()) {
+                AlertDialog.Builder(context)
+                    .setTitle("Žiadna dochádzka")
+                    .setMessage("Pre tento dátum neexistuje záznam dochádzky.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            } else if (entriesForDate.size == 1) {
+                val entry = entriesForDate.first()
+                AlertDialog.Builder(context)
+                    .setTitle("Odstrániť záznam dochádzky pre $pickedDate?")
+                    .setPositiveButton("Odstrániť") { _, _ ->
+                        removeAttendance(student, entry.entryKey, entry, rootView)
+                    }
+                    .setNegativeButton("Zrušiť", null)
+                    .show()
+            } else {
+                val items = entriesForDate.mapIndexed { index, e ->
+                    val status = if (e.absent) "Neprítomný" else "Prítomný"
+                    "${index + 1}. ${e.time.ifBlank { "—" }} - $status${if (e.note.isNotEmpty()) " (${e.note})" else ""}"
+                }.toTypedArray()
+                AlertDialog.Builder(context)
+                    .setTitle("Vyberte záznam na odstránenie ($pickedDate)")
+                    .setItems(items) { _, which ->
+                        val entry = entriesForDate[which]
+                        removeAttendance(student, entry.entryKey, entry, rootView)
+                    }
+                    .setNegativeButton("Zrušiť", null)
+                    .show()
+            }
+        }
+        datePicker.show(childFragmentManager, "date_picker_remove_attendance")
     }
 
     fun addAttendance(
@@ -1851,19 +1802,35 @@ class HomeFragment : Fragment() {
     }
 
     fun showDatePicker(context: Context, onDatePicked: (String) -> Unit) {
-        val c = Calendar.getInstance()
-        DatePickerDialog(context, { _, year, month, dayOfMonth ->
-            val selectedDate = "%04d-%02d-%02d".format(year, month + 1, dayOfMonth)
+        val datePicker = MaterialDatePicker.Builder.datePicker()
+            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+            .build()
+        datePicker.addOnPositiveButtonClickListener { selection ->
+            val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            utcCal.timeInMillis = selection
+            val selectedDate = "%04d-%02d-%02d".format(
+                utcCal.get(java.util.Calendar.YEAR),
+                utcCal.get(java.util.Calendar.MONTH) + 1,
+                utcCal.get(java.util.Calendar.DAY_OF_MONTH)
+            )
             onDatePicked(selectedDate)
-        }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+        }
+        datePicker.show(childFragmentManager, "date_picker_general")
     }
 
     fun showTimePicker(context: Context, onTimePicked: (String) -> Unit) {
         val c = Calendar.getInstance()
-        TimePickerDialog(context, { _, hour, minute ->
-            val selectedTime = "%02d:%02d".format(hour, minute)
+        val timePicker = MaterialTimePicker.Builder()
+            .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+            .setTimeFormat(TimeFormat.CLOCK_24H)
+            .setHour(c.get(Calendar.HOUR_OF_DAY))
+            .setMinute(c.get(Calendar.MINUTE))
+            .build()
+        timePicker.addOnPositiveButtonClickListener {
+            val selectedTime = "%02d:%02d".format(timePicker.hour, timePicker.minute)
             onTimePicked(selectedTime)
-        }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true).show()
+        }
+        timePicker.show(childFragmentManager, "time_picker_general")
     }
 
     private fun loadSchoolYears(onLoaded: (List<String>) -> Unit) {
@@ -2131,6 +2098,12 @@ class HomeFragment : Fragment() {
         snackbar.setTextColor(textColor)
         snackbar.setActionTextColor(actionColor)
 
+        try {
+            activity?.findViewById<View>(R.id.pillNavBar)?.let {
+                snackbar.anchorView = it
+            }
+        } catch (_: Exception) { }
+
         val params = snackbar.view.layoutParams
         if (params is android.view.ViewGroup.MarginLayoutParams) {
             val margin = (12 * context.resources.displayMetrics.density).toInt()
@@ -2249,8 +2222,8 @@ class HomeFragment : Fragment() {
             y += 30f
 
             // --- Table ---
-            val columns = listOf("Predmet", "Semester", "Známky", "Priemer")
-            val colWidths = listOf(180f, 80f, 160f, 80f)
+            val columns = listOf("Predmet", "Dochádzka", "Známky", "Priemer")
+            val colWidths = listOf(170f, 100f, 150f, 80f)
             val tableWidth = colWidths.sum()
 
             // Table header
@@ -2259,7 +2232,8 @@ class HomeFragment : Fragment() {
             var x = marginLeft
             paint.isFakeBoldText = true
             for ((i, col) in columns.withIndex()) {
-                canvas.drawText(col, x + 5f, y + 20f, paint)
+                val colTextWidth = paint.measureText(col)
+                canvas.drawText(col, x + (colWidths[i] - colTextWidth) / 2f, y + 20f, paint)
                 x += colWidths[i]
             }
             paint.isFakeBoldText = false
@@ -2276,23 +2250,39 @@ class HomeFragment : Fragment() {
             for ((rowIndex, subject) in subjectsList.withIndex()) {
                 val marksStr = subject.marks.joinToString(", ")
 
-                // Wrap subject name to fit within column width
+                // Wrap subject name to fit within column width (bold)
+                paint.isFakeBoldText = true
                 val nameLines = wrapText(subject.name, paint, colWidths[0] - 10f)
+                paint.isFakeBoldText = false
                 val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
+
+                // Attendance percentage
+                val attPresent = subject.attendanceCount.values.count { !it.absent }
+                val attTotal = subject.attendanceCount.size
+                val attPercent = if (attTotal > 0) (attPresent.toDouble() * 100.0 / attTotal) else 0.0
+                val attendanceText = if (attTotal > 0) "$attPresent/$attTotal (${"%.0f".format(attPercent)}%)" else "-"
 
                 // Alternating row background
                 if (rowIndex % 2 == 1) {
                     canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
                 }
 
-                // Draw cell text
+                // Draw cell text - vertically centered
+                val nameOffsetY = (rowHeight - nameLines.size * lineHeight) / 2f
                 for ((lineIdx, line) in nameLines.withIndex()) {
-                    canvas.drawText(line, marginLeft + 5f, y + 14f + lineIdx * lineHeight, paint)
+                    paint.isFakeBoldText = true
+                    canvas.drawText(line, marginLeft + 5f, y + nameOffsetY + 14f + lineIdx * lineHeight, paint)
+                    paint.isFakeBoldText = false
                 }
+                val singleLineOffsetY = (rowHeight - lineHeight) / 2f
                 x = marginLeft + colWidths[0]
-                canvas.drawText(semester, x + 5f, y + 14f, paint); x += colWidths[1]
-                canvas.drawText(marksStr, x + 5f, y + 14f, paint); x += colWidths[2]
-                canvas.drawText(subject.average, x + 5f, y + 14f, paint)
+                // Attendance (centered)
+                val attTextWidth = paint.measureText(attendanceText)
+                canvas.drawText(attendanceText, x + (colWidths[1] - attTextWidth) / 2f, y + singleLineOffsetY + 14f, paint); x += colWidths[1]
+                canvas.drawText(marksStr, x + 5f, y + singleLineOffsetY + 14f, paint); x += colWidths[2]
+                // Average (centered)
+                val avgTextWidth = paint.measureText(subject.average)
+                canvas.drawText(subject.average, x + (colWidths[3] - avgTextWidth) / 2f, y + singleLineOffsetY + 14f, paint)
 
                 // Row borders
                 x = marginLeft
@@ -2318,7 +2308,7 @@ class HomeFragment : Fragment() {
             y += 20f
             val totalPresent = subjectsList.sumOf { s -> s.attendanceCount.values.count { !it.absent } }
             val totalEntries = subjectsList.sumOf { it.attendanceCount.size }
-            val overallAttendanceText = if (totalEntries > 0) "${"%.2f".format(totalPresent.toDouble() * 100.0 / totalEntries).replace(Regex("\\.?0+$"), "")}%" else "-"
+            val overallAttendanceText = if (totalEntries > 0) "${"%.0f".format(totalPresent.toDouble() * 100.0 / totalEntries)}%" else "-"
             canvas.drawText("Celková dochádzka: $overallAttendanceText", marginLeft, y, paint)
 
             pdfDocument!!.finishPage(page)
@@ -2467,7 +2457,8 @@ class HomeFragment : Fragment() {
             var x = marginLeft
             paint.isFakeBoldText = true
             for ((i, col) in columns.withIndex()) {
-                canvas.drawText(col, x + 5f, y + 20f, paint)
+                val colTextWidth = paint.measureText(col)
+                canvas.drawText(col, x + (colWidths[i] - colTextWidth) / 2f, y + 20f, paint)
                 x += colWidths[i]
             }
             paint.isFakeBoldText = false
@@ -2482,7 +2473,9 @@ class HomeFragment : Fragment() {
             // Table rows
             val stripePaint = Paint().apply { color = 0xFFF5F5F5.toInt(); style = Paint.Style.FILL }
             for ((rowIndex, summary) in summaries.withIndex()) {
+                paint.isFakeBoldText = true
                 val nameLines = wrapText(summary.subjectName, paint, colWidths[0] - 10f)
+                paint.isFakeBoldText = false
                 val rowHeight = lineHeight * nameLines.size.coerceAtLeast(1)
 
                 // Alternating row background
@@ -2490,13 +2483,32 @@ class HomeFragment : Fragment() {
                     canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
                 }
 
+                // Vertically center name and single-line columns
+                val nameOffsetY = (rowHeight - nameLines.size * lineHeight) / 2f
                 for ((lineIdx, line) in nameLines.withIndex()) {
-                    canvas.drawText(line, marginLeft + 5f, y + 14f + lineIdx * lineHeight, paint)
+                    paint.isFakeBoldText = true
+                    canvas.drawText(line, marginLeft + 5f, y + nameOffsetY + 14f + lineIdx * lineHeight, paint)
+                    paint.isFakeBoldText = false
                 }
+                val singleLineOffsetY = (rowHeight - lineHeight) / 2f
                 x = marginLeft + colWidths[0]
-                canvas.drawText("${summary.studentCount}", x + 5f, y + 14f, paint); x += colWidths[1]
-                canvas.drawText(summary.averageAttendance, x + 5f, y + 14f, paint); x += colWidths[2]
-                canvas.drawText(summary.averageMark, x + 5f, y + 14f, paint)
+                // Students (centered)
+                val studCountText = "${summary.studentCount}"
+                val studCountWidth = paint.measureText(studCountText)
+                canvas.drawText(studCountText, x + (colWidths[1] - studCountWidth) / 2f, y + singleLineOffsetY + 14f, paint); x += colWidths[1]
+                // Attendance (centered)
+                // Add percentage to attendance
+                val attParts = summary.averageAttendance.split("/")
+                val attendanceWithPercent = if (attParts.size == 2) {
+                    val present = attParts[0].trim().toIntOrNull() ?: 0
+                    val total = attParts[1].trim().toIntOrNull() ?: 0
+                    if (total > 0) "${summary.averageAttendance} (${"%.0f".format(present.toDouble() * 100.0 / total)}%)" else summary.averageAttendance
+                } else summary.averageAttendance
+                val attWidth = paint.measureText(attendanceWithPercent)
+                canvas.drawText(attendanceWithPercent, x + (colWidths[2] - attWidth) / 2f, y + singleLineOffsetY + 14f, paint); x += colWidths[2]
+                // Average mark (centered)
+                val markWidth = paint.measureText(summary.averageMark)
+                canvas.drawText(summary.averageMark, x + (colWidths[3] - markWidth) / 2f, y + singleLineOffsetY + 14f, paint)
 
                 // Row borders
                 x = marginLeft
@@ -2527,7 +2539,7 @@ class HomeFragment : Fragment() {
                     totalEntries += parts[1].trim().toIntOrNull() ?: 0
                 }
             }
-            val overallAttendanceText = if (totalEntries > 0) "${"%.2f".format(totalPresent.toDouble() * 100.0 / totalEntries).replace(Regex("\\.?0+$"), "")}%" else "-"
+            val overallAttendanceText = if (totalEntries > 0) "${"%.0f".format(totalPresent.toDouble() * 100.0 / totalEntries)}%" else "-"
             canvas.drawText("Priemerná dochádzka: $overallAttendanceText", marginLeft, y, paint)
             y += 20f
             // Overall average grade

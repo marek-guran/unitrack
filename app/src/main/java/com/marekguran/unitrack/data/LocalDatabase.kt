@@ -268,13 +268,45 @@ class LocalDatabase private constructor(private val context: Context) {
         return result
     }
 
-    fun addStudent(uid: String, email: String, name: String) {
+    fun addStudent(uid: String, email: String, name: String, yearKey: String? = null) {
         val studentPath = "students/$uid"
-        if (getJson(studentPath) != null) return
+        if (getJson(studentPath) != null) {
+            // Student already exists – just ensure the year is tracked
+            if (yearKey != null) addStudentSchoolYear(uid, yearKey)
+            return
+        }
         val studentObj = JSONObject()
         studentObj.put("email", email)
         studentObj.put("name", name)
+        if (yearKey != null) {
+            studentObj.put("school_years", JSONArray(listOf(yearKey)))
+        }
         put(studentPath, studentObj)
+    }
+
+    fun getStudentSchoolYears(uid: String): List<String> {
+        val arr = getJsonArray("students/$uid/school_years") ?: return emptyList()
+        val result = mutableListOf<String>()
+        for (i in 0 until arr.length()) result.add(arr.optString(i))
+        return result
+    }
+
+    fun addStudentSchoolYear(uid: String, yearKey: String) {
+        val student = getJson("students/$uid") ?: return
+        val arr = student.optJSONArray("school_years") ?: JSONArray()
+        val existing = mutableListOf<String>()
+        for (i in 0 until arr.length()) existing.add(arr.optString(i))
+        if (yearKey !in existing) {
+            existing.add(yearKey)
+            student.put("school_years", JSONArray(existing))
+            put("students/$uid", student)
+        }
+    }
+
+    fun setStudentSchoolYears(uid: String, yearKeys: List<String>) {
+        val student = getJson("students/$uid") ?: return
+        student.put("school_years", JSONArray(yearKeys))
+        put("students/$uid", student)
     }
 
     fun removeStudent(uid: String) {
@@ -592,11 +624,45 @@ class LocalDatabase private constructor(private val context: Context) {
                     existingStudent.put("subjects", allSubjects)
                 }
 
+                // Track school years the student was enrolled in
+                val syArr = existingStudent.optJSONArray("school_years") ?: JSONArray()
+                val existingYears = mutableListOf<String>()
+                for (i in 0 until syArr.length()) existingYears.add(syArr.optString(i))
+                if (key !in existingYears) existingYears.add(key)
+                existingStudent.put("school_years", JSONArray(existingYears))
+
                 newStudents.put(uid, existingStudent)
             }
         }
 
         // Replace entire students node with the new global structure
         put("students", newStudents)
+    }
+
+    /** Check if any student is missing the school_years field. */
+    fun hasStudentsMissingSchoolYears(): Boolean {
+        val students = getJson("students") ?: return false
+        for (key in students.keys()) {
+            val studentObj = students.optJSONObject(key) ?: continue
+            if (!studentObj.has("school_years")) return true
+        }
+        return false
+    }
+
+    /** Migrate: populate school_years for students based on their subject enrollments. */
+    fun migrateStudentSchoolYears() {
+        val students = getStudents()
+        for ((uid, studentJson) in students) {
+            if (studentJson.has("school_years")) continue
+            val subjectsObj = studentJson.optJSONObject("subjects")
+            val yearKeys = mutableListOf<String>()
+            if (subjectsObj != null) {
+                for (yearKey in subjectsObj.keys()) {
+                    yearKeys.add(yearKey)
+                }
+            }
+            studentJson.put("school_years", JSONArray(yearKeys))
+            put("students/$uid", studentJson)
+        }
     }
 }

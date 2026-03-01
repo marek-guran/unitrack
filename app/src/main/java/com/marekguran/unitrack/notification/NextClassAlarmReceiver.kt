@@ -28,18 +28,20 @@ import java.time.temporal.IsoFields
 
 class NextClassAlarmReceiver : BroadcastReceiver() {
 
-    private data class ScheduleSlot(val name: String, val startTime: LocalTime, val endTime: LocalTime, val classroom: String)
-    private data class TimelineEvent(val title: String, val text: String, val startTime: LocalTime, val endTime: LocalTime, val isBreak: Boolean, val durationMins: Int)
+    private data class ScheduleSlot(val name: String, val startTime: LocalTime, val endTime: LocalTime, val classroom: String, val isConsultingHours: Boolean = false)
+    private data class TimelineEvent(val title: String, val text: String, val startTime: LocalTime, val endTime: LocalTime, val isBreak: Boolean, val durationMins: Int, val isConsultingHours: Boolean = false)
 
     companion object {
         const val CHANNEL_ID = "next_class_channel"
         const val CHANNEL_CANCELLED_ID = "class_cancelled_channel"
         const val CHANNEL_GRADES_ID = "grades_channel"
         const val CHANNEL_ABSENCE_ID = "absence_channel"
+        const val CHANNEL_CONSULTATION_ID = "consultation_channel"
         const val NOTIFICATION_ID = 1001
         const val NOTIFICATION_CANCELLED_ID = 1002
         const val NOTIFICATION_GRADE_BASE_ID = 2000
         const val NOTIFICATION_ABSENCE_ID = 3000
+        const val NOTIFICATION_CONSULTATION_ID = 4000
         private const val REQUEST_CODE_NEXT_CLASS = 2001
         private const val REQUEST_CODE_CHANGES = 2002
         private const val PREFS_NAME = "notif_state_prefs"
@@ -178,6 +180,16 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 description = context.getString(R.string.notification_absence_desc)
             }
             nm.createNotificationChannel(absenceChannel)
+
+            // Channel for consultation notifications
+            val consultationChannel = NotificationChannel(
+                CHANNEL_CONSULTATION_ID,
+                context.getString(R.string.notification_channel_consultation),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.notification_channel_consultation_desc)
+            }
+            nm.createNotificationChannel(consultationChannel)
         }
     }
 
@@ -219,6 +231,10 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             handleNextClassOffline(context)
         } else {
             handleNextClassOnline(context)
+            // Also check consultation reminders
+            if (appPrefs.getBoolean("notif_enabled_consultation", true)) {
+                handleConsultationReminders(context)
+            }
         }
     }
 
@@ -256,7 +272,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
                 val startTime = parseTimeSafe(startTimeStr) ?: continue
                 val endTime = parseTimeSafe(endTimeStr) ?: continue
-                todaySlots.add(ScheduleSlot(subjectName, startTime, endTime, entryJson.optString("classroom", "")))
+                val isConsulting = entryJson.optBoolean("isConsultingHours", false)
+                todaySlots.add(ScheduleSlot(subjectName, startTime, endTime, entryJson.optString("classroom", ""), isConsulting))
             }
         }
 
@@ -292,8 +309,14 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         val todaySlots = mutableListOf<ScheduleSlot>()
                         val currentSemester = getCurrentSemester(context)
+                        val uid = user.uid
 
                         for (subjectSnap in snapshot.children) {
+                            val subjectKey = subjectSnap.key ?: continue
+                            // Skip consulting hours that don't belong to this user
+                            val isConsultingSubject = subjectSnap.child("isConsultingHours").getValue(Boolean::class.java) ?: false
+                            if (isConsultingSubject && subjectKey != "_consulting_$uid") continue
+
                             val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
                             if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: continue
@@ -310,7 +333,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                                 val startTime = parseTimeSafe(startTimeStr) ?: continue
                                 val endTime = parseTimeSafe(endTimeStr) ?: continue
                                 val classroom = entrySnap.child("classroom").getValue(String::class.java) ?: ""
-                                todaySlots.add(ScheduleSlot(subjectName, startTime, endTime, classroom))
+                                val isConsulting = entrySnap.child("isConsultingHours").getValue(Boolean::class.java) ?: false
+                                todaySlots.add(ScheduleSlot(subjectName, startTime, endTime, classroom, isConsulting))
                             }
                         }
 
@@ -370,7 +394,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 "Posledná hodina • Koniec ${formatTime(slot.endTime)}"
             }
 
-            timeline.add(TimelineEvent(classTitle, classText, slot.startTime, slot.endTime, false, slotMins))
+            timeline.add(TimelineEvent(classTitle, classText, slot.startTime, slot.endTime, false, slotMins, slot.isConsultingHours))
 
             // Add Break segment if there is a gap between classes
             if (nextSlot != null && slot.endTime.isBefore(nextSlot.startTime)) {
@@ -388,6 +412,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         var currentTitle = ""
         var currentText = ""
         var isCurrentlyBreak = false
+        var isCurrentlyConsulting = false
 
         if (now.isBefore(firstStart)) {
             val firstClass = schedule.first()
@@ -401,6 +426,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                 currentTitle = activeEvent.title
                 currentText = activeEvent.text
                 isCurrentlyBreak = activeEvent.isBreak
+                isCurrentlyConsulting = activeEvent.isConsultingHours
             } else {
                 currentTitle = timeline.last().title
                 currentText = timeline.last().text
@@ -413,7 +439,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             java.time.Duration.between(firstStart, now).toMinutes().toInt().coerceIn(0, timeline.sumOf { it.durationMins })
         }
 
-        showProgressNotification(context, currentTitle, currentText, elapsedMins, timeline, isCurrentlyBreak)
+        showProgressNotification(context, currentTitle, currentText, elapsedMins, timeline, isCurrentlyBreak, isCurrentlyConsulting)
     }
 
     private fun formatTime(time: LocalTime): String {
@@ -426,7 +452,8 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         contentText: String,
         elapsedMins: Int,
         timeline: List<TimelineEvent>,
-        isCurrentlyBreak: Boolean
+        isCurrentlyBreak: Boolean,
+        isCurrentlyConsulting: Boolean = false
     ) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val contentIntent = Intent(context, MainActivity::class.java)
@@ -441,11 +468,16 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val isDarkMode = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
 
         // Jemnejšie farby pre tmavý režim (Material Design Dark Theme)
-        // Oranžová pre hodiny, Zelená pre prestávky
+        // Oranžová pre hodiny, Zelená pre prestávky, Červená pre konzultácie
         val colorClass = if (isDarkMode) android.graphics.Color.parseColor("#FDBA74") else android.graphics.Color.parseColor("#F9AB00")
         val colorBreak = if (isDarkMode) android.graphics.Color.parseColor("#81C995") else android.graphics.Color.parseColor("#34A853")
+        val colorConsulting = if (isDarkMode) android.graphics.Color.parseColor("#F28B82") else android.graphics.Color.parseColor("#D93025")
 
-        val baseColor = if (isCurrentlyBreak) colorBreak else colorClass
+        val baseColor = when {
+            isCurrentlyBreak -> colorBreak
+            isCurrentlyConsulting -> colorConsulting
+            else -> colorClass
+        }
 
         // Natívne API 36 (Android 16) - Segmentovaný ProgressStyle
         if (Build.VERSION.SDK_INT >= 36) {
@@ -475,7 +507,11 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                     if (event.durationMins <= 0) continue
                     val segmentObj = segmentConstructor.newInstance(event.durationMins)
                     // Nastavujeme farebnú segmentáciu s ohľadom na tmavý režim
-                    val segColor = if (event.isBreak) colorBreak else colorClass
+                    val segColor = when {
+                        event.isBreak -> colorBreak
+                        event.isConsultingHours -> colorConsulting
+                        else -> colorClass
+                    }
                     setColorMethod.invoke(segmentObj, segColor)
                     segmentsList.add(segmentObj)
                 }
@@ -974,5 +1010,170 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             if (!today.isBefore(from) && !today.isAfter(to)) return true
         }
         return false
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  CONSULTATION REMINDERS — notify before and at start of booked consultations
+    // ═══════════════════════════════════════════════════════════════════
+
+    private fun handleConsultationReminders(context: Context) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+        val uid = user.uid
+        val db = FirebaseDatabase.getInstance().reference
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val notifPrefs = context.getSharedPreferences("notif_state_prefs", Context.MODE_PRIVATE)
+        val minutesBefore = prefs.getInt("notif_consultation_minutes_before", 10)
+        val now = LocalTime.now()
+        val today = LocalDate.now()
+        val todayStr = today.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+
+        // Check if user is a teacher
+        db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+            val isTeacher = teacherSnap.exists()
+
+            if (isTeacher) {
+                handleTeacherConsultationReminders(context, db, uid, todayStr, now, minutesBefore, notifPrefs)
+            }
+
+            // Check student bookings (even teachers could be students in some systems,
+            // but typically only students have consultation_timetable entries)
+            handleStudentConsultationReminders(context, db, uid, todayStr, now, minutesBefore, notifPrefs)
+        }
+    }
+
+    private fun handleStudentConsultationReminders(
+        context: Context, db: com.google.firebase.database.DatabaseReference,
+        uid: String, todayStr: String, now: LocalTime, minutesBefore: Int,
+        notifPrefs: android.content.SharedPreferences
+    ) {
+        db.child("students").child(uid).child("consultation_timetable")
+            .get().addOnSuccessListener { snapshot ->
+                for (entrySnap in snapshot.children) {
+                    val date = entrySnap.child("specificDate").getValue(String::class.java) ?: ""
+                    if (date != todayStr) continue
+
+                    val startTimeStr = entrySnap.child("startTime").getValue(String::class.java) ?: continue
+                    val startTime = parseTimeSafe(startTimeStr) ?: continue
+                    val classroom = entrySnap.child("classroom").getValue(String::class.java) ?: ""
+                    val subjectName = entrySnap.child("subjectName").getValue(String::class.java) ?: ""
+                    val entryKey = entrySnap.key ?: continue
+
+                    val minsUntil = java.time.Duration.between(now, startTime).toMinutes()
+
+                    // "Before" reminder: within [0, minutesBefore] range, once
+                    val beforeKey = "consult_before_${todayStr}_$entryKey"
+                    if (minsUntil in 0..minutesBefore.toLong() && !notifPrefs.getBoolean(beforeKey, false)) {
+                        notifPrefs.edit().putBoolean(beforeKey, true).apply()
+                        showConsultationNotification(
+                            context,
+                            context.getString(R.string.notif_consultation_reminder, minsUntil.toInt(), subjectName, classroom.ifBlank { "—" }),
+                            NOTIFICATION_CONSULTATION_ID + entryKey.hashCode().and(0xFFF)
+                        )
+                    }
+
+                    // "Now" reminder: when consultation starts (within 2 min window)
+                    val nowKey = "consult_now_${todayStr}_$entryKey"
+                    if (minsUntil in -2..0 && !notifPrefs.getBoolean(nowKey, false)) {
+                        notifPrefs.edit().putBoolean(nowKey, true).apply()
+                        showConsultationNotification(
+                            context,
+                            context.getString(R.string.notif_consultation_now, subjectName, classroom.ifBlank { "—" }),
+                            NOTIFICATION_CONSULTATION_ID + entryKey.hashCode().and(0xFFF) + 1
+                        )
+                    }
+                }
+            }
+    }
+
+    private fun handleTeacherConsultationReminders(
+        context: Context, db: com.google.firebase.database.DatabaseReference,
+        uid: String, todayStr: String, now: LocalTime, minutesBefore: Int,
+        notifPrefs: android.content.SharedPreferences
+    ) {
+        val schoolYear = context.getSharedPreferences("unitrack_prefs", 0)
+            .getString("school_year", "") ?: ""
+        if (schoolYear.isBlank()) return
+
+        val consultingSubjectKey = "_consulting_$uid"
+        db.child("school_years").child(schoolYear).child("predmety").child(consultingSubjectKey).child("timetable")
+            .get().addOnSuccessListener { timetableSnap ->
+                val todayKey = LocalDate.now().dayOfWeek.toKey()
+
+                for (entrySnap in timetableSnap.children) {
+                    val day = entrySnap.child("day").getValue(String::class.java) ?: continue
+                    if (day != todayKey) continue
+
+                    val startTimeStr = entrySnap.child("startTime").getValue(String::class.java) ?: continue
+                    val startTime = parseTimeSafe(startTimeStr) ?: continue
+                    val classroom = entrySnap.child("classroom").getValue(String::class.java) ?: ""
+                    val entryKey = entrySnap.key ?: continue
+
+                    val minsUntil = java.time.Duration.between(now, startTime).toMinutes()
+
+                    // Only notify if within the relevant window
+                    if (minsUntil < -2 || minsUntil > minutesBefore) continue
+
+                    // Count booked students for this entry today
+                    db.child("consultation_bookings").child(consultingSubjectKey)
+                        .get().addOnSuccessListener { bookingsSnap ->
+                            var studentCount = 0
+                            for (bookingSnap in bookingsSnap.children) {
+                                val bookingDate = bookingSnap.child("date").getValue(String::class.java) ?: ""
+                                val bookingEntryKey = bookingSnap.child("consultingEntryKey").getValue(String::class.java) ?: ""
+                                if (bookingDate == todayStr && bookingEntryKey == entryKey) {
+                                    studentCount++
+                                }
+                            }
+
+                            // Only notify teacher if at least one student booked
+                            if (studentCount == 0) return@addOnSuccessListener
+
+                            // "Before" reminder
+                            val beforeKey = "teacher_consult_before_${todayStr}_$entryKey"
+                            if (minsUntil in 0..minutesBefore.toLong() && !notifPrefs.getBoolean(beforeKey, false)) {
+                                notifPrefs.edit().putBoolean(beforeKey, true).apply()
+                                showConsultationNotification(
+                                    context,
+                                    context.getString(R.string.notif_consultation_teacher_reminder, minsUntil.toInt(), studentCount, classroom.ifBlank { "—" }),
+                                    NOTIFICATION_CONSULTATION_ID + entryKey.hashCode().and(0xFFF) + 2
+                                )
+                            }
+
+                            // "Now" reminder
+                            val nowKey = "teacher_consult_now_${todayStr}_$entryKey"
+                            if (minsUntil in -2..0 && !notifPrefs.getBoolean(nowKey, false)) {
+                                notifPrefs.edit().putBoolean(nowKey, true).apply()
+                                showConsultationNotification(
+                                    context,
+                                    context.getString(R.string.notif_consultation_teacher_now, studentCount, classroom.ifBlank { "—" }),
+                                    NOTIFICATION_CONSULTATION_ID + entryKey.hashCode().and(0xFFF) + 3
+                                )
+                            }
+                        }
+                }
+            }
+    }
+
+    private fun showConsultationNotification(context: Context, message: String, notifId: Int) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, notifId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_CONSULTATION_ID)
+            .setSmallIcon(R.drawable.ic_timetable)
+            .setContentTitle(context.getString(R.string.notification_channel_consultation))
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(notifId, notification)
     }
 }

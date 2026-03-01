@@ -24,7 +24,7 @@
             android:id="@+id/dialogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Predmety"
+            android:text="Študenti"
             android:textAppearance="@style/TextAppearance.Material3.TitleLarge"
             android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="16dp" />
@@ -109,7 +109,7 @@
                 android:id="@+id/searchStudentEditText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Hľadať predmet..."
+                android:hint="Hľadať študenta..."
                 android:inputType="text"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
@@ -133,7 +133,7 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Všetky"
+                    android:text="Všetci"
                     android:checked="true" />
 
                 <com.google.android.material.chip.Chip
@@ -141,14 +141,14 @@
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Zapísané" />
+                    android:text="Zapísaní" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chipEnrollNotEnrolled"
                     style="@style/Widget.Material3.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Nezapísané" />
+                    android:text="Nezapísaní" />
 
             </com.google.android.material.chip.ChipGroup>
         </HorizontalScrollView>

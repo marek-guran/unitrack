@@ -1,5 +1,7 @@
 package com.marekguran.unitrack
 
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -7,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +26,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -36,6 +40,7 @@ import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import com.marekguran.unitrack.ui.PillNavigationBar
+import com.marekguran.unitrack.update.UpdateChecker
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,6 +56,8 @@ class MainActivity : AppCompatActivity() {
         @Volatile
         @JvmStatic
         var themeChangeInProgress = false
+
+        private const val NOTIFICATION_ID_UPDATE = 5000
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -308,6 +315,60 @@ class MainActivity : AppCompatActivity() {
         NextClassAlarmReceiver.triggerNextClassCheck(this)
         NextClassAlarmReceiver.scheduleNextClass(this)
         NextClassAlarmReceiver.scheduleChangesCheck(this)
+
+        // Periodic update check (debug builds only)
+        if (BuildConfig.DEBUG) {
+            scheduleUpdateCheck()
+        }
+    }
+
+    private fun scheduleUpdateCheck() {
+        val updateRunnable = object : Runnable {
+            override fun run() {
+                if (isFinishing || isDestroyed) return
+                if (UpdateChecker.shouldCheck(this@MainActivity)) {
+                    UpdateChecker.checkForUpdate(this@MainActivity, BuildConfig.VERSION_NAME) { hasUpdate, latestVersion ->
+                        if (hasUpdate && latestVersion != null) {
+                            showUpdateNotification(latestVersion)
+                        }
+                    }
+                }
+                if (!isFinishing && !isDestroyed) {
+                    handler.postDelayed(this, UpdateChecker.CHECK_INTERVAL_MS)
+                }
+            }
+        }
+        // Run first check shortly after launch
+        handler.postDelayed(updateRunnable, 5_000L)
+    }
+
+    private fun showUpdateNotification(latestVersion: String) {
+        val channelId = "updates_channel"
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
+        val channel = android.app.NotificationChannel(
+            channelId,
+            getString(R.string.notification_channel_updates),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = getString(R.string.notification_channel_updates_desc)
+        }
+        nm.createNotificationChannel(channel)
+
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.getReleaseUrl(latestVersion)))
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.notification_update_available, latestVersion))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIFICATION_ID_UPDATE, notification)
     }
 
     private fun buildNavigation(
@@ -337,6 +398,11 @@ class MainActivity : AppCompatActivity() {
             labels.add(getString(R.string.title_subjects))
             icons.add(ContextCompat.getDrawable(this, R.drawable.ic_book)!!)
             destinations.add(R.id.navigation_subjects)
+        } else if (isOnline) {
+            // Students (non-admin, online) get the consulting hours tab
+            labels.add(getString(R.string.title_consulting))
+            icons.add(ContextCompat.getDrawable(this, R.drawable.ic_consulting)!!)
+            destinations.add(R.id.navigation_consulting)
         }
 
         labels.add(getString(R.string.title_settings))

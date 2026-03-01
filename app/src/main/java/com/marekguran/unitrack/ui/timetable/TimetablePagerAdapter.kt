@@ -17,7 +17,8 @@ class TimetablePagerAdapter(
     private val canEdit: () -> Boolean = { false },
     private val canDelete: () -> Boolean = { false },
     private val onEditClick: ((TimetableEntry) -> Unit)? = null,
-    private val onDeleteClick: ((TimetableEntry) -> Unit)? = null
+    private val onDeleteClick: ((TimetableEntry) -> Unit)? = null,
+    private val loadConsultationBookings: ((TimetableEntry, android.widget.LinearLayout, java.time.LocalDate) -> Unit)? = null
 ) : RecyclerView.Adapter<TimetablePagerAdapter.PageViewHolder>() {
 
     private var dates: List<LocalDate> = emptyList()
@@ -51,10 +52,12 @@ class TimetablePagerAdapter(
             holder.recyclerSchedule.visibility = View.VISIBLE
             val existing = holder.recyclerSchedule.adapter as? ScheduleAdapter
             if (existing != null) {
+                existing.displayedDate = date
                 existing.updateItems(items)
                 boundAdapters[position] = existing
             } else {
-                val adapter = ScheduleAdapter(items, onCardClick, canEdit, canDelete, onEditClick, onDeleteClick)
+                val adapter = ScheduleAdapter(items, onCardClick, canEdit, canDelete, onEditClick, onDeleteClick, loadConsultationBookings)
+                adapter.displayedDate = date
                 holder.recyclerSchedule.adapter = adapter
                 boundAdapters[position] = adapter
             }

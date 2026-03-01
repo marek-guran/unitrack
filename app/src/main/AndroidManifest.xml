@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -50,6 +51,18 @@
             android:theme="@style/Theme.UniTrack" />
         <activity
             android:name=".QrScannerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".TeacherBookingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".ConsultingHoursActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".NewSemesterActivity"
             android:exported="false"
             android:theme="@style/Theme.UniTrack" />
 

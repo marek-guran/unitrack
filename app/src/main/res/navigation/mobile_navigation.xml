@@ -71,6 +71,16 @@
         app:popExitAnim="@anim/fade_out" />
 
     <fragment
+        android:id="@+id/navigation_consulting"
+        android:name="com.marekguran.unitrack.ui.consulting.ConsultingHoursFragment"
+        android:label="@string/title_consulting"
+        tools:layout="@layout/fragment_consulting_hours"
+        app:enterAnim="@anim/fade_in"
+        app:exitAnim="@anim/fade_out"
+        app:popEnterAnim="@anim/fade_in"
+        app:popExitAnim="@anim/fade_out" />
+
+    <fragment
         android:id="@+id/subjectDetailFragment"
         android:name="com.marekguran.unitrack.SubjectDetailFragment"
         android:label="Subject Detail"

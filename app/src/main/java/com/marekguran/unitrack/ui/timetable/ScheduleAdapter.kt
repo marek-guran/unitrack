@@ -40,13 +40,15 @@ class ScheduleAdapter(
     private val canEdit: () -> Boolean = { false },
     private val canDelete: () -> Boolean = { false },
     private val onEditClick: ((TimetableEntry) -> Unit)? = null,
-    private val onDeleteClick: ((TimetableEntry) -> Unit)? = null
+    private val onDeleteClick: ((TimetableEntry) -> Unit)? = null,
+    private val loadConsultationBookings: ((TimetableEntry, LinearLayout, java.time.LocalDate) -> Unit)? = null
 ) : RecyclerView.Adapter<ScheduleAdapter.ViewHolder>() {
 
     val runningAnimators = mutableListOf<ObjectAnimator>()
     val currentCards = mutableListOf<Pair<View, TimetableEntry>>()
     val nextCards = mutableListOf<Pair<View, TimetableEntry>>()
     private var expandedPosition: Int = RecyclerView.NO_POSITION
+    var displayedDate: java.time.LocalDate = java.time.LocalDate.now()
 
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val card: MaterialCardView = view as MaterialCardView
@@ -66,6 +68,8 @@ class ScheduleAdapter(
         val actionButtonsContainer: LinearLayout = view.findViewById(R.id.actionButtonsContainer)
         val btnCardEdit: View = view.findViewById(R.id.btnCardEdit)
         val btnCardDelete: View = view.findViewById(R.id.btnCardDelete)
+        val consultationBookingsContainer: LinearLayout = view.findViewById(R.id.consultationBookingsContainer)
+        val bookingsList: LinearLayout = view.findViewById(R.id.bookingsList)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -136,14 +140,24 @@ class ScheduleAdapter(
         }
 
         // Alternating card background (same as home screen)
-        val rowBgAttr = if (position % 2 == 0) {
-            com.google.android.material.R.attr.colorSurfaceContainerLowest
+        // Consulting hours get a distinctive warm/red tint
+        if (entry.isConsultingHours) {
+            val consultingBg = if (position % 2 == 0) {
+                ContextCompat.getColor(context, R.color.consulting_card_bg_light)
+            } else {
+                ContextCompat.getColor(context, R.color.consulting_card_bg_light_alt)
+            }
+            holder.card.setCardBackgroundColor(consultingBg)
         } else {
-            com.google.android.material.R.attr.colorSurfaceContainer
+            val rowBgAttr = if (position % 2 == 0) {
+                com.google.android.material.R.attr.colorSurfaceContainerLowest
+            } else {
+                com.google.android.material.R.attr.colorSurfaceContainer
+            }
+            val typedValue = TypedValue()
+            context.theme.resolveAttribute(rowBgAttr, typedValue, true)
+            holder.card.setCardBackgroundColor(typedValue.data)
         }
-        val typedValue = TypedValue()
-        context.theme.resolveAttribute(rowBgAttr, typedValue, true)
-        holder.card.setCardBackgroundColor(typedValue.data)
 
         // Resolve theme colors for text
         val colorOnSurface = resolveAttr(context, com.google.android.material.R.attr.colorOnSurface)
@@ -161,7 +175,12 @@ class ScheduleAdapter(
         }
 
         // Default: all cards get a visible border for contrast
-        holder.card.setStrokeColor(ColorStateList.valueOf(colorOutline))
+        // Consulting hours get a warm/red-tinted border
+        if (entry.isConsultingHours) {
+            holder.card.setStrokeColor(ColorStateList.valueOf(ContextCompat.getColor(context, R.color.consulting_card_stroke)))
+        } else {
+            holder.card.setStrokeColor(ColorStateList.valueOf(colorOutline))
+        }
         holder.card.setStrokeWidth((1 * density).toInt())
 
         // Default text colors
@@ -277,6 +296,12 @@ class ScheduleAdapter(
                 holder.actionButtonsContainer.visibility = View.VISIBLE
                 holder.btnCardDelete.visibility = if (canDelete()) View.VISIBLE else View.GONE
             }
+
+            // Load consultation bookings for consulting hours entries
+            if (entry.isConsultingHours && loadConsultationBookings != null) {
+                holder.consultationBookingsContainer.visibility = View.VISIBLE
+                loadConsultationBookings.invoke(entry, holder.bookingsList, displayedDate)
+            }
         }
 
         holder.btnCardEdit.setOnClickListener { onEditClick?.invoke(entry) }
@@ -306,7 +331,8 @@ class ScheduleAdapter(
             val hasNote = entry.note.isNotBlank()
             val hasDayOffNote = item.isDayOff
             val hasActions = canEdit()
-            if (!hasNote && !hasDayOffNote && !hasActions) {
+            val hasConsultingBookings = entry.isConsultingHours && loadConsultationBookings != null
+            if (!hasNote && !hasDayOffNote && !hasActions && !hasConsultingBookings) {
                 onCardClick(entry, item.isDayOff)
                 return@setOnClickListener
             }
@@ -337,6 +363,10 @@ class ScheduleAdapter(
                 if (hasActions) {
                     holder.actionButtonsContainer.visibility = View.VISIBLE
                     holder.btnCardDelete.visibility = if (canDelete()) View.VISIBLE else View.GONE
+                }
+                if (hasConsultingBookings) {
+                    holder.consultationBookingsContainer.visibility = View.VISIBLE
+                    loadConsultationBookings.invoke(entry, holder.bookingsList, displayedDate)
                 }
                 animateExpand(holder.expandedContainer)
             } else {
@@ -491,6 +521,8 @@ class ScheduleAdapter(
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
+                    // Switch to WRAP_CONTENT so async content (e.g. loaded bookings)
+                    // automatically expands the container without needing re-animation
                     view.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
                     view.requestLayout()
                     view.setTag(R.id.expandedContainer, null)
@@ -499,6 +531,45 @@ class ScheduleAdapter(
             view.setTag(R.id.expandedContainer, this)
             start()
         }
+
+        // Listen for child layout changes (async content like consultation bookings)
+        // and smoothly animate to the new size
+        view.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or2: Int, ob: Int) {
+                val animator = v.getTag(R.id.expandedContainer) as? ValueAnimator
+                if (animator != null && animator.isRunning) {
+                    // Animation still running - update target if content grew
+                    v.measure(
+                        View.MeasureSpec.makeMeasureSpec((v.parent as View).width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.UNSPECIFIED
+                    )
+                    val newTarget = v.measuredHeight
+                    val current = v.layoutParams.height
+                    if (newTarget > current) {
+                        animator.cancel()
+                        ValueAnimator.ofInt(current, newTarget).apply {
+                            duration = 200
+                            interpolator = DecelerateInterpolator(1.5f)
+                            addUpdateListener { va ->
+                                v.layoutParams.height = va.animatedValue as Int
+                                v.requestLayout()
+                            }
+                            addListener(object : android.animation.AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: android.animation.Animator) {
+                                    v.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    v.requestLayout()
+                                    v.setTag(R.id.expandedContainer, null)
+                                }
+                            })
+                            v.setTag(R.id.expandedContainer, this)
+                            start()
+                        }
+                    }
+                }
+                // Remove listener after first adjustment to avoid infinite loop
+                v.removeOnLayoutChangeListener(this)
+            }
+        })
     }
 
     /** Slide-closed collapse: animate height from current to 0 */

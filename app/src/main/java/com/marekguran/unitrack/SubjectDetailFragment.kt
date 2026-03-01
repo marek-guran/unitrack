@@ -3,8 +3,9 @@ package com.marekguran.unitrack
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.Dialog
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
+import com.google.android.material.datepicker.MaterialDatePicker
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -202,7 +203,7 @@ class SubjectDetailFragment : Fragment() {
                 val attPercent = if (attTotal > 0) (attCount.toDouble() * 100.0 / attTotal) else 0.0
                 val average = student.average.replace("FX", "Fx")
                 val attendanceText =
-                    if (attTotal > 0) "$attCount/$attTotal (${"%.2f".format(attPercent).replace(Regex("\\.?0+$"), "")}%)" else "-"
+                    if (attTotal > 0) "$attCount/$attTotal (${"%.0f".format(attPercent)}%)" else "-"
 
                 val rowHeight = lineHeight * maxLines
 
@@ -222,27 +223,30 @@ class SubjectDetailFragment : Fragment() {
                     canvas.drawRect(marginLeft, y, marginLeft + tableWidth, y + rowHeight, stripePaint)
                 }
 
-                for (line in 0 until maxLines) {
-                    var x = 40f
-                    // Student Name (wrapped, bold)
-                    val nameLine = if (line < nameLines.size) nameLines[line] else ""
-                    paint.isFakeBoldText = true
-                    canvas.drawText(nameLine, x + 5f, y + 14f + line * lineHeight, paint)
-                    paint.isFakeBoldText = false
-                    x += colWidths[0]
-                    // Attendance
-                    val attendance = if (line == 0) attendanceText else ""
-                    canvas.drawText(attendance, x + 5f, y + 14f + line * lineHeight, paint)
-                    x += colWidths[1]
-                    // Marks (wrapped)
-                    val markLine = if (line < marksLines.size) marksLines[line] else ""
-                    canvas.drawText(markLine, x + 5f, y + 14f + line * lineHeight, paint)
-                    x += colWidths[2]
-                    // Average
-                    val avg = if (line == 0) average else ""
-                    canvas.drawText(avg, x + 5f, y + 14f + line * lineHeight, paint)
-                    // x += colWidths[3] // not needed after last column
+                var x = 40f
+                // Student Name (wrapped, bold, vertically centered)
+                val nameOffsetY = (rowHeight - nameLines.size * lineHeight) / 2f
+                paint.isFakeBoldText = true
+                for ((i, nameLine) in nameLines.withIndex()) {
+                    canvas.drawText(nameLine, x + 5f, y + nameOffsetY + 14f + i * lineHeight, paint)
                 }
+                paint.isFakeBoldText = false
+                x += colWidths[0]
+                // Attendance (centered horizontally + vertically)
+                val attTextWidth = paint.measureText(attendanceText)
+                val attOffsetY = (rowHeight - lineHeight) / 2f
+                canvas.drawText(attendanceText, x + (colWidths[1] - attTextWidth) / 2f, y + attOffsetY + 14f, paint)
+                x += colWidths[1]
+                // Marks (wrapped, vertically centered)
+                val marksOffsetY = (rowHeight - marksLines.size * lineHeight) / 2f
+                for ((i, markLine) in marksLines.withIndex()) {
+                    canvas.drawText(markLine, x + 5f, y + marksOffsetY + 14f + i * lineHeight, paint)
+                }
+                x += colWidths[2]
+                // Average (centered horizontally + vertically)
+                val avgTextWidth = paint.measureText(average)
+                val avgOffsetY = (rowHeight - lineHeight) / 2f
+                canvas.drawText(average, x + (colWidths[3] - avgTextWidth) / 2f, y + avgOffsetY + 14f, paint)
                 // Draw row borders after all lines
                 drawTableRowBorders(canvas, paint, colWidths, tableWidth, y, rowHeight)
                 y += rowHeight
@@ -264,7 +268,7 @@ class SubjectDetailFragment : Fragment() {
             val averageGradeText = if (allGrades.isNotEmpty()) numericToGrade(allGrades.average()) else "-"
             canvas.drawText("Celkom študentov: $totalStudents", 40f, y, paint); y += 20f
             canvas.drawText("Celkom udelených známok: $totalMarks", 40f, y, paint); y += 20f
-            canvas.drawText("Priemerná dochádzka: ${"%.2f".format(averageAttendancePercent).replace(Regex("\\.?0+$"), "")}%", 40f, y, paint); y += 20f
+            canvas.drawText("Priemerná dochádzka: ${"%.0f".format(averageAttendancePercent)}%", 40f, y, paint); y += 20f
             canvas.drawText("Priemerná známka: $averageGradeText", 40f, y, paint)
 
             pdfDocument!!.finishPage(page)
@@ -293,7 +297,8 @@ class SubjectDetailFragment : Fragment() {
             var x = marginLeft
             paint.isFakeBoldText = true
             for ((i, col) in columns.withIndex()) {
-                canvas.drawText(col, x + 5f, y + 20f, paint)
+                val colTextWidth = paint.measureText(col)
+                canvas.drawText(col, x + (colWidths[i] - colTextWidth) / 2f, y + 20f, paint)
                 x += colWidths[i]
             }
             paint.isFakeBoldText = false
@@ -575,9 +580,9 @@ class SubjectDetailFragment : Fragment() {
             showMarkAttendanceDialog(
                 students = students,
                 subjectName = openedSubject ?: "Unknown",
-                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String ->
+                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String, timeStr: String ->
                     val today = dateStr
-                    val now = LocalTime.now().toString()
+                    val now = timeStr
                     val sanitizedSubject = openedSubjectKey ?: ""
                     if (isOffline) {
                         for ((studentUid, isPresent) in presentMap) {
@@ -834,6 +839,11 @@ class SubjectDetailFragment : Fragment() {
             val items = mutableListOf<EnrollStudentItem>()
             for (studentSnap in snap.children) {
                 val uid = studentSnap.key!!
+                // Only show students enrolled in the current academic year
+                val inYear = studentSnap.child("school_years").children.any {
+                    it.getValue(String::class.java) == selectedSchoolYear
+                }
+                if (!inYear) continue
                 val studentObj = studentSnap.getValue(StudentDbModel::class.java)
                 val name = studentObj?.name ?: "(bez mena)"
                 val subjects = studentObj?.subjects?.get(selectedSchoolYear)?.get(selectedSemester) ?: emptyList()
@@ -902,7 +912,7 @@ class SubjectDetailFragment : Fragment() {
                         ref.setValue(newList).addOnCompleteListener {
                             pending--
                             if (pending == 0) {
-                                Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).show()
+                                Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).also { styleSnackbar(it) }.show()
                                 dialog.dismiss()
                                 closeAllDialogs()
                                 refreshFragmentView()
@@ -928,6 +938,12 @@ class SubjectDetailFragment : Fragment() {
         val studentsMap = localDb.getStudents()
         val items = mutableListOf<EnrollStudentItem>()
         for ((uid, studentJson) in studentsMap) {
+            // Only show students enrolled in the current academic year
+            val schoolYearsArr = studentJson.optJSONArray("school_years")
+            val inYear = schoolYearsArr != null && (0 until schoolYearsArr.length()).any {
+                schoolYearsArr.optString(it) == selectedSchoolYear
+            }
+            if (!inYear) continue
             val name = studentJson.optString("name", "(bez mena)")
             val subjectsObj = studentJson.optJSONObject("subjects")
             val yearObj = subjectsObj?.optJSONObject(selectedSchoolYear)
@@ -1000,7 +1016,7 @@ class SubjectDetailFragment : Fragment() {
                 }
                 localDb.updateStudentSubjects(item.uid, selectedSchoolYear, selectedSemester, currentList)
             }
-            Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).show()
+            Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).also { styleSnackbar(it) }.show()
             dialog.dismiss()
             closeAllDialogs()
             refreshFragmentView()
@@ -1243,20 +1259,24 @@ class SubjectDetailFragment : Fragment() {
                 .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
         dateInput.setOnClickListener {
             val cal = java.util.Calendar.getInstance().apply { timeInMillis = pickedDateMillis }
-            DatePickerDialog(
-                requireContext(),
-                { _, year, month, dayOfMonth ->
-                    val pickedCal = java.util.Calendar.getInstance()
-                    pickedCal.set(year, month, dayOfMonth)
-                    pickedDateMillis = pickedCal.timeInMillis
-                    dateInput.text = Instant.ofEpochMilli(pickedDateMillis)
-                        .atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
-                },
-                cal.get(java.util.Calendar.YEAR),
-                cal.get(java.util.Calendar.MONTH),
-                cal.get(java.util.Calendar.DAY_OF_MONTH)
-            ).show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.of(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.timeInMillis = selection
+                val pickedCal = java.util.Calendar.getInstance()
+                pickedCal.set(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH), utcCal.get(java.util.Calendar.DAY_OF_MONTH))
+                pickedDateMillis = pickedCal.timeInMillis
+                dateInput.text = Instant.ofEpochMilli(pickedDateMillis)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
+            }
+            picker.show(childFragmentManager, "add_mark_date")
         }
 
         val dialog = Dialog(requireContext())
@@ -1269,7 +1289,7 @@ class SubjectDetailFragment : Fragment() {
 
         submitButton.setOnClickListener {
             if (selectedGrade.isEmpty()) {
-                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                 return@setOnClickListener
             }
             val mark = Mark(
@@ -1354,20 +1374,24 @@ class SubjectDetailFragment : Fragment() {
 
         dateField.setOnClickListener {
             val cal = java.util.Calendar.getInstance().apply { timeInMillis = pickedTimestamp }
-            DatePickerDialog(
-                requireContext(),
-                { _, year, month, dayOfMonth ->
-                    val pickedCal = java.util.Calendar.getInstance()
-                    pickedCal.set(year, month, dayOfMonth)
-                    pickedTimestamp = pickedCal.timeInMillis
-                    dateField.text = Instant.ofEpochMilli(pickedTimestamp)
-                        .atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
-                },
-                cal.get(java.util.Calendar.YEAR),
-                cal.get(java.util.Calendar.MONTH),
-                cal.get(java.util.Calendar.DAY_OF_MONTH)
-            ).show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.of(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.timeInMillis = selection
+                val pickedCal = java.util.Calendar.getInstance()
+                pickedCal.set(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH), utcCal.get(java.util.Calendar.DAY_OF_MONTH))
+                pickedTimestamp = pickedCal.timeInMillis
+                dateField.text = Instant.ofEpochMilli(pickedTimestamp)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.getDefault()))
+            }
+            picker.show(childFragmentManager, "edit_mark_date")
         }
 
         val dialog = Dialog(requireContext())
@@ -1376,7 +1400,7 @@ class SubjectDetailFragment : Fragment() {
 
         submitButton.setOnClickListener {
             if (selectedGrade.isEmpty()) {
-                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(dialogView, "Vyberte známku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                 return@setOnClickListener
             }
             val updatedMark = markWithKey.mark.copy(
@@ -1573,18 +1597,33 @@ class SubjectDetailFragment : Fragment() {
         timeField.text = pickedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 
         dateField.setOnClickListener {
-            android.icu.util.Calendar.getInstance()
-            DatePickerDialog(context, { _, year, month, day ->
-                pickedDate = LocalDate.of(year, month + 1, day)
+            val prefilledMillis = try {
+                pickedDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.timeInMillis = selection
+                pickedDate = LocalDate.of(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH) + 1, utcCal.get(java.util.Calendar.DAY_OF_MONTH))
                 dateField.text = pickedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-            }, pickedDate.year, pickedDate.monthValue - 1, pickedDate.dayOfMonth).show()
+            }
+            picker.show(childFragmentManager, "attendance_date")
         }
 
         timeField.setOnClickListener {
-            TimePickerDialog(context, { _, hour, minute ->
-                pickedTime = LocalTime.of(hour, minute)
+            val picker = MaterialTimePicker.Builder()
+                .setTimeFormat(TimeFormat.CLOCK_24H)
+                .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                .setHour(pickedTime.hour)
+                .setMinute(pickedTime.minute)
+                .build()
+            picker.addOnPositiveButtonClickListener {
+                pickedTime = LocalTime.of(picker.hour, picker.minute)
                 timeField.text = pickedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-            }, pickedTime.hour, pickedTime.minute, true).show()
+            }
+            picker.show(childFragmentManager, "attendance_time")
         }
 
         val dialog = Dialog(context)
@@ -1627,47 +1666,46 @@ class SubjectDetailFragment : Fragment() {
     fun showRemoveAttendanceDialog(student: StudentDetail, rootView: View) {
         closeAllDialogs()
         val context = rootView.context
-        val calendar = android.icu.util.Calendar.getInstance()
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val pickedDate = "%04d-%02d-%02d".format(year, month + 1, dayOfMonth)
-                val entriesForDate = student.attendanceMap.values.filter { it.date == pickedDate }
+        val picker = MaterialDatePicker.Builder.datePicker()
+            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+            .build()
+        picker.addOnPositiveButtonClickListener { selection ->
+            val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            utcCal.timeInMillis = selection
+            val pickedDate = "%04d-%02d-%02d".format(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH) + 1, utcCal.get(java.util.Calendar.DAY_OF_MONTH))
+            val entriesForDate = student.attendanceMap.values.filter { it.date == pickedDate }
 
-                if (entriesForDate.isEmpty()) {
-                    AlertDialog.Builder(context)
-                        .setTitle("Žiadna dochádzka")
-                        .setMessage("Pre tento dátum neexistuje záznam dochádzky.")
-                        .setPositiveButton("OK", null)
-                        .show()
-                } else if (entriesForDate.size == 1) {
-                    val entry = entriesForDate.first()
-                    AlertDialog.Builder(context)
-                        .setTitle("Odstrániť záznam dochádzky pre $pickedDate?")
-                        .setPositiveButton("Odstrániť") { _, _ ->
-                            removeAttendance(student, entry.entryKey, entry, rootView)
-                        }
-                        .setNegativeButton("Zrušiť", null)
-                        .show()
-                } else {
-                    val items = entriesForDate.mapIndexed { index, e ->
-                        val status = if (e.absent) "Neprítomný" else "Prítomný"
-                        "${index + 1}. ${e.time.ifBlank { "—" }} - $status${if (e.note.isNotEmpty()) " (${e.note})" else ""}"
-                    }.toTypedArray()
-                    AlertDialog.Builder(context)
-                        .setTitle("Vyberte záznam na odstránenie ($pickedDate)")
-                        .setItems(items) { _, which ->
-                            val entry = entriesForDate[which]
-                            removeAttendance(student, entry.entryKey, entry, rootView)
-                        }
-                        .setNegativeButton("Zrušiť", null)
-                        .show()
-                }
-            },
-            calendar.get(android.icu.util.Calendar.YEAR),
-            calendar.get(android.icu.util.Calendar.MONTH),
-            calendar.get(android.icu.util.Calendar.DAY_OF_MONTH)
-        ).show()
+            if (entriesForDate.isEmpty()) {
+                AlertDialog.Builder(context)
+                    .setTitle("Žiadna dochádzka")
+                    .setMessage("Pre tento dátum neexistuje záznam dochádzky.")
+                    .setPositiveButton("OK", null)
+                    .show()
+            } else if (entriesForDate.size == 1) {
+                val entry = entriesForDate.first()
+                AlertDialog.Builder(context)
+                    .setTitle("Odstrániť záznam dochádzky pre $pickedDate?")
+                    .setPositiveButton("Odstrániť") { _, _ ->
+                        removeAttendance(student, entry.entryKey, entry, rootView)
+                    }
+                    .setNegativeButton("Zrušiť", null)
+                    .show()
+            } else {
+                val items = entriesForDate.mapIndexed { index, e ->
+                    val status = if (e.absent) "Neprítomný" else "Prítomný"
+                    "${index + 1}. ${e.time.ifBlank { "—" }} - $status${if (e.note.isNotEmpty()) " (${e.note})" else ""}"
+                }.toTypedArray()
+                AlertDialog.Builder(context)
+                    .setTitle("Vyberte záznam na odstránenie ($pickedDate)")
+                    .setItems(items) { _, which ->
+                        val entry = entriesForDate[which]
+                        removeAttendance(student, entry.entryKey, entry, rootView)
+                    }
+                    .setNegativeButton("Zrušiť", null)
+                    .show()
+            }
+        }
+        picker.show(childFragmentManager, "remove_attendance_date")
     }
 
     fun addAttendance(
@@ -1872,37 +1910,37 @@ class SubjectDetailFragment : Fragment() {
     }
 
     fun showDatePicker(context: Context, onDatePicked: (String) -> Unit) {
-        val c = android.icu.util.Calendar.getInstance()
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val selectedDate = "%04d-%02d-%02d".format(year, month + 1, dayOfMonth)
-                onDatePicked(selectedDate)
-            },
-            c.get(android.icu.util.Calendar.YEAR),
-            c.get(android.icu.util.Calendar.MONTH),
-            c.get(android.icu.util.Calendar.DAY_OF_MONTH)
-        ).show()
+        val picker = MaterialDatePicker.Builder.datePicker()
+            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+            .build()
+        picker.addOnPositiveButtonClickListener { selection ->
+            val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            utcCal.timeInMillis = selection
+            val selectedDate = "%04d-%02d-%02d".format(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH) + 1, utcCal.get(java.util.Calendar.DAY_OF_MONTH))
+            onDatePicked(selectedDate)
+        }
+        picker.show(childFragmentManager, "show_date_picker")
     }
 
     fun showTimePicker(context: Context, onTimePicked: (String) -> Unit) {
         val c = android.icu.util.Calendar.getInstance()
-        TimePickerDialog(
-            context,
-            { _, hour, minute ->
-                val selectedTime = "%02d:%02d".format(hour, minute)
-                onTimePicked(selectedTime)
-            },
-            c.get(android.icu.util.Calendar.HOUR_OF_DAY),
-            c.get(android.icu.util.Calendar.MINUTE),
-            true
-        ).show()
+        val picker = MaterialTimePicker.Builder()
+            .setTimeFormat(TimeFormat.CLOCK_24H)
+            .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+            .setHour(c.get(android.icu.util.Calendar.HOUR_OF_DAY))
+            .setMinute(c.get(android.icu.util.Calendar.MINUTE))
+            .build()
+        picker.addOnPositiveButtonClickListener {
+            val selectedTime = "%02d:%02d".format(picker.hour, picker.minute)
+            onTimePicked(selectedTime)
+        }
+        picker.show(childFragmentManager, "show_time_picker")
     }
 
     private fun showMarkAttendanceDialog(
         students: List<StudentDetail>,
         subjectName: String,
-        onAttendanceSaved: (Map<String, Boolean>, Map<String, String>, String) -> Unit
+        onAttendanceSaved: (Map<String, Boolean>, Map<String, String>, String, String) -> Unit
     ) {
         closeAllDialogs()
         val context = requireContext()
@@ -1921,21 +1959,43 @@ class SubjectDetailFragment : Fragment() {
         var selectedDate = LocalDate.now()
         datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
         val openDatePicker = View.OnClickListener {
-            val cal = java.util.Calendar.getInstance()
-            cal.set(selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth)
-            DatePickerDialog(
-                context,
-                { _, year, month, dayOfMonth ->
-                    selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
-                    datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-                },
-                cal.get(java.util.Calendar.YEAR),
-                cal.get(java.util.Calendar.MONTH),
-                cal.get(java.util.Calendar.DAY_OF_MONTH)
-            ).show()
+            val prefilledMillis = try {
+                selectedDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.timeInMillis = selection
+                selectedDate = LocalDate.of(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH) + 1, utcCal.get(java.util.Calendar.DAY_OF_MONTH))
+                datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+            }
+            picker.show(childFragmentManager, "mark_attendance_date")
         }
         datePicker.setOnClickListener(openDatePicker)
         datePickerCard.setOnClickListener(openDatePicker)
+
+        // Time picker - default to current time
+        val timePicker = dialogView.findViewById<TextView>(R.id.attendanceTimePicker)
+        val timePickerCard = dialogView.findViewById<View>(R.id.timePickerCard)
+        var selectedTime = LocalTime.now()
+        timePicker.text = selectedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+        val openTimePicker = View.OnClickListener {
+            val picker = MaterialTimePicker.Builder()
+                .setTimeFormat(TimeFormat.CLOCK_24H)
+                .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                .setHour(selectedTime.hour)
+                .setMinute(selectedTime.minute)
+                .build()
+            picker.addOnPositiveButtonClickListener {
+                selectedTime = LocalTime.of(picker.hour, picker.minute)
+                timePicker.text = selectedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+            }
+            picker.show(childFragmentManager, "mark_attendance_time")
+        }
+        timePicker.setOnClickListener(openTimePicker)
+        timePickerCard.setOnClickListener(openTimePicker)
 
         titleView.text =
             "Dochádzka: $subjectName"
@@ -1972,7 +2032,7 @@ class SubjectDetailFragment : Fragment() {
                 students.mapIndexed { i, student -> student.studentUid to presentStates[i] }.toMap()
             val notesMap =
                 students.mapIndexed { i, student -> student.studentUid to notesList[i] }.toMap()
-            onAttendanceSaved(result, notesMap, selectedDate.toString())
+            onAttendanceSaved(result, notesMap, selectedDate.toString(), selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")))
             dialog.dismiss()
         }
         cancelButton.setOnClickListener {
@@ -2083,7 +2143,7 @@ class SubjectDetailFragment : Fragment() {
         // Wire up the "Bulk Grade" FAB
         binding.bulkGradeButton.setOnClickListener {
             if (students.isEmpty()) {
-                Snackbar.make(requireView(), "Žiadni študenti na známkovanie", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(requireView(), "Žiadni študenti na známkovanie", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                 return@setOnClickListener
             }
             val intent = Intent(requireContext(), BulkGradeActivity::class.java).apply {
@@ -2157,9 +2217,9 @@ class SubjectDetailFragment : Fragment() {
             showMarkAttendanceDialog(
                 students = students,
                 subjectName = openedSubject ?: "Unknown",
-                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String ->
+                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String, timeStr: String ->
                     val today = dateStr
-                    val now = LocalTime.now().toString()
+                    val now = timeStr
                     val sanitizedSubject = openedSubjectKey ?: ""
                     if (isOffline) {
                         for ((studentUid, isPresent) in presentMap) {
@@ -2203,7 +2263,7 @@ class SubjectDetailFragment : Fragment() {
         if (!isOffline) {
             binding.qrAttendanceButton?.setOnClickListener {
                 if (students.isEmpty()) {
-                    Snackbar.make(requireView(), "Žiadni študenti na prezenčku", Snackbar.LENGTH_SHORT).show()
+                    Snackbar.make(requireView(), "Žiadni študenti na prezenčku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                     return@setOnClickListener
                 }
                 val intent = Intent(requireContext(), QrAttendanceActivity::class.java).apply {
@@ -2278,9 +2338,17 @@ class SubjectDetailFragment : Fragment() {
         dialog.setCancelable(true)
 
         val closeMarksBtn = dialogView.findViewById<Button>(R.id.closeMarksBtn)
+        val addMarkBtn = dialogView.findViewById<Button>(R.id.addMarkBtn)
 
         closeMarksBtn.setOnClickListener {
             dialog.dismiss()
+        }
+        addMarkBtn.setOnClickListener {
+            dialog.dismiss()
+            showAddMarkDialog(student)
+        }
+        dialog.setOnDismissListener {
+            activeDialogs.remove(dialog)
         }
 
         dialog.show()
@@ -2496,6 +2564,12 @@ class SubjectDetailFragment : Fragment() {
         snackbar.view.backgroundTintList = null
         snackbar.setTextColor(textColor)
         snackbar.setActionTextColor(actionColor)
+
+        try {
+            activity?.findViewById<View>(R.id.pillNavBar)?.let {
+                snackbar.anchorView = it
+            }
+        } catch (_: Exception) { }
 
         val params = snackbar.view.layoutParams
         if (params is android.view.ViewGroup.MarginLayoutParams) {

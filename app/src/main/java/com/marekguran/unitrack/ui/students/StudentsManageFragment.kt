@@ -244,6 +244,12 @@ class StudentsManageFragment : Fragment() {
                 val subjectsMap = mutableMapOf<String, MutableSet<String>>()
                 val students = localDb.getStudents()
                 for ((uid, json) in students) {
+                    // Filter by school_years enrollment
+                    val schoolYears = json.optJSONArray("school_years")
+                    if (schoolYears != null) {
+                        val enrolled = (0 until schoolYears.length()).any { schoolYears.optString(it) == selectedYear }
+                        if (!enrolled) continue
+                    }
                     val name = json.optString("name", "(bez mena)")
                     val email = json.optString("email", "")
                     items.add(StudentManageItem(uid, name, email))
@@ -300,6 +306,7 @@ class StudentsManageFragment : Fragment() {
                         val result = withContext(Dispatchers.Default) {
                             val admins = adminSnap.children.mapNotNull { it.key }.toSet()
                             val semester = prefs.getString("semester", "zimny") ?: "zimny"
+                            val savedYear = prefs.getString("school_year", null) ?: ""
                             val teacherUids = mutableSetOf<String>()
                             val items = mutableListOf<StudentManageItem>()
                             val subjectsMap = mutableMapOf<String, MutableSet<String>>()
@@ -317,6 +324,12 @@ class StudentsManageFragment : Fragment() {
                             for (child in allStudentsSnap.children) {
                                 val uid = child.key ?: continue
                                 if (uid in teacherUids) continue
+                                // Filter by school_years enrollment
+                                if (savedYear.isNotEmpty()) {
+                                    val schoolYears = child.child("school_years")
+                                    val enrolledInYear = schoolYears.children.any { it.getValue(String::class.java) == savedYear }
+                                    if (!enrolledInYear && schoolYears.exists()) continue
+                                }
                                 val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
                                 val email = child.child("email").getValue(String::class.java) ?: ""
                                 items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
@@ -390,7 +403,8 @@ class StudentsManageFragment : Fragment() {
 
     private fun addStudentOffline(name: String) {
         val uid = UUID.randomUUID().toString().replace("-", "")
-        localDb.addStudent(uid, "", name)
+        val currentYear = prefs.getString("school_year", null)
+        localDb.addStudent(uid, "", name, currentYear)
         loadStudents()
     }
 
@@ -567,7 +581,8 @@ class StudentsManageFragment : Fragment() {
                             }
                             val studentObj = mapOf(
                                 "email" to email,
-                                "name" to name
+                                "name" to name,
+                                "school_years" to listOf(selectedYear)
                             )
                             db.child("students").child(userId).setValue(studentObj)
                                     .addOnSuccessListener {
@@ -779,7 +794,7 @@ class StudentsManageFragment : Fragment() {
         val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
         dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Predmety · ${student.name}"
-        searchEdit.hint = "Hľadať predmet..."
+        (searchEdit.parent?.parent as? com.google.android.material.textfield.TextInputLayout)?.hint = "Hľadať predmet..."
 
         val yearsMap = localDb.getSchoolYears()
         val yearKeys = yearsMap.keys.sortedDescending()
@@ -799,6 +814,9 @@ class StudentsManageFragment : Fragment() {
         val chipEnrollAll = dialogView.findViewById<Chip>(R.id.chipEnrollAll)
         val chipEnrollEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollEnrolled)
         val chipEnrollNotEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollNotEnrolled)
+        chipEnrollAll.text = "Všetky"
+        chipEnrollEnrolled.text = "Zapísané"
+        chipEnrollNotEnrolled.text = "Nezapísané"
 
         val items = mutableListOf<SubjectEnrollItem>()
         var filtered = mutableListOf<SubjectEnrollItem>()
@@ -908,7 +926,7 @@ class StudentsManageFragment : Fragment() {
             val spinnerSemester = dialogView.findViewById<Spinner>(R.id.spinnerSemester)
 
             dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Predmety · ${student.name}"
-            searchEdit.hint = "Hľadať predmet..."
+            (searchEdit.parent?.parent as? com.google.android.material.textfield.TextInputLayout)?.hint = "Hľadať predmet..."
 
             spinnerYear.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, yearDisplay)
                 .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
@@ -925,6 +943,9 @@ class StudentsManageFragment : Fragment() {
             val chipEnrollAll = dialogView.findViewById<Chip>(R.id.chipEnrollAll)
             val chipEnrollEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollEnrolled)
             val chipEnrollNotEnrolled = dialogView.findViewById<Chip>(R.id.chipEnrollNotEnrolled)
+            chipEnrollAll.text = "Všetky"
+            chipEnrollEnrolled.text = "Zapísané"
+            chipEnrollNotEnrolled.text = "Nezapísané"
 
             val items = mutableListOf<SubjectEnrollItem>()
             var filtered = mutableListOf<SubjectEnrollItem>()
@@ -1056,13 +1077,22 @@ class StudentsManageFragment : Fragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     private fun showRenameDialog(student: StudentManageItem) {
-        val input = EditText(requireContext())
+        val cornerRadiusPx = 12f * resources.displayMetrics.density
+        val textInputLayout = com.google.android.material.textfield.TextInputLayout(requireContext()).apply {
+            boxBackgroundMode = com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE
+            setBoxCornerRadii(cornerRadiusPx, cornerRadiusPx, cornerRadiusPx, cornerRadiusPx)
+            hint = "Meno"
+            val dp16 = (16 * resources.displayMetrics.density).toInt()
+            setPadding(dp16, dp16, dp16, 0)
+        }
+        val input = com.google.android.material.textfield.TextInputEditText(textInputLayout.context)
         input.setText(student.name)
-        input.setSelection(input.text.length)
+        textInputLayout.addView(input)
+        input.setSelection(input.text?.length ?: 0)
 
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Premenovať")
-            .setView(input)
+            .setView(textInputLayout)
             .setPositiveButton("Uložiť") { _, _ ->
                 val newName = input.text.toString().trim()
                 if (newName.isEmpty()) {

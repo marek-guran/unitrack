@@ -25,6 +25,7 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.database.*
 import com.marekguran.unitrack.R
+import com.marekguran.unitrack.data.model.AppConstants
 import com.marekguran.unitrack.databinding.FragmentSettingsBinding
 import com.marekguran.unitrack.ui.login.LoginActivity
 import com.marekguran.unitrack.data.model.SubjectInfo
@@ -38,6 +39,9 @@ import android.graphics.Canvas
 import android.os.Build
 import androidx.appcompat.widget.SwitchCompat
 import com.marekguran.unitrack.MainActivity
+import com.marekguran.unitrack.NewSemesterActivity
+import com.marekguran.unitrack.BuildConfig
+import com.marekguran.unitrack.update.UpdateChecker
 import java.security.SecureRandom
 import java.util.UUID
 
@@ -61,6 +65,12 @@ class SettingsFragment : Fragment() {
 
     private var darkModeListener: ((View, Boolean) -> Unit)? = null
     private var pendingThemeRunnable: Runnable? = null
+
+    private val editYearLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            loadSchoolYears()
+        }
+    }
 
     // Subject list for admin
     private val subjectList = mutableListOf<SubjectInfo>()
@@ -187,9 +197,17 @@ class SettingsFragment : Fragment() {
         binding.recyclerSubjects.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerSubjects.adapter = adminSubjectAdapter
 
-        binding.btnAboutUs?.setOnClickListener {
+        binding.btnAboutUs.setOnClickListener {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/marek-guran/unitrack"))
             startActivity(intent)
+        }
+
+        // App version at the bottom
+        binding.textAppVersion.text = getString(R.string.app_version, BuildConfig.VERSION_NAME)
+
+        // Update checker (debug builds only)
+        if (BuildConfig.DEBUG) {
+            setupUpdateChecker()
         }
 
         setupNotificationSettings()
@@ -201,6 +219,52 @@ class SettingsFragment : Fragment() {
         }
 
         return root
+    }
+
+    private fun setupUpdateChecker() {
+        binding.btnCheckUpdates.visibility = View.VISIBLE
+
+        // Show cached update state immediately
+        val cachedVersion = UpdateChecker.getCachedLatestVersion(requireContext())
+        if (cachedVersion != null && cachedVersion != BuildConfig.VERSION_NAME) {
+            binding.btnUpdateAvailable.visibility = View.VISIBLE
+            binding.btnUpdateAvailable.setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.getReleaseUrl(cachedVersion))))
+            }
+        }
+
+        // Manual check button
+        binding.btnCheckUpdates.setOnClickListener {
+            binding.btnCheckUpdates.text = getString(R.string.update_checking)
+            binding.btnCheckUpdates.isEnabled = false
+            UpdateChecker.checkForUpdate(requireContext(), BuildConfig.VERSION_NAME) { hasUpdate, latestVersion ->
+                if (!isAdded || _binding == null) return@checkForUpdate
+                binding.btnCheckUpdates.isEnabled = true
+                binding.btnCheckUpdates.text = getString(R.string.check_for_updates)
+                if (hasUpdate && latestVersion != null) {
+                    binding.btnUpdateAvailable.visibility = View.VISIBLE
+                    binding.btnUpdateAvailable.setOnClickListener {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.getReleaseUrl(latestVersion))))
+                    }
+                } else {
+                    binding.btnUpdateAvailable.visibility = View.GONE
+                    Toast.makeText(requireContext(), getString(R.string.update_not_available), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        // Auto-check if enough time has passed
+        if (UpdateChecker.shouldCheck(requireContext())) {
+            UpdateChecker.checkForUpdate(requireContext(), BuildConfig.VERSION_NAME) { hasUpdate, latestVersion ->
+                if (!isAdded || _binding == null) return@checkForUpdate
+                if (hasUpdate && latestVersion != null) {
+                    binding.btnUpdateAvailable.visibility = View.VISIBLE
+                    binding.btnUpdateAvailable.setOnClickListener {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.getReleaseUrl(latestVersion))))
+                    }
+                }
+            }
+        }
     }
 
     private fun setupOfflineMode() {
@@ -224,6 +288,12 @@ class SettingsFragment : Fragment() {
         // Hide online-only UI elements
         binding.btnResetPassword.visibility = View.GONE
         binding.textResetStatus.visibility = View.GONE
+        binding.btnChangeEmail.visibility = View.GONE
+
+        // Hide consultation notification settings (not available in offline mode)
+        binding.switchNotifConsultation.visibility = View.GONE
+        binding.labelConsultationMinutesBefore.visibility = View.GONE
+        binding.frameConsultationMinutesBefore.visibility = View.GONE
 
         // Change logout button to reset app button
         binding.btnLogout.text = getString(R.string.reset_app)
@@ -305,12 +375,49 @@ class SettingsFragment : Fragment() {
             }
         }
 
+        // Hide change email button in online mode
+        binding.btnChangeEmail.visibility = View.GONE
+
         binding.btnLogout.setOnClickListener {
             auth.signOut()
             val intent = Intent(requireContext(), LoginActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
         }
+    }
+
+    private fun showChangeEmailDialog(auth: FirebaseAuth) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_input, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = getString(R.string.change_email)
+        val input = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogInput)
+        input.hint = getString(R.string.change_email_hint)
+        input.inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        input.setText(auth.currentUser?.email ?: "")
+
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton).apply {
+            text = getString(R.string.change_email)
+            setOnClickListener {
+                val newEmail = input.text?.toString()?.trim() ?: ""
+                if (newEmail.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) return@setOnClickListener
+                auth.currentUser?.verifyBeforeUpdateEmail(newEmail)
+                    ?.addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Toast.makeText(requireContext(), getString(R.string.change_email_success, newEmail), Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(requireContext(), getString(R.string.change_email_error, task.exception?.message ?: ""), Toast.LENGTH_LONG).show()
+                        }
+                        dialog.dismiss()
+                    }
+            }
+        }
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+            .setOnClickListener { dialog.dismiss() }
+        dialog.show()
     }
 
     private fun createLocalUser(email: String, name: String, isTeacher: Boolean) {
@@ -436,6 +543,8 @@ class SettingsFragment : Fragment() {
                 setupSchoolYearManagement()
                 // Show database migration for admins (only if needed)
                 setupMigrateDb()
+                // Show allowed domains setting for admins
+                setupAllowedDomains()
             } else {
                 binding.layoutAddUser.visibility = View.GONE
                 binding.layoutAddSubject.visibility = View.GONE
@@ -443,7 +552,31 @@ class SettingsFragment : Fragment() {
                 binding.layoutSchoolYears.visibility = View.GONE
                 binding.labelSchoolYears.visibility = View.GONE
                 binding.layoutMigrateDb.visibility = View.GONE
+                binding.layoutAllowedDomains.visibility = View.GONE
+                binding.labelAllowedDomains.visibility = View.GONE
             }
+        }
+    }
+
+    private fun setupAllowedDomains() {
+        binding.layoutAllowedDomains.visibility = View.VISIBLE
+        binding.labelAllowedDomains.visibility = View.VISIBLE
+
+        val dbRef = FirebaseDatabase.getInstance().reference
+        // Load current value
+        dbRef.child("settings").child("allowed_domains").get().addOnSuccessListener { snapshot ->
+            if (!isAdded || _binding == null) return@addOnSuccessListener
+            val current = snapshot.getValue(String::class.java) ?: AppConstants.DEFAULT_ALLOWED_DOMAIN
+            binding.editAllowedDomains.setText(current)
+        }
+
+        binding.btnSaveAllowedDomains.setOnClickListener {
+            val domains = binding.editAllowedDomains.text?.toString()?.trim() ?: ""
+            if (domains.isBlank()) return@setOnClickListener
+            dbRef.child("settings").child("allowed_domains").setValue(domains)
+                .addOnSuccessListener {
+                    if (isAdded) Toast.makeText(requireContext(), getString(R.string.allowed_domains_saved), Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
@@ -1192,42 +1325,11 @@ class SettingsFragment : Fragment() {
     }
 
     private fun showEditSchoolYearDialog(item: SchoolYearItem) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_input, null)
-        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Upraviť akademický rok"
-        val input = dialogView.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogInput)
-        input.hint = "Názov (napr. 2025/2026)"
-        input.setText(item.name)
-        val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
-        confirmBtn.text = "Uložiť"
-
-        val dialog = AlertDialog.Builder(requireContext())
-            .setView(dialogView)
-            .setCancelable(true)
-            .create()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-
-        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
-            .setOnClickListener { dialog.dismiss() }
-        confirmBtn.setOnClickListener {
-            val newName = input.text.toString().trim()
-            if (newName.isEmpty()) {
-                Toast.makeText(requireContext(), "Zadajte názov.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            if (isOffline) {
-                localDb.addSchoolYear(item.key, newName)
-                loadSchoolYears()
-                dialog.dismiss()
-            } else {
-                val yearObj = mapOf("name" to newName)
-                FirebaseDatabase.getInstance().reference.child("school_years").child(item.key)
-                    .setValue(yearObj).addOnSuccessListener {
-                        loadSchoolYears()
-                        dialog.dismiss()
-                    }
-            }
-        }
-        dialog.show()
+        val intent = Intent(requireContext(), NewSemesterActivity::class.java)
+        intent.putExtra(NewSemesterActivity.EXTRA_MODE, NewSemesterActivity.MODE_EDIT)
+        intent.putExtra(NewSemesterActivity.EXTRA_YEAR_KEY, item.key)
+        intent.putExtra(NewSemesterActivity.EXTRA_YEAR_NAME, item.name)
+        editYearLauncher.launch(intent)
     }
 
     private fun confirmDeleteSchoolYear(item: SchoolYearItem) {
@@ -1251,8 +1353,13 @@ class SettingsFragment : Fragment() {
                 localDb.remove("school_years/${item.key}")
                 // Remove enrollment data for the deleted year from all students
                 val students = localDb.getStudents()
-                for ((uid, _) in students) {
+                for ((uid, studentJson) in students) {
                     localDb.remove("students/$uid/subjects/${item.key}")
+                    // Also remove from school_years array
+                    val schoolYears = localDb.getStudentSchoolYears(uid).toMutableList()
+                    if (schoolYears.remove(item.key)) {
+                        localDb.setStudentSchoolYears(uid, schoolYears)
+                    }
                 }
                 // Clean up marks and attendance for this year
                 for (semester in listOf("zimny", "letny")) {
@@ -1271,6 +1378,14 @@ class SettingsFragment : Fragment() {
                         for (studentSnap in studentsSnap.children) {
                             val uid = studentSnap.key ?: continue
                             updates["students/$uid/subjects/${item.key}"] = null
+                            // Also remove from school_years array
+                            val schoolYears = mutableListOf<String>()
+                            for (child in studentSnap.child("school_years").children) {
+                                child.getValue(String::class.java)?.let { schoolYears.add(it) }
+                            }
+                            if (schoolYears.remove(item.key)) {
+                                updates["students/$uid/school_years"] = schoolYears
+                            }
                         }
                         if (updates.isNotEmpty()) {
                             db.updateChildren(updates)
@@ -1383,6 +1498,31 @@ class SettingsFragment : Fragment() {
             prefs.edit().putBoolean("notif_show_upcoming", isChecked).apply()
         }
 
+        // Consultation notification switch
+        val consultEnabled = prefs.getBoolean("notif_enabled_consultation", true)
+        binding.switchNotifConsultation.isChecked = consultEnabled
+        updateConsultationNotifControls(consultEnabled)
+        binding.switchNotifConsultation.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("notif_enabled_consultation", isChecked).apply()
+            updateConsultationNotifControls(isChecked, animate = true)
+            rescheduleNotifications()
+        }
+
+        // Consultation minutes before spinner (options: 5, 10, 15, 30, 60)
+        val consultMinutes = listOf("5", "10", "15", "30", "60")
+        val consultMinutesAdapter = ArrayAdapter(requireContext(), R.layout.spinner_item, consultMinutes.map { "$it min" })
+        consultMinutesAdapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
+        binding.spinnerConsultationMinutesBefore.adapter = consultMinutesAdapter
+        val savedConsultMin = prefs.getInt("notif_consultation_minutes_before", 10)
+        val consultIdx = consultMinutes.indexOf(savedConsultMin.toString()).coerceAtLeast(0)
+        binding.spinnerConsultationMinutesBefore.setSelection(consultIdx)
+        binding.spinnerConsultationMinutesBefore.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                prefs.edit().putInt("notif_consultation_minutes_before", consultMinutes[pos].toInt()).apply()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
         // Battery optimization button
         binding.btnBatteryOptimization.setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -1458,6 +1598,30 @@ class SettingsFragment : Fragment() {
             binding.labelChangesInterval.isEnabled = enabled
             binding.frameChangesInterval.isEnabled = enabled
             binding.spinnerChangesInterval.isEnabled = enabled
+        }
+        if (animate) {
+            if (enabled) setEnabled()
+            views.forEachIndexed { i, v ->
+                val anim = v.animate().alpha(alpha).setDuration(CONTROLS_FADE_DURATION_MS)
+                if (!enabled && i == views.lastIndex) anim.withEndAction { setEnabled() }
+                anim.start()
+            }
+        } else {
+            views.forEach { it.alpha = alpha }
+            setEnabled()
+        }
+    }
+
+    private fun updateConsultationNotifControls(enabled: Boolean, animate: Boolean = false) {
+        val label = binding.labelConsultationMinutesBefore
+        val frame = binding.frameConsultationMinutesBefore
+        val spinner = binding.spinnerConsultationMinutesBefore
+        val alpha = if (enabled) 1.0f else 0.5f
+        val views = listOf(label, frame)
+        val setEnabled = {
+            label.isEnabled = enabled
+            frame.isEnabled = enabled
+            spinner.isEnabled = enabled
         }
         if (animate) {
             if (enabled) setEnabled()

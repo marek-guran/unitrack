@@ -82,4 +82,32 @@
             android:textColor="?attr/colorOnSurface" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/actionConsultingHours"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_consulting"
+            app:tint="?attr/colorPrimary"
+            android:contentDescription="@string/consulting_hours_activity_title" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="@string/consulting_hours_activity_title"
+            android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+            android:textColor="?attr/colorOnSurface" />
+    </LinearLayout>
+
 </LinearLayout>

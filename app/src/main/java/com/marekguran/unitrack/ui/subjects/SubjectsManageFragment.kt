@@ -2,7 +2,9 @@ package com.marekguran.unitrack.ui.subjects
 
 import android.annotation.SuppressLint
 import android.app.Dialog
-import android.app.TimePickerDialog
+import com.google.android.material.datepicker.MaterialDatePicker
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
@@ -164,6 +166,7 @@ class SubjectsManageFragment : Fragment() {
                 val result = mutableListOf<SubjectManageItem>()
                 val subjects = localDb.getSubjects(selectedSchoolYear)
                 for ((key, json) in subjects) {
+                    if (json.optBoolean("isConsultingHours", false)) continue
                     val name = json.optString("name", key.replaceFirstChar { it.uppercaseChar() })
                     val teacherEmail = json.optString("teacherEmail", "")
                     val semester = json.optString("semester", "both")
@@ -190,6 +193,8 @@ class SubjectsManageFragment : Fragment() {
                             val result = mutableListOf<SubjectManageItem>()
                             for (subjectSnap in snapshot.children) {
                                 val key = subjectSnap.key ?: continue
+                                val isConsulting = subjectSnap.child("isConsultingHours").getValue(Boolean::class.java) ?: false
+                                if (isConsulting) continue
                                 val name = subjectSnap.child("name").getValue(String::class.java)
                                     ?: key.replaceFirstChar { it.uppercaseChar() }
                                 val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
@@ -647,13 +652,13 @@ class SubjectsManageFragment : Fragment() {
 
     // ── Timetable entry management ──────────────────────────────────────
 
-    private val dayKeys = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    private val dayKeys = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "specific")
     private val dayDisplayNames by lazy {
         listOf(
             getString(R.string.day_monday), getString(R.string.day_tuesday),
             getString(R.string.day_wednesday), getString(R.string.day_thursday),
             getString(R.string.day_friday), getString(R.string.day_saturday),
-            getString(R.string.day_sunday)
+            getString(R.string.day_sunday), getString(R.string.timetable_specific_dates)
         )
     }
     private val parityKeys = listOf("every", "odd", "even")
@@ -663,6 +668,84 @@ class SubjectsManageFragment : Fragment() {
             getString(R.string.timetable_week_odd),
             getString(R.string.timetable_week_even)
         )
+    }
+
+    /** Index of "Špecifické dni" in the day spinner. */
+    private val specificDaysIndex get() = dayKeys.size - 1
+
+    /**
+     * Attach a listener to the day spinner that shows/hides the specific-dates
+     * section and fades the parity spinner in/out accordingly.
+     */
+    private fun setupDaySpinnerToggle(
+        spinnerDay: Spinner,
+        spinnerWeekParity: Spinner,
+        labelWeekParity: View,
+        labelSpecificDates: View,
+        chipGroupDates: View,
+        btnAddDate: View
+    ) {
+        var isFirstCall = true
+        spinnerDay.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val isSpecific = position == specificDaysIndex
+                // Skip animation on initial trigger from Spinner setup
+                if (isFirstCall) {
+                    isFirstCall = false
+                    if (isSpecific) {
+                        spinnerWeekParity.visibility = View.GONE
+                        labelWeekParity.visibility = View.GONE
+                        labelSpecificDates.visibility = View.VISIBLE
+                        chipGroupDates.visibility = View.VISIBLE
+                        btnAddDate.visibility = View.VISIBLE
+                    } else {
+                        spinnerWeekParity.visibility = View.VISIBLE
+                        labelWeekParity.visibility = View.VISIBLE
+                        labelSpecificDates.visibility = View.GONE
+                        chipGroupDates.visibility = View.GONE
+                        btnAddDate.visibility = View.GONE
+                    }
+                    return
+                }
+                val fadeDuration = 200L
+                if (isSpecific) {
+                    // Fade out parity spinner
+                    spinnerWeekParity.animate().alpha(0f).setDuration(fadeDuration).withEndAction {
+                        spinnerWeekParity.visibility = View.GONE
+                    }.start()
+                    labelWeekParity.animate().alpha(0f).setDuration(fadeDuration).withEndAction {
+                        labelWeekParity.visibility = View.GONE
+                    }.start()
+                    // Show specific dates section
+                    labelSpecificDates.visibility = View.VISIBLE
+                    chipGroupDates.visibility = View.VISIBLE
+                    btnAddDate.visibility = View.VISIBLE
+                    labelSpecificDates.alpha = 0f
+                    chipGroupDates.alpha = 0f
+                    btnAddDate.alpha = 0f
+                    labelSpecificDates.animate().alpha(1f).setDuration(fadeDuration).start()
+                    chipGroupDates.animate().alpha(1f).setDuration(fadeDuration).start()
+                    btnAddDate.animate().alpha(1f).setDuration(fadeDuration).start()
+                } else {
+                    // Fade in parity spinner
+                    spinnerWeekParity.visibility = View.VISIBLE
+                    spinnerWeekParity.animate().alpha(1f).setDuration(fadeDuration).start()
+                    labelWeekParity.visibility = View.VISIBLE
+                    labelWeekParity.animate().alpha(1f).setDuration(fadeDuration).start()
+                    // Hide specific dates section
+                    labelSpecificDates.animate().alpha(0f).setDuration(fadeDuration).withEndAction {
+                        labelSpecificDates.visibility = View.GONE
+                    }.start()
+                    chipGroupDates.animate().alpha(0f).setDuration(fadeDuration).withEndAction {
+                        chipGroupDates.visibility = View.GONE
+                    }.start()
+                    btnAddDate.animate().alpha(0f).setDuration(fadeDuration).withEndAction {
+                        btnAddDate.visibility = View.GONE
+                    }.start()
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
     }
 
     private fun loadTimetableEntriesOnline(subjectKey: String, container: LinearLayout, db: DatabaseReference) {
@@ -680,16 +763,18 @@ class SubjectsManageFragment : Fragment() {
                         val parity = entrySnap.child("weekParity").getValue(String::class.java) ?: "every"
                         val classroom = entrySnap.child("classroom").getValue(String::class.java) ?: ""
                         val note = entrySnap.child("note").getValue(String::class.java) ?: ""
+                        val specificDates = entrySnap.child("specificDates").getValue(String::class.java) ?: ""
 
                         val dayName = dayDisplayNames.getOrElse(dayKeys.indexOf(day)) { day }
                         val parityName = parityDisplayNames.getOrElse(parityKeys.indexOf(parity)) { parity }
                         val label = "$dayName $start-$end" +
                                 (if (classroom.isNotBlank()) " ($classroom)" else "") +
-                                (if (parity != "every") " · $parityName" else "")
+                                (if (parity != "every") " · $parityName" else "") +
+                                (if (specificDates.isNotBlank()) " · Špecifické dni" else "")
 
                         addTimetableEntryRow(container, label,
                             onEdit = {
-                                showEditTimetableEntryDialog(subjectKey, key, day, start, end, parity, classroom, note, isOfflineMode = false) {
+                                showEditTimetableEntryDialog(subjectKey, key, day, start, end, parity, classroom, note, specificDates, isOfflineMode = false) {
                                     loadTimetableEntriesOnline(subjectKey, container, db)
                                 }
                             }
@@ -710,16 +795,18 @@ class SubjectsManageFragment : Fragment() {
             val parity = json.optString("weekParity", "every")
             val classroom = json.optString("classroom", "")
             val note = json.optString("note", "")
+            val specificDates = json.optString("specificDates", "")
 
             val dayName = dayDisplayNames.getOrElse(dayKeys.indexOf(day)) { day }
             val parityName = parityDisplayNames.getOrElse(parityKeys.indexOf(parity)) { parity }
             val label = "$dayName $start-$end" +
                     (if (classroom.isNotBlank()) " ($classroom)" else "") +
-                    (if (parity != "every") " · $parityName" else "")
+                    (if (parity != "every") " · $parityName" else "") +
+                    (if (specificDates.isNotBlank()) " · Špecifické dni" else "")
 
             addTimetableEntryRow(container, label,
                 onEdit = {
-                    showEditTimetableEntryDialog(subjectKey, key, day, start, end, parity, classroom, note, isOfflineMode = true) {
+                    showEditTimetableEntryDialog(subjectKey, key, day, start, end, parity, classroom, note, specificDates, isOfflineMode = true) {
                         loadTimetableEntriesOffline(subjectKey, container)
                     }
                 }
@@ -771,6 +858,7 @@ class SubjectsManageFragment : Fragment() {
         subjectKey: String, entryKey: String,
         currentDay: String, currentStart: String, currentEnd: String,
         currentParity: String, currentClassroom: String, currentNote: String,
+        currentSpecificDates: String = "",
         isOfflineMode: Boolean, onUpdated: () -> Unit
     ) {
         val dialogView = LayoutInflater.from(requireContext())
@@ -786,6 +874,9 @@ class SubjectsManageFragment : Fragment() {
         val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveEntry)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelEntry)
         val btnDelete = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDeleteEntry)
+        val labelSpecificDates = dialogView.findViewById<TextView>(R.id.labelSpecificDates)
+        val chipGroupDates = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.chipGroupSpecificDates)
+        val btnAddDate = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddSpecificDate)
 
         dialogTitle.text = getString(R.string.timetable_edit_entry)
         btnSave.text = "Uložiť"
@@ -796,8 +887,15 @@ class SubjectsManageFragment : Fragment() {
         spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
+        val labelWeekParity = dialogView.findViewById<TextView>(R.id.labelWeekParity)
+
         // Pre-fill current values
-        spinnerDay.setSelection(dayKeys.indexOf(currentDay).coerceAtLeast(0))
+        val hasSpecificDates = currentSpecificDates.isNotBlank()
+        if (hasSpecificDates) {
+            spinnerDay.setSelection(specificDaysIndex)
+        } else {
+            spinnerDay.setSelection(dayKeys.indexOf(currentDay).coerceAtLeast(0))
+        }
         editStartTime.setText(currentStart)
         editEndTime.setText(currentEnd)
         spinnerWeekParity.setSelection(parityKeys.indexOf(currentParity).coerceAtLeast(0))
@@ -807,38 +905,91 @@ class SubjectsManageFragment : Fragment() {
         editStartTime.setOnClickListener { showTimePicker(editStartTime) }
         editEndTime.setOnClickListener { showTimePicker(editEndTime) }
 
+        // Initially set visibility based on whether specific dates are present
+        if (hasSpecificDates) {
+            labelSpecificDates.visibility = View.VISIBLE
+            chipGroupDates.visibility = View.VISIBLE
+            btnAddDate.visibility = View.VISIBLE
+            spinnerWeekParity.visibility = View.GONE
+            labelWeekParity.visibility = View.GONE
+        } else {
+            labelSpecificDates.visibility = View.GONE
+            chipGroupDates.visibility = View.GONE
+            btnAddDate.visibility = View.GONE
+        }
+
+        // Toggle parity / specific-dates on day spinner change
+        setupDaySpinnerToggle(spinnerDay, spinnerWeekParity, labelWeekParity, labelSpecificDates, chipGroupDates, btnAddDate)
+
+        // Specific dates support
+        val selectedDates = mutableListOf<String>()
+        if (currentSpecificDates.isNotBlank()) {
+            currentSpecificDates.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach { dateStr ->
+                selectedDates.add(dateStr)
+                val chip = com.google.android.material.chip.Chip(requireContext()).apply {
+                    text = dateStr
+                    isCloseIconVisible = true
+                    setOnCloseIconClickListener { selectedDates.remove(dateStr); chipGroupDates.removeView(this) }
+                }
+                chipGroupDates.addView(chip)
+            }
+        }
+        btnAddDate.setOnClickListener {
+            val mdp = MaterialDatePicker.Builder.datePicker().build()
+            mdp.addOnPositiveButtonClickListener { selection ->
+                val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                val dateStr = String.format("%02d.%02d.%04d", cal.get(java.util.Calendar.DAY_OF_MONTH), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.YEAR))
+                if (dateStr !in selectedDates) {
+                    selectedDates.add(dateStr)
+                    val chip = com.google.android.material.chip.Chip(requireContext()).apply {
+                        text = dateStr
+                        isCloseIconVisible = true
+                        setOnCloseIconClickListener { selectedDates.remove(dateStr); chipGroupDates.removeView(this) }
+                    }
+                    chipGroupDates.addView(chip)
+                }
+            }
+            mdp.show(childFragmentManager, "addScheduleDatePicker")
+        }
+
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         btnSave.setOnClickListener {
-            val day = dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
+            val isSpecificDays = spinnerDay.selectedItemPosition == specificDaysIndex
+            val day = if (isSpecificDays) "monday" else dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
             val startTime = editStartTime.text?.toString()?.trim() ?: ""
             val endTime = editEndTime.text?.toString()?.trim() ?: ""
-            val weekParity = parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" }
+            val weekParity = if (isSpecificDays) "every" else parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" }
             val classroom = editClassroom.text?.toString()?.trim() ?: ""
             val note = editNote.text?.toString()?.trim() ?: ""
+            val specificDatesStr = if (isSpecificDays) selectedDates.joinToString(",") else ""
 
             if (startTime.isBlank() || endTime.isBlank()) {
                 Toast.makeText(requireContext(), "Zadajte čas začiatku a konca.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val conflict = findTimeConflict(subjectKey, entryKey, day, startTime, endTime, weekParity, isOfflineMode)
-            if (conflict != null) {
-                Toast.makeText(requireContext(), conflict, Toast.LENGTH_LONG).show()
-                return@setOnClickListener
+            if (!isSpecificDays) {
+                val conflict = findTimeConflict(subjectKey, entryKey, day, startTime, endTime, weekParity, isOfflineMode)
+                if (conflict != null) {
+                    Toast.makeText(requireContext(), conflict, Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
             }
 
-            val entryMap = mapOf(
+            val entryMap = mutableMapOf(
                 "day" to day, "startTime" to startTime, "endTime" to endTime,
                 "weekParity" to weekParity, "classroom" to classroom, "note" to note
             )
+            if (specificDatesStr.isNotBlank()) entryMap["specificDates"] = specificDatesStr
 
             if (isOfflineMode) {
                 localDb.removeTimetableEntry(selectedSchoolYear, subjectKey, entryKey)
-                localDb.addTimetableEntry(selectedSchoolYear, subjectKey, JSONObject(entryMap))
+                localDb.addTimetableEntry(selectedSchoolYear, subjectKey, JSONObject(entryMap as Map<*, *>))
                 onUpdated()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
@@ -884,6 +1035,9 @@ class SubjectsManageFragment : Fragment() {
         val editNote = dialogView.findViewById<TextInputEditText>(R.id.editNote)
         val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveEntry)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelEntry)
+        val labelSpecificDates = dialogView.findViewById<TextView>(R.id.labelSpecificDates)
+        val chipGroupDates = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.chipGroupSpecificDates)
+        val btnAddDate = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddSpecificDate)
 
         spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
@@ -891,8 +1045,39 @@ class SubjectsManageFragment : Fragment() {
         spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
+        val labelWeekParity = dialogView.findViewById<TextView>(R.id.labelWeekParity)
+
         editStartTime.setOnClickListener { showTimePicker(editStartTime) }
         editEndTime.setOnClickListener { showTimePicker(editEndTime) }
+
+        // Initially hide specific dates section (shown when "Špecifické dni" selected)
+        labelSpecificDates.visibility = View.GONE
+        chipGroupDates.visibility = View.GONE
+        btnAddDate.visibility = View.GONE
+
+        // Toggle parity / specific-dates on day spinner change
+        setupDaySpinnerToggle(spinnerDay, spinnerWeekParity, labelWeekParity, labelSpecificDates, chipGroupDates, btnAddDate)
+
+        // Specific dates support
+        val selectedDates = mutableListOf<String>()
+        btnAddDate.setOnClickListener {
+            val mdp = MaterialDatePicker.Builder.datePicker().build()
+            mdp.addOnPositiveButtonClickListener { selection ->
+                val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                val dateStr = String.format("%02d.%02d.%04d", cal.get(java.util.Calendar.DAY_OF_MONTH), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.YEAR))
+                if (dateStr !in selectedDates) {
+                    selectedDates.add(dateStr)
+                    val chip = com.google.android.material.chip.Chip(requireContext()).apply {
+                        text = dateStr
+                        isCloseIconVisible = true
+                        setOnCloseIconClickListener { selectedDates.remove(dateStr); chipGroupDates.removeView(this) }
+                    }
+                    chipGroupDates.addView(chip)
+                }
+            }
+            mdp.show(childFragmentManager, "editScheduleDatePicker")
+        }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
@@ -900,22 +1085,26 @@ class SubjectsManageFragment : Fragment() {
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         btnSave.setOnClickListener {
-            val day = dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
+            val isSpecificDays = spinnerDay.selectedItemPosition == specificDaysIndex
+            val day = if (isSpecificDays) "monday" else dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
             val startTime = editStartTime.text?.toString()?.trim() ?: ""
             val endTime = editEndTime.text?.toString()?.trim() ?: ""
-            val weekParity = parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" }
+            val weekParity = if (isSpecificDays) "every" else parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" }
             val classroom = editClassroom.text?.toString()?.trim() ?: ""
             val note = editNote.text?.toString()?.trim() ?: ""
+            val specificDatesStr = if (isSpecificDays) selectedDates.joinToString(",") else ""
 
             if (startTime.isBlank() || endTime.isBlank()) {
                 Toast.makeText(requireContext(), "Zadajte čas začiatku a konca.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val conflict = findTimeConflict(subjectKey, "", day, startTime, endTime, weekParity, isOfflineMode)
-            if (conflict != null) {
-                Toast.makeText(requireContext(), conflict, Toast.LENGTH_LONG).show()
-                return@setOnClickListener
+            if (!isSpecificDays) {
+                val conflict = findTimeConflict(subjectKey, "", day, startTime, endTime, weekParity, isOfflineMode)
+                if (conflict != null) {
+                    Toast.makeText(requireContext(), conflict, Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
             }
 
             if (isOfflineMode) {
@@ -926,12 +1115,13 @@ class SubjectsManageFragment : Fragment() {
                     put("weekParity", weekParity)
                     put("classroom", classroom)
                     put("note", note)
+                    if (specificDatesStr.isNotBlank()) put("specificDates", specificDatesStr)
                 }
                 localDb.addTimetableEntry(selectedSchoolYear, subjectKey, entry)
                 onAdded()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
-                val entryMap = mapOf(
+                val entryMap = mutableMapOf(
                     "day" to day,
                     "startTime" to startTime,
                     "endTime" to endTime,
@@ -939,6 +1129,7 @@ class SubjectsManageFragment : Fragment() {
                     "classroom" to classroom,
                     "note" to note
                 )
+                if (specificDatesStr.isNotBlank()) entryMap["specificDates"] = specificDatesStr
                 val key = db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").push().key ?: return@setOnClickListener
                 db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(key).setValue(entryMap)
                     .addOnSuccessListener { onAdded() }
@@ -1010,8 +1201,15 @@ class SubjectsManageFragment : Fragment() {
 
     private fun showTimePicker(editText: TextInputEditText) {
         val cal = Calendar.getInstance()
-        TimePickerDialog(requireContext(), { _, hour, minute ->
-            editText.setText(String.format("%02d:%02d", hour, minute))
-        }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).show()
+        val mtp = MaterialTimePicker.Builder()
+            .setHour(cal.get(Calendar.HOUR_OF_DAY))
+            .setMinute(cal.get(Calendar.MINUTE))
+            .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+            .setTimeFormat(TimeFormat.CLOCK_24H)
+            .build()
+        mtp.addOnPositiveButtonClickListener {
+            editText.setText(String.format("%02d:%02d", mtp.hour, mtp.minute))
+        }
+        mtp.show(childFragmentManager, "scheduleTimePicker")
     }
 }

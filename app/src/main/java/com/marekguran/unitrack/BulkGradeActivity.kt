@@ -1,7 +1,7 @@
 package com.marekguran.unitrack
 
 import android.animation.ValueAnimator
-import android.app.DatePickerDialog
+import com.google.android.material.datepicker.MaterialDatePicker
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -86,20 +86,19 @@ class BulkGradeActivity : AppCompatActivity() {
         val datePicker = findViewById<TextView>(R.id.bulkGradeDatePicker)
         updateDateDisplay(datePicker)
         datePicker.setOnClickListener {
-            val cal = java.util.Calendar.getInstance().apply { timeInMillis = pickedDateMillis }
-            DatePickerDialog(
-                this,
-                { _, year, month, dayOfMonth ->
-                    val pickedCal = java.util.Calendar.getInstance()
-                    pickedCal.set(year, month, dayOfMonth)
-                    pickedDateMillis = pickedCal.timeInMillis
-                    updateDateDisplay(datePicker)
-                    hasUnsavedChanges = true
-                },
-                cal.get(java.util.Calendar.YEAR),
-                cal.get(java.util.Calendar.MONTH),
-                cal.get(java.util.Calendar.DAY_OF_MONTH)
-            ).show()
+            val mdp = MaterialDatePicker.Builder.datePicker()
+                .setSelection(pickedDateMillis)
+                .build()
+            mdp.addOnPositiveButtonClickListener { selection ->
+                val pickedCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                pickedCal.timeInMillis = selection
+                val localCal = java.util.Calendar.getInstance()
+                localCal.set(pickedCal.get(java.util.Calendar.YEAR), pickedCal.get(java.util.Calendar.MONTH), pickedCal.get(java.util.Calendar.DAY_OF_MONTH))
+                pickedDateMillis = localCal.timeInMillis
+                updateDateDisplay(datePicker)
+                hasUnsavedChanges = true
+            }
+            mdp.show(supportFragmentManager, "bulkGradeDatePicker")
         }
 
         // Grade name input (shared, cascading)

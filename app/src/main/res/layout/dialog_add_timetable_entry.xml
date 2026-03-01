@@ -119,6 +119,35 @@
             android:popupBackground="@drawable/spinner_dropdown_bg"
             android:spinnerMode="dropdown" />
 
+        <!-- Specific dates section -->
+        <TextView
+            android:id="@+id/labelSpecificDates"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/timetable_specific_dates"
+            android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+            android:textColor="?attr/colorPrimary"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupSpecificDates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddSpecificDate"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="@string/timetable_add_specific_date"
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="12dp"
+            android:visibility="gone" />
+
         <!-- Classroom -->
         <com.google.android.material.textfield.TextInputLayout
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"

@@ -1,7 +1,10 @@
 package com.marekguran.unitrack.ui.timetable
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
+import com.google.android.material.datepicker.MaterialDatePicker
+import com.google.android.material.datepicker.CalendarConstraints
+import com.google.android.material.datepicker.DateValidatorPointForward
+import com.google.android.material.timepicker.MaterialTimePicker
+import com.google.android.material.timepicker.TimeFormat
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
@@ -18,6 +21,7 @@ import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -72,6 +76,11 @@ class TimetableFragment : Fragment() {
 
     // Active "My days off" dialog so it can be refreshed after edits/deletes
     private var myDaysOffDialog: android.app.Dialog? = null
+
+    // Launcher for ConsultingHoursActivity — reloads timetable on return
+    private val consultingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (isOffline) loadOfflineTimetable() else checkUserRoleAndLoad()
+    }
 
     // Handler for periodic progress updates of CURRENT class cards
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -194,7 +203,12 @@ class TimetableFragment : Fragment() {
             canEdit = { isAdmin || isTeacher },
             canDelete = { isAdmin },
             onEditClick = { entry -> showEditEntryDialog(entry) },
-            onDeleteClick = { entry -> showDeleteConfirmation(entry) {} }
+            onDeleteClick = { entry -> showDeleteConfirmation(entry) {} },
+            loadConsultationBookings = { entry, container, displayedDate ->
+                if ((isTeacher || isAdmin) && !isOffline) {
+                    loadConsultationBookingsForEntry(entry, container, displayedDate)
+                }
+            }
         )
         binding.viewPager.adapter = pagerAdapter
 
@@ -290,6 +304,11 @@ class TimetableFragment : Fragment() {
                 bottomSheet.dismiss()
                 showMyDaysOffDialog()
             }
+            sheetView.findViewById<View>(R.id.actionConsultingHours).setOnClickListener {
+                bottomSheet.dismiss()
+                val intent = android.content.Intent(requireContext(), com.marekguran.unitrack.ConsultingHoursActivity::class.java)
+                consultingLauncher.launch(intent)
+            }
 
             bottomSheet.show()
         }
@@ -312,20 +331,8 @@ class TimetableFragment : Fragment() {
      * returns the next visible weekday (typically Monday).
      */
     private fun findNearestVisibleDate(date: LocalDate): LocalDate {
-        val daysOfWeekWithClasses = dayOrder.filter { dayKey ->
-            allEntries.any { it.day == dayKey }
-        }.toSet()
-        val baseDayIndices = (0..4).toMutableSet() // Mon–Fri always visible
-        for (dayKey in daysOfWeekWithClasses) {
-            baseDayIndices.add(dayOrder.indexOf(dayKey))
-        }
-        var candidate = date
-        for (i in 0..6) {
-            val dayIdx = candidate.dayOfWeek.value - 1
-            if (dayIdx in baseDayIndices) return candidate
-            candidate = candidate.plusDays(1)
-        }
-        return date // fallback if no visible day found within a week
+        // All days (Mon–Sun) are always visible in the day navigation
+        return date
     }
 
     private fun navigateToDay(date: LocalDate, scrollToChip: Boolean = false) {
@@ -478,28 +485,16 @@ class TimetableFragment : Fragment() {
         val startDate = today.with(DayOfWeek.MONDAY)
         val endDate = today.plusWeeks(weeksForward.toLong())
 
-        // Always include Mon–Fri; expand to Sat/Sun only if there are classes on those days
-        val daysOfWeekWithClasses = dayOrder.filter { dayKey ->
-            allEntries.any { it.day == dayKey }
-        }.toSet()
-
-        val baseDayIndices = (0..4).toMutableSet() // Mon–Fri
-        for (dayKey in daysOfWeekWithClasses) {
-            baseDayIndices.add(dayOrder.indexOf(dayKey))
-        }
-
         val chips = mutableListOf<DayChipItem>()
         var date = startDate
         while (!date.isAfter(endDate)) {
             val dayIdx = date.dayOfWeek.value - 1
-            if (dayIdx in baseDayIndices) {
-                chips.add(DayChipItem(
-                    dayKey = dayOrder[dayIdx],
-                    shortName = if (date == today) "Dnes" else shortDayNames[dayIdx],
-                    date = date,
-                    isSelected = date == selectedDate
-                ))
-            }
+            chips.add(DayChipItem(
+                dayKey = dayOrder[dayIdx],
+                shortName = if (date == today) "Dnes" else shortDayNames[dayIdx],
+                date = date,
+                isSelected = date == selectedDate
+            ))
             date = date.plusDays(1)
         }
         return chips
@@ -516,8 +511,15 @@ class TimetableFragment : Fragment() {
         // Rebuild chips and pager dates (this also refreshes all pager pages)
         buildDayChips(scrollToSelected = false)
 
-        // Initialize state fingerprint for today
+        // After data loads, navigate to today (or nearest visible day) so weekends
+        // with consultation hours are displayed correctly instead of snapping to Monday.
         val today = LocalDate.now()
+        val effectiveToday = findNearestVisibleDate(today)
+        if (selectedDate != effectiveToday) {
+            navigateToDay(effectiveToday, scrollToChip = true)
+        }
+
+        // Initialize state fingerprint for today
         lastStateFingerprint = buildStateFingerprint(today)
 
         // Start progress updates if today has any active or upcoming classes
@@ -530,12 +532,25 @@ class TimetableFragment : Fragment() {
     /** Build schedule card items for a given date (used by TimetablePagerAdapter). */
     private fun buildScheduleItems(date: LocalDate): List<ScheduleCardItem> {
         val selectedDayKey = date.dayOfWeek.toKey()
+        val dateStr = date.format(skDateFormat)
 
         val weekNumber = date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
 
         val dayEntries = allEntries
-            .filter { it.day == selectedDayKey }
+            .filter { entry ->
+                if (entry.specificDates.isNotBlank()) {
+                    // Multi-date event: show on any of the specified dates
+                    val dates = entry.specificDates.split(",").map { it.trim() }
+                    dateStr in dates
+                } else if (entry.specificDate.isNotBlank()) {
+                    // One-time event: show only on the specific date
+                    entry.specificDate == dateStr
+                } else {
+                    // Regular recurring entry: match by day of week
+                    entry.day == selectedDayKey
+                }
+            }
             .sortedBy { it.startTime }
 
         val today = LocalDate.now()
@@ -769,7 +784,8 @@ class TimetableFragment : Fragment() {
                                 allEntries.add(parseTimetableEntryFromSnapshot(entryKey, entrySnap, subjectKey, subjectName))
                             }
                         }
-                        loadDaysOffAndBuild()
+                        // Also load student's booked consultation entries
+                        loadStudentConsultationEntries()
                     }
 
                     override fun onCancelled(error: DatabaseError) {}
@@ -778,6 +794,13 @@ class TimetableFragment : Fragment() {
 
             override fun onCancelled(error: DatabaseError) {}
         })
+    }
+
+    private fun loadStudentConsultationEntries() {
+        // Student booked consultations are shown only in the Consulting Hours fragment,
+        // not in the timetable. Skip loading them into allEntries and proceed to
+        // build the timetable.
+        loadDaysOffAndBuild()
     }
 
     private fun loadDaysOffAndBuild() {
@@ -1018,11 +1041,15 @@ class TimetableFragment : Fragment() {
         val editStartTime = dialogView.findViewById<TextInputEditText>(R.id.editStartTime)
         val editEndTime = dialogView.findViewById<TextInputEditText>(R.id.editEndTime)
         val spinnerWeekParity = dialogView.findViewById<Spinner>(R.id.spinnerWeekParity)
+        val labelWeekParity = dialogView.findViewById<TextView>(R.id.labelWeekParity)
         val editClassroom = dialogView.findViewById<TextInputEditText>(R.id.editClassroom)
         val editNote = dialogView.findViewById<TextInputEditText>(R.id.editNote)
         val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSaveEntry)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancelEntry)
         val btnDelete = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnDeleteEntry)
+        val labelSpecificDates = dialogView.findViewById<TextView>(R.id.labelSpecificDates)
+        val chipGroupDates = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.chipGroupSpecificDates)
+        val btnAddDate = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnAddSpecificDate)
 
         dialogTitle.text = getString(R.string.timetable_edit_entry)
         btnSave.text = "Uložiť"
@@ -1030,18 +1057,89 @@ class TimetableFragment : Fragment() {
         // Only admins can delete timetable entries
         btnDelete.visibility = if (isAdmin) View.VISIBLE else View.GONE
 
-        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayDisplayNames)
+        // Day spinner: Mon-Sun + "Specific dates" as last option
+        val specificDatesLabel = getString(R.string.timetable_specific_dates)
+        val dayLabelsWithSpecific = dayDisplayNames + specificDatesLabel
+        val specificDatesIndex = dayLabelsWithSpecific.size - 1
+
+        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayLabelsWithSpecific)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
         spinnerWeekParity.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, parityDisplayNames)
             .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
 
+        val selectedDates = mutableListOf<String>()
+
+        // Helper: show/hide parity vs specific-dates section
+        fun updateVisibilityForDaySelection(position: Int) {
+            if (position == specificDatesIndex) {
+                // "Specific dates" selected → hide parity, show multi-date picker
+                labelWeekParity.visibility = View.GONE
+                spinnerWeekParity.visibility = View.GONE
+                labelSpecificDates.visibility = View.VISIBLE
+                chipGroupDates.visibility = View.VISIBLE
+                btnAddDate.visibility = View.VISIBLE
+            } else {
+                // Regular day selected → show parity, keep specific dates section if admin
+                labelWeekParity.visibility = View.VISIBLE
+                spinnerWeekParity.visibility = View.VISIBLE
+                if (!isAdmin) {
+                    labelSpecificDates.visibility = View.GONE
+                    chipGroupDates.visibility = View.GONE
+                    btnAddDate.visibility = View.GONE
+                }
+            }
+        }
+
         // Pre-fill
-        spinnerDay.setSelection(dayKeys.indexOf(entry.day).coerceAtLeast(0))
+        val hasSpecificDates = entry.specificDates.isNotBlank()
+        if (hasSpecificDates) {
+            spinnerDay.setSelection(specificDatesIndex)
+        } else {
+            spinnerDay.setSelection(dayKeys.indexOf(entry.day).coerceAtLeast(0))
+        }
         editStartTime.setText(entry.startTime)
         editEndTime.setText(entry.endTime)
         spinnerWeekParity.setSelection(parityKeys.indexOf(entry.weekParity).coerceAtLeast(0))
         editClassroom.setText(entry.classroom)
         editNote.setText(entry.note)
+
+        // Day spinner selection listener to toggle parity vs specific dates
+        spinnerDay.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                updateVisibilityForDaySelection(position)
+            }
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+        }
+
+        // Specific dates handling (admin only)
+        if (isAdmin) {
+            // Pre-fill existing specific dates
+            if (entry.specificDates.isNotBlank()) {
+                entry.specificDates.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach { dateStr ->
+                    selectedDates.add(dateStr)
+                    addDateChip(chipGroupDates, dateStr, selectedDates)
+                }
+            }
+
+            btnAddDate.setOnClickListener {
+                val picker = MaterialDatePicker.Builder.datePicker()
+                    .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+                    .build()
+                picker.addOnPositiveButtonClickListener { selection ->
+                    val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                    cal.timeInMillis = selection
+                    val dateStr = String.format("%02d.%02d.%04d", cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR))
+                    if (dateStr !in selectedDates) {
+                        selectedDates.add(dateStr)
+                        addDateChip(chipGroupDates, dateStr, selectedDates)
+                    }
+                }
+                picker.show(childFragmentManager, "date_picker_one_time")
+            }
+
+            // Set initial visibility
+            updateVisibilityForDaySelection(spinnerDay.selectedItemPosition)
+        }
 
         // Teachers (non-admin) can only edit classroom and note — hide other fields
         if (isTeacher && !isAdmin) {
@@ -1049,8 +1147,11 @@ class TimetableFragment : Fragment() {
             spinnerDay.visibility = View.GONE
             dialogView.findViewById<View>(R.id.layoutStartTime).visibility = View.GONE
             dialogView.findViewById<View>(R.id.layoutEndTime).visibility = View.GONE
-            dialogView.findViewById<TextView>(R.id.labelWeekParity).visibility = View.GONE
+            labelWeekParity.visibility = View.GONE
             spinnerWeekParity.visibility = View.GONE
+            labelSpecificDates.visibility = View.GONE
+            chipGroupDates.visibility = View.GONE
+            btnAddDate.visibility = View.GONE
         } else {
             editStartTime.setOnClickListener { showTimePicker(editStartTime) }
             editEndTime.setOnClickListener { showTimePicker(editEndTime) }
@@ -1063,19 +1164,35 @@ class TimetableFragment : Fragment() {
         dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
 
         btnSave.setOnClickListener {
-            val day = if (isAdmin) dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" } else entry.day
+            val dayPos = spinnerDay.selectedItemPosition
+            val isSpecificDatesMode = dayPos == specificDatesIndex
+            val day = if (isAdmin) {
+                if (isSpecificDatesMode) {
+                    // Use the first selected date's day-of-week, or monday as fallback
+                    val firstDate = selectedDates.firstOrNull()
+                    if (firstDate != null) {
+                        try {
+                            val parsed = java.time.LocalDate.parse(firstDate, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                            dayKeys[parsed.dayOfWeek.value - 1]
+                        } catch (_: Exception) { "monday" }
+                    } else "monday"
+                } else {
+                    dayKeys.getOrElse(dayPos) { "monday" }
+                }
+            } else entry.day
             val startTime = if (isAdmin) (editStartTime.text?.toString()?.trim() ?: "") else entry.startTime
             val endTime = if (isAdmin) (editEndTime.text?.toString()?.trim() ?: "") else entry.endTime
-            val weekParity = if (isAdmin) parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" } else entry.weekParity
+            val weekParity = if (isAdmin && !isSpecificDatesMode) parityKeys.getOrElse(spinnerWeekParity.selectedItemPosition) { "every" } else entry.weekParity
             val classroom = editClassroom.text?.toString()?.trim() ?: ""
             val note = editNote.text?.toString()?.trim() ?: ""
+            val specificDatesStr = if (isSpecificDatesMode) selectedDates.joinToString(",") else ""
 
             if (startTime.isBlank() || endTime.isBlank()) {
                 Snackbar.make(binding.root, "Zadajte čas začiatku a konca.", Snackbar.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (isAdmin) {
+            if (isAdmin && !isSpecificDatesMode) {
                 val conflict = findTimeConflict(day, startTime, endTime, weekParity, entry.subjectKey, entry.key)
                 if (conflict != null) {
                     Snackbar.make(binding.root, conflict, Snackbar.LENGTH_LONG).show()
@@ -1083,7 +1200,7 @@ class TimetableFragment : Fragment() {
                 }
             }
 
-            updateTimetableEntry(entry, day, startTime, endTime, weekParity, classroom, note)
+            updateTimetableEntry(entry, day, startTime, endTime, weekParity, classroom, note, specificDatesStr)
             dialog.dismiss()
         }
 
@@ -1124,24 +1241,33 @@ class TimetableFragment : Fragment() {
     }
 
     private fun showTimePicker(editText: TextInputEditText) {
-        // Pre-fill picker with existing value if present, otherwise use current time
         val existing = editText.text?.toString()?.trim() ?: ""
         val parsedTime = parseTime(existing)
         val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
-        TimePickerDialog(requireContext(), { _, h, m ->
-            editText.setText(String.format("%02d:%02d", h, m))
-        }, hour, minute, true).show()
+        val picker = MaterialTimePicker.Builder()
+            .setTimeFormat(TimeFormat.CLOCK_24H)
+            .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+            .setHour(hour)
+            .setMinute(minute)
+            .build()
+        picker.addOnPositiveButtonClickListener {
+            editText.setText(String.format("%02d:%02d", picker.hour, picker.minute))
+        }
+        picker.show(childFragmentManager, "time_picker")
     }
 
     // ── Time conflict detection ───────────────────────────────────────────────
 
-    private fun findTimeConflict(day: String, startTime: String, endTime: String, weekParity: String, excludeSubjectKey: String, excludeEntryKey: String): String? {
+    private fun findTimeConflict(day: String, startTime: String, endTime: String, weekParity: String, excludeSubjectKey: String, excludeEntryKey: String, isConsultingHours: Boolean = false): String? {
+        // Consulting hours skip conflict checks
+        if (isConsultingHours) return null
         val newStart = parseTime(startTime) ?: return null
         val newEnd = parseTime(endTime) ?: return null
 
         for (existing in allEntries) {
             if (existing.key == excludeEntryKey) continue
+            if (existing.isConsultingHours) continue
             if (existing.day != day) continue
             // Check parity overlap
             if (weekParity != "every" && existing.weekParity != "every" && weekParity != existing.weekParity) continue
@@ -1172,7 +1298,7 @@ class TimetableFragment : Fragment() {
 
     // ── Update timetable entry ────────────────────────────────────────────────
 
-    private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String) {
+    private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String, specificDates: String = "") {
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
         val entryRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
@@ -1192,7 +1318,7 @@ class TimetableFragment : Fragment() {
                 }
             }
         } else {
-            val data = mapOf(
+            val data = mutableMapOf(
                 "day" to day,
                 "startTime" to startTime,
                 "endTime" to endTime,
@@ -1200,8 +1326,11 @@ class TimetableFragment : Fragment() {
                 "classroom" to classroom,
                 "note" to note
             )
+            if (specificDates.isNotBlank()) {
+                data["specificDates"] = specificDates
+            }
             if (isOffline) {
-                val json = JSONObject(data)
+                val json = JSONObject(data as Map<*, *>)
                 localDb.removeTimetableEntry(selectedSchoolYear, entry.subjectKey, entry.key)
                 localDb.addTimetableEntry(selectedSchoolYear, entry.subjectKey, json)
                 loadOfflineTimetable()
@@ -1233,23 +1362,43 @@ class TimetableFragment : Fragment() {
 
         // Date pickers — DD.MM.YYYY format
         editDate.setOnClickListener {
-            val cal = Calendar.getInstance()
-            DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                editDate.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.parse(editDate.text?.toString()?.trim() ?: "", skDateFormat)
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setTitleText(getString(R.string.timetable_day_off_date_from))
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                editDate.setText(String.format("%02d.%02d.%04d", cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR)))
+            }
+            picker.show(childFragmentManager, "date_picker_dayoff_from")
         }
         editDateTo.setOnClickListener {
-            val cal = Calendar.getInstance()
-            val dpd = DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                editDateTo.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+            val constraintsBuilder = CalendarConstraints.Builder()
             val fromDate = parseDateSk(editDate.text?.toString()?.trim() ?: "")
             if (fromDate != null) {
-                val minCal = Calendar.getInstance()
-                minCal.set(fromDate.year, fromDate.monthValue - 1, fromDate.dayOfMonth)
-                dpd.datePicker.minDate = minCal.timeInMillis
+                val minMillis = fromDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                constraintsBuilder.setValidator(DateValidatorPointForward.from(minMillis))
             }
-            dpd.show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.parse(editDateTo.text?.toString()?.trim() ?: "", skDateFormat)
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setTitleText(getString(R.string.timetable_day_off_date_to))
+                .setCalendarConstraints(constraintsBuilder.build())
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                editDateTo.setText(String.format("%02d.%02d.%04d", cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR)))
+            }
+            picker.show(childFragmentManager, "date_picker_dayoff_to")
         }
 
         // Time pickers
@@ -1259,9 +1408,16 @@ class TimetableFragment : Fragment() {
                 val parsedTime = parseTime(existing)
                 val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
                 val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
-                TimePickerDialog(requireContext(), { _, h, m ->
-                    editText.setText(String.format("%02d:%02d", h, m))
-                }, hour, minute, true).show()
+                val picker = MaterialTimePicker.Builder()
+                    .setTimeFormat(TimeFormat.CLOCK_24H)
+                    .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                    .setHour(hour)
+                    .setMinute(minute)
+                    .build()
+                picker.addOnPositiveButtonClickListener {
+                    editText.setText(String.format("%02d:%02d", picker.hour, picker.minute))
+                }
+                picker.show(childFragmentManager, "time_picker_dayoff")
             }
         }
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
@@ -1329,6 +1485,347 @@ class TimetableFragment : Fragment() {
                     }
                 }
         }
+    }
+
+    // ── Add consulting hours dialog ───────────────────────────────────────────
+
+    private fun showAddConsultingHoursDialog() {
+        val dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_add_consulting_hours, null)
+
+        val spinnerDay = dialogView.findViewById<Spinner>(R.id.spinnerDay)
+        val spinnerLocationType = dialogView.findViewById<Spinner>(R.id.spinnerLocationType)
+        val editStartTime = dialogView.findViewById<TextInputEditText>(R.id.editStartTime)
+        val editEndTime = dialogView.findViewById<TextInputEditText>(R.id.editEndTime)
+        val editClassroom = dialogView.findViewById<TextInputEditText>(R.id.editClassroom)
+        val editNote = dialogView.findViewById<TextInputEditText>(R.id.editNote)
+        val btnSave = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnSave)
+        val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancel)
+
+        val dayLabels = dayOrder.map { dayNames[it] ?: it }
+        spinnerDay.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, dayLabels)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+
+        // Location type: Kabinet (office) or Učebňa (classroom)
+        val locationTypes = listOf("Kabinet", "Učebňa")
+        spinnerLocationType.adapter = ArrayAdapter(requireContext(), R.layout.spinner_item, locationTypes)
+            .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
+
+        // Time pickers
+        editStartTime.setOnClickListener { showTimePicker(editStartTime) }
+        editEndTime.setOnClickListener { showTimePicker(editEndTime) }
+
+        val dialog = android.app.Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+
+        btnSave.setOnClickListener {
+            val startTime = editStartTime.text?.toString()?.trim() ?: ""
+            val endTime = editEndTime.text?.toString()?.trim() ?: ""
+            val classroomInput = editClassroom.text?.toString()?.trim() ?: ""
+            val locationType = if (spinnerLocationType.selectedItemPosition == 0) "Kabinet" else "Učebňa"
+            val classroom = if (classroomInput.isNotBlank()) "$locationType – $classroomInput" else locationType
+            val note = editNote.text?.toString()?.trim() ?: ""
+            val dayKey = dayOrder.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
+
+            if (startTime.isBlank() || endTime.isBlank()) {
+                Snackbar.make(binding.root, "Zadajte čas začiatku a konca.", Snackbar.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            saveConsultingHours(dayKey, startTime, endTime, classroom, note, "")
+            dialog.dismiss()
+        }
+
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun saveConsultingHours(day: String, startTime: String, endTime: String, classroom: String, note: String, specificDate: String) {
+        val consultingSubjectKey = "_consulting_$currentUserUid"
+        val entryKey = java.util.UUID.randomUUID().toString().replace("-", "")
+
+        val data = mutableMapOf<String, Any>(
+            "day" to day,
+            "startTime" to startTime,
+            "endTime" to endTime,
+            "weekParity" to "every",
+            "classroom" to classroom,
+            "note" to note,
+            "isConsultingHours" to true
+        )
+        if (specificDate.isNotBlank()) {
+            data["specificDate"] = specificDate
+        }
+
+        if (isOffline) {
+            val json = JSONObject(data.mapValues { it.value.toString() })
+            json.put("isConsultingHours", true)
+            localDb.addTimetableEntry(selectedSchoolYear, consultingSubjectKey, json)
+            loadOfflineTimetable()
+        } else {
+            // Ensure the consulting "subject" node exists
+            val subjectRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(consultingSubjectKey)
+            subjectRef.child("name").setValue(getString(R.string.timetable_consulting_hours))
+            subjectRef.child("teacherEmail").setValue(currentUserEmail)
+            subjectRef.child("isConsultingHours").setValue(true)
+            subjectRef.child("timetable").child(entryKey).setValue(data)
+                .addOnSuccessListener {
+                    if (isAdded) {
+                        loadOnlineTimetable()
+                        Snackbar.make(binding.root, getString(R.string.timetable_consulting_hours) + " pridané", Snackbar.LENGTH_SHORT).show()
+                    }
+                }
+        }
+    }
+
+    // ── Manage my consulting hours ────────────────────────────────────────────
+
+    private fun showManageConsultingHoursDialog() {
+        val consultingSubjectKey = "_consulting_$currentUserUid"
+        val subjectRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(consultingSubjectKey).child("timetable")
+
+        subjectRef.get().addOnSuccessListener { snapshot ->
+            if (!isAdded) return@addOnSuccessListener
+            val entries = mutableListOf<Pair<String, TimetableEntry>>()
+            for (snap in snapshot.children) {
+                val key = snap.key ?: continue
+                entries.add(key to TimetableEntry(
+                    key = key,
+                    day = snap.child("day").getValue(String::class.java) ?: "",
+                    startTime = snap.child("startTime").getValue(String::class.java) ?: "",
+                    endTime = snap.child("endTime").getValue(String::class.java) ?: "",
+                    classroom = snap.child("classroom").getValue(String::class.java) ?: "",
+                    note = snap.child("note").getValue(String::class.java) ?: "",
+                    subjectKey = consultingSubjectKey,
+                    isConsultingHours = true
+                ))
+            }
+
+            val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
+            val title = dialogView.findViewById<TextView>(R.id.dialogTitle)
+            val message = dialogView.findViewById<TextView>(R.id.dialogMessage)
+            val confirmBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton)
+            val cancelBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton)
+            title.text = getString(R.string.consulting_manage_title)
+            confirmBtn.visibility = View.GONE
+            cancelBtn.text = "Zavrieť"
+
+            val container = (message.parent as LinearLayout)
+            val messageIndex = container.indexOfChild(message)
+            container.removeView(message)
+
+            val dialog = android.app.Dialog(requireContext())
+
+            if (entries.isEmpty()) {
+                val emptyText = TextView(requireContext()).apply {
+                    text = getString(R.string.consulting_no_entries)
+                    setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+                    setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                    setPadding(0, 0, 0, (24 * resources.displayMetrics.density).toInt())
+                }
+                container.addView(emptyText, messageIndex)
+            } else {
+                for ((index, pair) in entries.withIndex()) {
+                    val (entryKey, entry) = pair
+                    val dayLabel = dayNames[entry.day] ?: entry.day
+                    val row = LinearLayout(requireContext()).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(0, (8 * resources.displayMetrics.density).toInt(), 0, (8 * resources.displayMetrics.density).toInt())
+                    }
+                    val info = TextView(requireContext()).apply {
+                        text = "$dayLabel  ${entry.startTime} – ${entry.endTime}" +
+                            if (entry.classroom.isNotBlank()) "\n${entry.classroom}" else ""
+                        setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+                        setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurface))
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    val btnDelete = com.google.android.material.button.MaterialButton(requireContext(), null, android.R.attr.borderlessButtonStyle).apply {
+                        text = "Odstrániť"
+                        setTextColor(resolveThemeColor(android.R.attr.colorError))
+                        textSize = 12f
+                        setOnClickListener {
+                            deleteConsultingHoursEntry(consultingSubjectKey, entryKey, entry, dialog)
+                        }
+                    }
+                    row.addView(info)
+                    row.addView(btnDelete)
+                    container.addView(row, messageIndex + index)
+                }
+            }
+
+            dialog.setContentView(dialogView)
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+            cancelBtn.setOnClickListener { dialog.dismiss() }
+            dialog.show()
+        }
+    }
+
+    private fun deleteConsultingHoursEntry(consultingSubjectKey: String, entryKey: String, entry: TimetableEntry, parentDialog: android.app.Dialog) {
+        // Check if there are bookings for this entry
+        db.child("consultation_bookings").child(consultingSubjectKey).get().addOnSuccessListener { snapshot ->
+            if (!isAdded) return@addOnSuccessListener
+            val bookedStudents = mutableListOf<DataSnapshot>()
+            for (bookingSnap in snapshot.children) {
+                val ek = bookingSnap.child("consultingEntryKey").getValue(String::class.java) ?: ""
+                if (ek == entryKey) bookedStudents.add(bookingSnap)
+            }
+
+            if (bookedStudents.isNotEmpty()) {
+                // Warn teacher about booked students
+                val confirmView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
+                confirmView.findViewById<TextView>(R.id.dialogTitle).text = getString(R.string.consulting_delete_confirm)
+                confirmView.findViewById<TextView>(R.id.dialogMessage).text = getString(R.string.consulting_has_bookings)
+                val confirmDialog = android.app.Dialog(requireContext())
+                confirmDialog.setContentView(confirmView)
+                confirmDialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+                confirmDialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+                confirmView.findViewById<com.google.android.material.button.MaterialButton>(R.id.confirmButton).apply {
+                    text = "Pokračovať"
+                    setOnClickListener {
+                        performDeleteConsultingEntry(consultingSubjectKey, entryKey, bookedStudents, entry)
+                        confirmDialog.dismiss()
+                        parentDialog.dismiss()
+                    }
+                }
+                confirmView.findViewById<com.google.android.material.button.MaterialButton>(R.id.cancelButton).setOnClickListener {
+                    confirmDialog.dismiss()
+                }
+                confirmDialog.show()
+            } else {
+                performDeleteConsultingEntry(consultingSubjectKey, entryKey, emptyList(), entry)
+                parentDialog.dismiss()
+            }
+        }
+    }
+
+    private fun performDeleteConsultingEntry(consultingSubjectKey: String, entryKey: String, bookedStudents: List<DataSnapshot>, entry: TimetableEntry) {
+        // Remove the timetable entry
+        db.child("school_years").child(selectedSchoolYear).child("predmety")
+            .child(consultingSubjectKey).child("timetable").child(entryKey).removeValue()
+
+        // Notify and clean up booked students
+        for (bookingSnap in bookedStudents) {
+            val studentUid = bookingSnap.child("studentUid").getValue(String::class.java) ?: continue
+            val bookingKey = bookingSnap.key ?: continue
+            val date = bookingSnap.child("date").getValue(String::class.java) ?: ""
+
+            // Remove booking
+            db.child("consultation_bookings").child(consultingSubjectKey).child(bookingKey).removeValue()
+
+            // Remove from student's timetable
+            db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { snap ->
+                for (child in snap.children) {
+                    if (child.child("bookingKey").getValue(String::class.java) == bookingKey) {
+                        child.ref.removeValue()
+                    }
+                }
+            }
+
+            // Notify student
+            val dayLabel = dayNames[entry.day] ?: entry.day
+            val notifKey = db.child("notifications").child(studentUid).push().key ?: continue
+            db.child("notifications").child(studentUid).child(notifKey).setValue(
+                mapOf(
+                    "type" to "consultation_cancelled",
+                    "message" to getString(R.string.consulting_cancel_notification, "$dayLabel $date ${entry.startTime}–${entry.endTime}"),
+                    "timestamp" to ServerValue.TIMESTAMP
+                )
+            )
+        }
+
+        if (isAdded) {
+            loadOnlineTimetable()
+            Snackbar.make(binding.root, getString(R.string.consulting_deleted), Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
+    // ── Load consultation bookings for teacher timetable card ───────────────
+
+    private fun loadConsultationBookingsForEntry(entry: TimetableEntry, container: android.widget.LinearLayout, displayedDate: java.time.LocalDate) {
+        container.removeAllViews()
+        val skDateFormat = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+        val displayedDateStr = displayedDate.format(skDateFormat)
+        val today = java.time.LocalDate.now()
+        db.child("consultation_bookings").child(entry.subjectKey)
+            .addListenerForSingleValueEvent(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    if (!isAdded) return
+                    container.removeAllViews()
+                    var hasBookings = false
+                    for (bookingSnap in snapshot.children) {
+                        val entryKey = bookingSnap.child("consultingEntryKey").getValue(String::class.java) ?: ""
+                        if (entryKey != entry.key) continue
+                        val bookingDate = bookingSnap.child("date").getValue(String::class.java) ?: ""
+
+                        // Auto-delete past bookings
+                        val parsedDate = try { java.time.LocalDate.parse(bookingDate, skDateFormat) } catch (_: Exception) { null }
+                        if (parsedDate != null && parsedDate.isBefore(today)) {
+                            val studentUid = bookingSnap.child("studentUid").getValue(String::class.java) ?: ""
+                            val bKey = bookingSnap.key ?: ""
+                            bookingSnap.ref.removeValue()
+                            if (studentUid.isNotBlank() && bKey.isNotBlank()) {
+                                db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { stSnap ->
+                                    for (child in stSnap.children) {
+                                        if (child.child("bookingKey").getValue(String::class.java) == bKey) {
+                                            child.ref.removeValue()
+                                        }
+                                    }
+                                }
+                            }
+                            continue
+                        }
+
+                        // Only show bookings for the specific date being viewed
+                        if (bookingDate != displayedDateStr) continue
+                        val studentName = bookingSnap.child("studentName").getValue(String::class.java) ?: ""
+                        val timeFrom = bookingSnap.child("timeFrom").getValue(String::class.java) ?: ""
+                        val timeTo = bookingSnap.child("timeTo").getValue(String::class.java) ?: ""
+                        if (studentName.isBlank()) continue
+                        hasBookings = true
+
+                        val text = buildString {
+                            append("• $studentName")
+                            if (timeFrom.isNotBlank()) append("  $timeFrom")
+                        }
+                        val bookingNote = bookingSnap.child("note").getValue(String::class.java) ?: ""
+                        val tv = android.widget.TextView(requireContext()).apply {
+                            this.text = text
+                            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                            setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                            setPadding(0, (2 * resources.displayMetrics.density).toInt(), 0, (2 * resources.displayMetrics.density).toInt())
+                        }
+                        container.addView(tv)
+                        // Show student's booking note/reason if present
+                        if (bookingNote.isNotBlank()) {
+                            val noteTv = android.widget.TextView(requireContext()).apply {
+                                this.text = "  ↳ $bookingNote"
+                                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                                setTextColor(resolveThemeColor(androidx.appcompat.R.attr.colorPrimary))
+                                setTypeface(typeface, android.graphics.Typeface.ITALIC)
+                                setPadding(0, 0, 0, (2 * resources.displayMetrics.density).toInt())
+                            }
+                            container.addView(noteTv)
+                        }
+                    }
+                    if (!hasBookings) {
+                        val tv = android.widget.TextView(requireContext()).apply {
+                            this.text = "Žiadne rezervácie"
+                            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                            setTextColor(resolveThemeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                            setTypeface(typeface, android.graphics.Typeface.ITALIC)
+                        }
+                        container.addView(tv)
+                    }
+                }
+                override fun onCancelled(error: DatabaseError) {}
+            })
     }
 
     // ── View / Edit / Delete days off ───────────────────────────────────────────
@@ -1468,23 +1965,43 @@ class TimetableFragment : Fragment() {
 
         // Date pickers
         editDate.setOnClickListener {
-            val cal = Calendar.getInstance()
-            DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                editDate.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.parse(editDate.text?.toString()?.trim() ?: "", skDateFormat)
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setTitleText(getString(R.string.timetable_day_off_date_from))
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                editDate.setText(String.format("%02d.%02d.%04d", cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR)))
+            }
+            picker.show(childFragmentManager, "date_picker_edit_dayoff_from")
         }
         editDateTo.setOnClickListener {
-            val cal = Calendar.getInstance()
-            val dpd = DatePickerDialog(requireContext(), { _, year, month, dayOfMonth ->
-                editDateTo.setText(String.format("%02d.%02d.%04d", dayOfMonth, month + 1, year))
-            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+            val constraintsBuilder = CalendarConstraints.Builder()
             val fromDate = parseDateSk(editDate.text?.toString()?.trim() ?: "")
             if (fromDate != null) {
-                val minCal = Calendar.getInstance()
-                minCal.set(fromDate.year, fromDate.monthValue - 1, fromDate.dayOfMonth)
-                dpd.datePicker.minDate = minCal.timeInMillis
+                val minMillis = fromDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+                constraintsBuilder.setValidator(DateValidatorPointForward.from(minMillis))
             }
-            dpd.show()
+            val prefilledMillis = try {
+                val ld = java.time.LocalDate.parse(editDateTo.text?.toString()?.trim() ?: "", skDateFormat)
+                ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
+            val picker = MaterialDatePicker.Builder.datePicker()
+                .setTitleText(getString(R.string.timetable_day_off_date_to))
+                .setCalendarConstraints(constraintsBuilder.build())
+                .setSelection(prefilledMillis)
+                .build()
+            picker.addOnPositiveButtonClickListener { selection ->
+                val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                cal.timeInMillis = selection
+                editDateTo.setText(String.format("%02d.%02d.%04d", cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR)))
+            }
+            picker.show(childFragmentManager, "date_picker_edit_dayoff_to")
         }
 
         val timeClickListener = { editText: TextInputEditText ->
@@ -1493,9 +2010,16 @@ class TimetableFragment : Fragment() {
                 val parsedTime = parseTime(existing)
                 val hour = parsedTime?.hour ?: Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
                 val minute = parsedTime?.minute ?: Calendar.getInstance().get(Calendar.MINUTE)
-                TimePickerDialog(requireContext(), { _, h, m ->
-                    editText.setText(String.format("%02d:%02d", h, m))
-                }, hour, minute, true).show()
+                val picker = MaterialTimePicker.Builder()
+                    .setTimeFormat(TimeFormat.CLOCK_24H)
+                    .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                    .setHour(hour)
+                    .setMinute(minute)
+                    .build()
+                picker.addOnPositiveButtonClickListener {
+                    editText.setText(String.format("%02d:%02d", picker.hour, picker.minute))
+                }
+                picker.show(childFragmentManager, "time_picker_edit_dayoff")
             }
         }
         editTimeFrom.setOnClickListener(timeClickListener(editTimeFrom))
@@ -1642,11 +2166,26 @@ class TimetableFragment : Fragment() {
             classroom = snap.child("classroom").getValue(String::class.java) ?: "",
             note = snap.child("note").getValue(String::class.java) ?: "",
             subjectKey = subjectKey,
-            subjectName = subjectName
+            subjectName = subjectName,
+            specificDate = snap.child("specificDate").getValue(String::class.java) ?: "",
+            specificDates = snap.child("specificDates").getValue(String::class.java) ?: "",
+            isConsultingHours = snap.child("isConsultingHours").getValue(Boolean::class.java) ?: false
         )
     }
 
     // ── Utilities ───────────────────────────────────────────────────────────
+
+    private fun addDateChip(chipGroup: com.google.android.material.chip.ChipGroup, dateStr: String, selectedDates: MutableList<String>) {
+        val chip = com.google.android.material.chip.Chip(requireContext()).apply {
+            text = dateStr
+            isCloseIconVisible = true
+            setOnCloseIconClickListener {
+                selectedDates.remove(dateStr)
+                chipGroup.removeView(this)
+            }
+        }
+        chipGroup.addView(chip)
+    }
 
     private fun DayOfWeek.toKey(): String = when (this) {
         DayOfWeek.MONDAY -> "monday"

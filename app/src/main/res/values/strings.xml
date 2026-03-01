@@ -41,6 +41,10 @@
     <string name="delete_subject_confirm">Naozaj chcete odstrániť tento predmet?</string>
     <string name="enrollment">Zápis predmetov</string>
     <string name="new_semester_title">Nový akademický rok</string>
+    <string name="edit_semester_title">Úprava akademického roka</string>
+    <string name="tab_settings">Nastavenia</string>
+    <string name="tab_students">Študenti</string>
+    <string name="tab_subjects">Predmety</string>
     <string name="new_semester_hint">Začiatočný rok (napr. 2026)</string>
     <string name="new_semester_preview">Akademický rok: %s</string>
     <string name="new_semester_create">Vytvoriť</string>
@@ -56,6 +60,7 @@
     <string name="semester_summer">Letný</string>
     <!-- Timetable -->
     <string name="title_timetable">Rozvrh</string>
+    <string name="title_consulting">Konzultácie</string>
     <string name="timetable_day">Deň</string>
     <string name="timetable_start_time">Začiatok (napr. 13:50)</string>
     <string name="timetable_end_time">Koniec (napr. 14:50)</string>
@@ -63,7 +68,7 @@
     <string name="timetable_week_every">Každý týždeň</string>
     <string name="timetable_week_odd">Nepárny týždeň</string>
     <string name="timetable_week_even">Párny týždeň</string>
-    <string name="timetable_classroom">Učebňa (napr. A402)</string>
+    <string name="timetable_classroom">Miestnosť (napr. A402)</string>
     <string name="timetable_note">Poznámka</string>
     <string name="timetable_add_entry">Pridať čas</string>
     <string name="timetable_edit_entry">Upraviť čas</string>
@@ -77,7 +82,7 @@
     <string name="timetable_day_off_time_to">Do času (voliteľné, napr. 14:00)</string>
     <string name="timetable_day_off_note">Dôvod (voliteľné)</string>
     <string name="timetable_no_classes">Žiadne hodiny</string>
-    <string name="timetable_free_day">Dnes máš voľno, užívaj si!</string>
+    <string name="timetable_free_day">Žiadne rozvrhové aktivity na dnešný deň.</string>
     <string name="timetable_day_off_label">Neprítomnosť</string>
     <string name="timetable_my_days_off">Moja neprítomnosť</string>
     <string name="timetable_no_days_off">Žiadna naplánovaná neprítomnosť</string>
@@ -85,6 +90,7 @@
     <string name="timetable_class_cancelled">Hodina zrušená</string>
     <string name="timetable_week_label">Týždeň %d</string>
     <string name="timetable_filter_all">Všetky</string>
+    <string name="filter_all_people">Všetci</string>
     <string name="timetable_filter_odd">Nepárny</string>
     <string name="timetable_filter_even">Párny</string>
     <string name="timetable_filter_today">Dnes</string>
@@ -125,4 +131,86 @@
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
+
+    <!-- Login page -->
+    <string name="create_account">Vytvoriť účet</string>
+    <string name="forgot_password">Zabudnuté heslo?</string>
+    <string name="reset_password_title">Obnovenie hesla</string>
+    <string name="reset_password_hint">Zadajte váš e-mail</string>
+    <string name="reset_password_sent">E-mail na obnovu hesla bol odoslaný.</string>
+    <string name="reset_password_error">Chyba pri odosielaní e-mailu: %s</string>
+    <string name="register_title">Registrácia</string>
+    <string name="register_email_hint">E-mail (@edu.ku.sk)</string>
+    <string name="register_name_hint">Meno a priezvisko</string>
+    <string name="register_button">Zaregistrovať sa</string>
+    <string name="register_success">Účet bol vytvorený. Skontrolujte e-mail pre nastavenie hesla.</string>
+    <string name="register_invalid_domain">Registrácia je povolená len pre e-maily s doménou: %s</string>
+    <string name="register_error">Chyba pri registrácii: %s</string>
+
+    <!-- Timetable one-time events & consulting hours -->
+    <string name="timetable_specific_date">Dátum (napr. 15.03.2026)</string>
+    <string name="timetable_specific_dates">Špecifické dni</string>
+    <string name="timetable_add_specific_date">+ Pridať dátum</string>
+    <string name="timetable_add_consulting_hours">Pridať konzultačné hodiny</string>
+    <string name="timetable_consulting_hours">Konzultačné hodiny</string>
+    <string name="timetable_one_time_event">Jednorazová udalosť</string>
+
+    <!-- Settings -->
+    <string name="app_version">Verzia aplikácie: %s</string>
+    <string name="update_available">K dispozícii je aktualizácia</string>
+    <string name="check_for_updates">Skontrolovať aktualizácie</string>
+    <string name="update_not_available">Žiadna nová aktualizácia</string>
+    <string name="update_checking">Kontrolujem aktualizácie…</string>
+    <string name="notification_channel_updates">Aktualizácie</string>
+    <string name="notification_channel_updates_desc">Upozornenia na dostupné aktualizácie</string>
+    <string name="notification_update_available">K dispozícii je nová verzia %s</string>
+    <string name="change_email">Zmeniť e-mail</string>
+    <string name="change_email_hint">Nový e-mail</string>
+    <string name="change_email_success">E-mail bol zmenený na: %s</string>
+    <string name="change_email_error">Chyba pri zmene e-mailu: %s</string>
+    <string name="allowed_domains">Povolené domény pre registráciu</string>
+    <string name="allowed_domains_hint">Domény oddelené čiarkou (napr. edu.ku.sk,ku.sk)</string>
+    <string name="allowed_domains_saved">Povolené domény boli uložené.</string>
+
+    <!-- Consultation booking -->
+    <string name="consulting_hours_button">Konzultačné hodiny</string>
+    <string name="consulting_book_title">Rezervovať konzultáciu</string>
+    <string name="consulting_book_date">Dátum konzultácie</string>
+    <string name="consulting_book_time_from">Čas príchodu</string>
+    <string name="consulting_book_time_to">Čas odchodu</string>
+    <string name="consulting_book_success">Konzultácia bola rezervovaná.</string>
+    <string name="consulting_no_hours">Učiteľ nemá zadané konzultačné hodiny.</string>
+    <string name="consulting_bookings_label">Rezervácie študentov</string>
+    <string name="consulting_time_before_start">Čas musí byť od %s.</string>
+    <string name="consulting_time_after_end">Čas musí byť pred %s.</string>
+    <string name="consulting_low_time_warning">Pozor: do konca konzultačných hodín zostáva menej ako 15 minút. Učiteľ vás nemusí prijať.</string>
+    <string name="consulting_manage_title">Moje konzultačné hodiny</string>
+    <string name="consulting_no_entries">Nemáte žiadne konzultačné hodiny.</string>
+    <string name="consulting_delete_confirm">Naozaj chcete odstrániť tieto konzultačné hodiny?</string>
+    <string name="consulting_has_bookings">Pre tento termín existujú rezervácie študentov. Ak pokračujete, budú zrušené.</string>
+    <string name="consulting_deleted">Konzultačné hodiny boli odstránené.</string>
+    <string name="consulting_cancel_notification">Vaša konzultácia %1$s bola zrušená učiteľom.</string>
+    <string name="consulting_booked_title">Rezervované konzultácie</string>
+    <string name="consulting_booked_empty">Žiadne rezervácie.</string>
+    <string name="consulting_contact_email">Kontaktovať e-mailom</string>
+    <string name="consulting_booked_dates_count">dní s rezerváciami</string>
+    <string name="consulting_book_note">Dôvod konzultácie (voliteľné)</string>
+    <string name="consulting_hours_activity_title">Konzultačné hodiny</string>
+    <string name="consulting_tab_add">Pridať</string>
+    <string name="consulting_tab_manage">Spravovať</string>
+    <string name="consulting_tab_bookings">Rezervácie</string>
+
+    <!-- Consultation notifications -->
+    <string name="notif_consultation_switch">Upozornenia na konzultácie</string>
+    <string name="notif_consultation_minutes_label">Upozorniť pred konzultáciou (minúty)</string>
+    <string name="notif_consultation_reminder">O %1$d min máte konzultáciu s %2$s v %3$s</string>
+    <string name="notif_consultation_now">Práve začína konzultácia s %1$s v %2$s</string>
+    <string name="notif_consultation_teacher_reminder">O %1$d min máte konzultáciu (%2$d študentov) v %3$s</string>
+    <string name="notif_consultation_teacher_now">Práve začína konzultácia (%1$d študentov) v %2$s</string>
+    <string name="notification_channel_consultation">Konzultácie</string>
+    <string name="notification_channel_consultation_desc">Upozornenia na blížiace sa konzultácie</string>
+    <string name="content_desc_empty_state">Prázdne</string>
+    <string name="consulting_manage_edit">Upraviť</string>
+    <string name="consulting_manage_edit_title">Upraviť konzultačné hodiny</string>
+    <string name="consulting_manage_updated">Konzultačné hodiny boli aktualizované.</string>
 </resources>

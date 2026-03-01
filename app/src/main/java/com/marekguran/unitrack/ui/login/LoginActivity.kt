@@ -1,21 +1,30 @@
 package com.marekguran.unitrack.ui.login
 
 import android.content.Intent
+import android.view.LayoutInflater
 import android.view.animation.DecelerateInterpolator
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.Toast
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputEditText
 import com.marekguran.unitrack.R
 import com.marekguran.unitrack.databinding.ActivityLoginBinding
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.MainActivity
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.model.AppConstants
 
 class LoginActivity : AppCompatActivity() {
 
@@ -99,6 +108,16 @@ class LoginActivity : AppCompatActivity() {
             loading.visibility = View.VISIBLE
             performLogin(username.text.toString(), password.text.toString())
         }
+
+        // Forgot password button
+        binding.btnForgotPassword.setOnClickListener {
+            showForgotPasswordDialog()
+        }
+
+        // Create account button
+        binding.btnCreateAccount.setOnClickListener {
+            showCreateAccountDialog()
+        }
     }
 
     private fun performLogin(email: String, password: String) {
@@ -147,6 +166,7 @@ class LoginActivity : AppCompatActivity() {
         binding.loading.visibility = View.GONE
         binding.dividerText.visibility = View.GONE
         binding.btnOfflineMode.visibility = View.GONE
+        binding.authActionsRow.visibility = View.GONE
 
         // Update subtitle
         binding.subtitleText.text = "Aplikácia dočasne nedostupná"
@@ -193,6 +213,7 @@ class LoginActivity : AppCompatActivity() {
             binding.usernameLayout,
             binding.passwordLayout,
             binding.login,
+            binding.authActionsRow,
             binding.dividerText,
             binding.btnOfflineMode
         )
@@ -219,6 +240,125 @@ class LoginActivity : AppCompatActivity() {
             .setStartDelay(100)
             .setInterpolator(android.view.animation.OvershootInterpolator(1.5f))
             .start()
+    }
+
+    // ── Forgot Password Dialog ────────────────────────────────────────────────
+
+    private fun showForgotPasswordDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_input, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = getString(R.string.reset_password_title)
+        val input = dialogView.findViewById<TextInputEditText>(R.id.dialogInput)
+        input.hint = getString(R.string.reset_password_hint)
+        input.inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+
+        val dialog = android.app.Dialog(this)
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        dialogView.findViewById<MaterialButton>(R.id.confirmButton).apply {
+            text = "Odoslať"
+            setOnClickListener {
+                val email = input.text?.toString()?.trim() ?: ""
+                if (email.isBlank()) return@setOnClickListener
+                firebaseAuth.sendPasswordResetEmail(email)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Toast.makeText(this@LoginActivity, getString(R.string.reset_password_sent), Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this@LoginActivity, getString(R.string.reset_password_error, task.exception?.message ?: ""), Toast.LENGTH_LONG).show()
+                        }
+                        dialog.dismiss()
+                    }
+            }
+        }
+        dialogView.findViewById<MaterialButton>(R.id.cancelButton).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    // ── Create Account Dialog ─────────────────────────────────────────────────
+
+    private fun showCreateAccountDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_register, null)
+
+        val editEmail = dialogView.findViewById<TextInputEditText>(R.id.editRegisterEmail)
+        val editName = dialogView.findViewById<TextInputEditText>(R.id.editRegisterName)
+        val btnSave = dialogView.findViewById<MaterialButton>(R.id.btnConfirmRegister)
+        val btnCancel = dialogView.findViewById<MaterialButton>(R.id.btnCancelRegister)
+
+        val dialog = android.app.Dialog(this)
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        btnSave.setOnClickListener {
+            val email = editEmail.text?.toString()?.trim() ?: ""
+            val name = editName.text?.toString()?.trim() ?: ""
+            if (email.isBlank() || name.isBlank()) return@setOnClickListener
+            // Check allowed domains
+            checkAllowedDomainsAndRegister(email, name, dialog)
+        }
+        btnCancel.setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun checkAllowedDomainsAndRegister(email: String, name: String, dialog: android.app.Dialog) {
+        val db = FirebaseDatabase.getInstance().reference
+        db.child("settings").child("allowed_domains").get().addOnSuccessListener { snapshot ->
+            val domains = snapshot.getValue(String::class.java)
+            val allowedDomains = if (!domains.isNullOrBlank()) {
+                domains.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
+            } else {
+                listOf(AppConstants.DEFAULT_ALLOWED_DOMAIN)
+            }
+            val emailDomain = email.substringAfter("@").lowercase()
+            if (emailDomain !in allowedDomains) {
+                Toast.makeText(this, getString(R.string.register_invalid_domain, allowedDomains.joinToString(", ")), Toast.LENGTH_LONG).show()
+                return@addOnSuccessListener
+            }
+            registerNewStudent(email, name, dialog)
+        }.addOnFailureListener {
+            val emailDomain = email.substringAfter("@").lowercase()
+            if (emailDomain != AppConstants.DEFAULT_ALLOWED_DOMAIN) {
+                Toast.makeText(this, getString(R.string.register_invalid_domain, AppConstants.DEFAULT_ALLOWED_DOMAIN), Toast.LENGTH_LONG).show()
+                return@addOnFailureListener
+            }
+            registerNewStudent(email, name, dialog)
+        }
+    }
+
+    private fun registerNewStudent(email: String, name: String, dialog: android.app.Dialog) {
+        binding.loading.visibility = View.VISIBLE
+        val tempPassword = java.util.UUID.randomUUID().toString()
+        firebaseAuth.createUserWithEmailAndPassword(email, tempPassword)
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    val userId = firebaseAuth.currentUser?.uid ?: return@addOnCompleteListener
+                    val db = FirebaseDatabase.getInstance().reference
+                    val studentObj = mapOf(
+                        "email" to email,
+                        "name" to name
+                    )
+                    db.child("students").child(userId).setValue(studentObj)
+                        .addOnCompleteListener {
+                            // Send password setup email and sign out
+                            firebaseAuth.sendPasswordResetEmail(email)
+                                .addOnCompleteListener { resetTask ->
+                                    firebaseAuth.signOut()
+                                    binding.loading.visibility = View.GONE
+                                    dialog.dismiss()
+                                    if (resetTask.isSuccessful) {
+                                        Toast.makeText(this, getString(R.string.register_success), Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(this, getString(R.string.register_success), Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                        }
+                } else {
+                    binding.loading.visibility = View.GONE
+                    Toast.makeText(this, getString(R.string.register_error, task.exception?.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+            }
     }
 }
 

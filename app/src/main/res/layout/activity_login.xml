@@ -139,6 +139,35 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent" />
 
+            <!-- Forgot Password & Create Account row -->
+            <LinearLayout
+                android:id="@+id/authActionsRow"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                app:layout_constraintTop_toBottomOf="@id/login"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnForgotPassword"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/forgot_password"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCreateAccount"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/create_account"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
             <!-- Loading indicator -->
             <com.google.android.material.progressindicator.CircularProgressIndicator
                 android:id="@+id/loading"
@@ -149,7 +178,7 @@
                 android:visibility="gone"
                 app:indicatorSize="48dp"
                 app:trackThickness="4dp"
-                app:layout_constraintTop_toBottomOf="@id/login"
+                app:layout_constraintTop_toBottomOf="@id/authActionsRow"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent" />
 

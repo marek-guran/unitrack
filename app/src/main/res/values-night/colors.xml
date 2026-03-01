@@ -72,6 +72,11 @@
     <color name="gradient_start">#1A3D5C</color>
     <color name="gradient_end">#2A3A48</color>
 
+    <!-- Consulting hours card colors -->
+    <color name="consulting_card_bg_light">#3D2020</color>
+    <color name="consulting_card_bg_light_alt">#4D2828</color>
+    <color name="consulting_card_stroke">#8A5050</color>
+
     <!-- Grade-specific colors (dark mode) -->
     <color name="grade_a_bg">#1B5E20</color>
     <color name="grade_a_text">#C8F7C5</color>
