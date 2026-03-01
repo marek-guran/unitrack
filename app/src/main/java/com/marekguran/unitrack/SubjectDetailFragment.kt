@@ -2000,10 +2000,9 @@ class SubjectDetailFragment : Fragment() {
         titleView.text =
             "Dochádzka: $subjectName"
         val presentStates = MutableList(students.size) { true }
-        val notesList = MutableList(students.size) { "" }
 
         lateinit var attendanceAdapter: AttendanceStudentAdapter
-        attendanceAdapter = AttendanceStudentAdapter(students, presentStates, notesList) { _, _ ->
+        attendanceAdapter = AttendanceStudentAdapter(students, presentStates) { _, _ ->
             // Update mark all chip state based on whether all students are marked
             val allMarked = presentStates.all { it }
             markAllChip.setOnCheckedChangeListener(null)
@@ -2031,7 +2030,7 @@ class SubjectDetailFragment : Fragment() {
             val result =
                 students.mapIndexed { i, student -> student.studentUid to presentStates[i] }.toMap()
             val notesMap =
-                students.mapIndexed { i, student -> student.studentUid to notesList[i] }.toMap()
+                students.associate { student -> student.studentUid to "" }
             onAttendanceSaved(result, notesMap, selectedDate.toString(), selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")))
             dialog.dismiss()
         }

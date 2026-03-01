@@ -111,6 +111,11 @@ Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
 | 5.7 | Notifikácie po reštarte zariadenia | Alarmy sa nanovo naplánujú | ✅ |
 | 5.8 | Segmentovaný progress bar (Android 16) | Farebné segmenty pre hodiny a prestávky | ✅ |
 | 5.9 | Vypnutie notifikačného kanálu | Alarm sa zruší, notifikácia sa nezobrazuje | ✅ |
+| 5.10 | Pripomienka konzultácie — študent | Notifikácia X minút pred konzultáciou | ✅ |
+| 5.11 | Pripomienka konzultácie — učiteľ | Notifikácia X minút pred konzultáciou s počtom študentov | ✅ |
+| 5.12 | Notifikácia o novej rezervácii (učiteľ) | Učiteľ dostane notifikáciu keď študent zarezervuje termín | ✅ |
+| 5.13 | Notifikácia o zrušení konzultácie (študent) | Študent dostane notifikáciu keď učiteľ zruší rezerváciu | ✅ |
+| 5.14 | Vypnutie pripomienok konzultácií | Pripomienky sa nezobrazujú | ✅ |
 
 ### 6. Offline režim
 
@@ -148,6 +153,30 @@ Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
 | 9.2 | Export výsledkov študenta | PDF s predmetmi a hodnoteniami | ✅ |
 | 9.3 | Export prehľadu učiteľa | PDF s predmetmi a štatistikami | ✅ |
 | 9.4 | Viacstránkový report | Automatické stránkovanie pri dlhom zozname | ✅ |
+
+### 10. Konzultačné hodiny
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 10.1 | Pridanie konzultačnej hodiny učiteľom | Hodina sa uloží s dňom, časom, učebňou | ✅ |
+| 10.2 | Úprava konzultačnej hodiny | Hodina sa aktualizuje | ✅ |
+| 10.3 | Mazanie konzultačnej hodiny bez rezervácií | Hodina sa odstráni | ✅ |
+| 10.4 | Mazanie konzultačnej hodiny s aktívnymi rezerváciami | Varovanie o zrušení rezervácií, potvrdenie | ✅ |
+| 10.5 | Zobrazenie konzultačných hodín študentom | Zoznam učiteľov s ich hodinami | ✅ |
+| 10.6 | Rezervácia termínu študentom | Rezervácia sa uloží v consultation_bookings aj consultation_timetable | ✅ |
+| 10.7 | Zrušenie rezervácie študentom | Rezervácia sa odstráni z oboch miest | ✅ |
+| 10.8 | Zrušenie rezervácie učiteľom | Rezervácia sa odstráni, študent dostane notifikáciu | ✅ |
+| 10.9 | Úprava rezervácie (dátum, čas) | Dátum a čas sa aktualizujú | ✅ |
+| 10.10 | Automatické mazanie minulých rezervácií | Minulé rezervácie sa pri načítaní zmažú | ✅ |
+| 10.11 | Vyhľadávanie učiteľov/študentov | Filtrovanie podľa mena funguje správne | ✅ |
+
+### 11. Nový semester
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 11.1 | Vytvorenie nového školského roka | Rok sa vytvorí s vybranými predmetmi a študentmi | ✅ |
+| 11.2 | Kopírovanie predmetov z existujúceho roka | Predmety sa prekopírujú | ✅ |
+| 11.3 | Výber a odznačenie predmetov/študentov | Filtre a hromadný výber fungujú | ✅ |
 
 ---
 

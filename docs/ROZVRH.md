@@ -262,7 +262,15 @@ Potvrdzovacie dialóg pred zmazaním. Mazanie je dostupné len pre admina. Zázn
 
 ### Pridanie voľného dňa
 
-Učitelia a admini môžu pridávať voľné dni cez FAB tlačidlo:
+Učitelia a admini môžu pridávať voľné dni cez FAB tlačidlo, ktoré zobrazí bottom sheet s tromi akciami:
+
+- **Pridať voľný deň** — otvorí dialóg na pridanie voľného dňa
+- **Zobraziť voľné dni** — otvorí prehľad existujúcich voľných dní
+- **Konzultačné hodiny** — presmeruje na obrazovku `ConsultingHoursActivity` pre správu konzultačných hodín učiteľa (pridávanie, úprava, mazanie, prehľad rezervácií)
+
+### Pridanie voľného dňa — detaily
+
+Dialóg pre pridanie voľného dňa obsahuje:
 
 - **Dátum** — DatePicker (DD.MM.YYYY), voliteľný koncový dátum pre rozsah
 - **Čas** — Voliteľný časový rozsah (časť dňa)

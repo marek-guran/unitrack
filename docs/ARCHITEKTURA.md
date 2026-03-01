@@ -86,6 +86,9 @@ com.marekguran.unitrack/
 ├── MainActivity.kt              # Vstupný bod po splashi, navigácia, internet check
 ├── UniTrackApplication.kt       # Application trieda (inicializácia témy + App Check)
 ├── BulkGradeActivity.kt         # Hromadné zadávanie známok (expand/collapse animácie)
+├── ConsultingHoursActivity.kt   # Správa konzultačných hodín (učiteľ — pridávanie, správa, rezervácie)
+├── TeacherBookingsActivity.kt   # Prehľad rezervácií študentov (učiteľ — alternatívne zobrazenie)
+├── NewSemesterActivity.kt       # Vytvorenie nového školského roka/semestra (záložky: nastavenia, predmety, študenti)
 ├── QrAttendanceActivity.kt      # QR kód dochádzka — strana učiteľa (generovanie, monitorovanie)
 ├── QrScannerActivity.kt         # QR kód skener — strana študenta (skenovanie, overenie)
 ├── SubjectDetailFragment.kt     # Detail predmetu (ViewPager2 — známky, dochádzka, študenti)
@@ -96,8 +99,11 @@ com.marekguran.unitrack/
 │   ├── OfflineMode.kt           # Online/offline prepínač
 │   ├── Result.kt                # Sealed class pre výsledky operácií
 │   └── model/                   # Dátové modely + RecyclerView adaptéry
+│       └── ConsultationBooking.kt  # Model rezervácie konzultácie
 ├── notification/                # Notifikačný systém
 │   └── NextClassAlarmReceiver.kt
+├── update/                      # Kontrola aktualizácií
+│   └── UpdateChecker.kt         # Kontrola najnovšej verzie z GitHub
 └── ui/                          # Obrazovky
     ├── PillNavigationBar.kt     # Vlastný navigačný komponent (glass-morphism)
     ├── SubjectDetailPagerAdapter.kt  # ViewPager2 pre detail predmetu (3 záložky)
@@ -105,6 +111,8 @@ com.marekguran.unitrack/
     ├── home/                    # Domov + dialóg známok
     ├── dashboard/               # Dashboard (ViewModel + Fragment)
     ├── login/                   # Prihlásenie (MVVM komplet)
+    ├── consulting/              # Konzultačné hodiny (študentský pohľad)
+    │   └── ConsultingHoursFragment.kt  # Prehliadanie učiteľov, rezervácia, moje rezervácie
     ├── timetable/               # Rozvrh
     │   ├── TimetableFragment.kt       # Hlavný kontrolér (dáta, CRUD, filtre)
     │   ├── ScheduleAdapter.kt         # Stavové karty hodín (PAST/CURRENT/NEXT/FUTURE)

@@ -16,6 +16,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 - [Inštalácia a spustenie](#-inštalácia-a-spustenie)
 - [Firebase App Check](#-firebase-app-check)
 - [Obrazovky aplikácie](#-obrazovky-aplikácie)
+- [Konzultačné hodiny](#-konzultačné-hodiny)
 - [Offline režim](#-offline-režim)
 - [Migrácia databázy](#-migrácia-databázy)
 - [Animácie a prechody](#-animácie-a-prechody)
@@ -43,9 +44,12 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 - **Animácie a prechody** — paint-drop animácia pri prepínaní tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, slide-up splash, fade prechody medzi obrazovkami
 - **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa (aplikuje sa už od spustenia, vrátane ikon stavového riadku)
 - **Export a import databázy** — zálohovanie a obnova celej lokálnej databázy ako JSON súbor
-- **Nastaviteľné notifikácie** — živá aktualizácia rozvrhu, upozornenia na zrušené hodiny, zmeny známok a nové neprítomnosti s konfigurovateľnými intervalmi
+- **Nastaviteľné notifikácie** — živá aktualizácia rozvrhu, upozornenia na zrušené hodiny, zmeny známok, nové neprítomnosti a pripomienky konzultačných hodín s konfigurovateľnými intervalmi
 - **Android 16 Live Update** — segmentovaný progress bar s farebnými blokmi pre hodiny a prestávky (na podporovaných zariadeniach)
 - **Reset hesla** — možnosť odoslať email na obnovu hesla priamo z nastavení
+- **Konzultačné hodiny** — učitelia môžu nastaviť svoje konzultačné hodiny (deň, čas, učebňa), študenti si ich môžu prehliadať a rezervovať termíny; učitelia vidia prehľad rezervácií a môžu ich spravovať (úprava, zrušenie, kontaktovanie študenta)
+- **Správa nového semestra** — samostatná obrazovka pre vytvorenie nového školského roka s výberom predmetov a študentov (záložky: nastavenia, predmety, študenti)
+- **Kontrola aktualizácií** — automatická kontrola dostupnosti novej verzie z GitHub repozitára
 - **Meno učiteľa** — v offline režime si učiteľ môže nastaviť a uložiť svoje meno
 - **Responzívny dizajn** — prispôsobený pre telefóny aj tablety s vlastnou pill navigáciou
 - **Plynulý rozvrh** — swipe navigácia medzi dňami s 1:1 peek animáciou (obsah sleduje prst), zobrazovanie voľných dní s prázdnym stavom, učebňa zobrazená v „pill" odznaku na kartách rozvrhu, fade-out na okrajoch navigátora dní, bez ghosting efektu pri prepínaní čipov
@@ -87,6 +91,8 @@ UniTrack/
 │       │   │   │   ├── ScheduleAdapter.kt         # Stavové karty hodín (PAST/CURRENT/NEXT/FUTURE)
 │       │   │   │   ├── DayChipAdapter.kt          # Animovaný chip navigátor dní
 │       │   │   │   └── TimetablePagerAdapter.kt   # ViewPager2 adaptér pre stránky dní
+│       │   │   ├── consulting/         # Konzultačné hodiny (študentský pohľad — prehliadanie a rezervácia)
+│       │   │   │   └── ConsultingHoursFragment.kt # Zoznam učiteľov, rezervácia termínov, moje rezervácie
 │       │   │   ├── subjects/           # Správa predmetov
 │       │   │   ├── students/           # Správa študentov / účtov
 │       │   │   ├── settings/           # Nastavenia (tmavý režim, notifikácie, export, admin, migrácia)
@@ -94,13 +100,18 @@ UniTrack/
 │       │   │   ├── SubjectDetailPagerAdapter.kt  # ViewPager2 pre detail predmetu (známky/dochádzka/študenti)
 │       │   │   └── SwipeableFrameLayout.kt       # Gestá pre swipe navigáciu
 │       │   ├── data/                   # Dátová vrstva
-│       │   │   ├── model/              # Dátové modely (Mark, Student, Timetable...)
+│       │   │   ├── model/              # Dátové modely (Mark, Student, Timetable, ConsultationBooking...)
 │       │   │   ├── LocalDatabase.kt    # Lokálna JSON databáza + migračné metódy
 │       │   │   ├── LoginDataSource.kt  # Prihlásenie cez Firebase
 │       │   │   ├── LoginRepository.kt  # Repository pre prihlásenie
 │       │   │   └── OfflineMode.kt      # Prepínanie online/offline
-│       │   ├── notification/           # Notifikácie (rozvrh, známky, zrušené hodiny, neprítomnosť)
+│       │   ├── notification/           # Notifikácie (rozvrh, známky, zrušené hodiny, neprítomnosť, konzultácie)
+│       │   ├── update/                 # Kontrola aktualizácií z GitHub
+│       │   │   └── UpdateChecker.kt    # Sťahovanie a kontrola najnovšej verzie
 │       │   ├── BulkGradeActivity.kt    # Hromadné zadávanie známok viacerým študentom
+│       │   ├── ConsultingHoursActivity.kt  # Správa konzultačných hodín (učiteľ — pridávanie, správa, rezervácie)
+│       │   ├── TeacherBookingsActivity.kt  # Prehľad rezervácií študentov (učiteľ)
+│       │   ├── NewSemesterActivity.kt  # Vytvorenie nového školského roka/semestra
 │       │   ├── QrAttendanceActivity.kt # QR kód dochádzka (strana učiteľa — generovanie a monitorovanie)
 │       │   ├── QrScannerActivity.kt    # QR kód skener (strana študenta — skenovanie a overenie)
 │       │   ├── SplashActivity.kt       # Animovaná splash obrazovka (slide-up + fade)
@@ -239,10 +250,34 @@ V offline režime sa zobrazuje ako **„Študenti"** — pridávanie a odstraňo
 
 Správa predmetov — vytváranie nových, úprava názvu, priradenie učiteľa a nastavenie semestra (zimný, letný, alebo obidva). Pri zmene semestra sa automaticky migrujú všetky známky a dochádzka.
 
+### 🕐 Konzultačné hodiny
+
+Učitelia môžu nastaviť svoje konzultačné hodiny cez obrazovku `ConsultingHoursActivity` s tromi záložkami:
+
+- **Pridanie konzultačných hodín** — výber dňa v týždni, začiatok a koniec, typ miestnosti (Kabinet/Učebňa), číslo miestnosti, poznámka
+- **Správa konzultačných hodín** — prehľad existujúcich hodín s možnosťou úpravy a mazania (pri mazaní sa kontrolujú aktívne rezervácie študentov)
+- **Prehľad rezervácií** (len online) — zoznam študentov, ktorí si zarezervovali konzultáciu, s možnosťou úpravy, zrušenia a kontaktovania emailom
+
+Študenti pristupujú ku konzultačným hodinám cez záložku **„Konzultácie"** v navigácii (`ConsultingHoursFragment`):
+
+- **Prehľad učiteľov** — vyhľadávanie učiteľov s aktívnymi konzultačnými hodinami, zobrazenie dňa, času, učebne
+- **Rezervácia termínu** — výber konkrétneho dátumu (podľa dňa v týždni), zadanie preferovaného času príchodu
+- **Moje rezervácie** — prehľad vlastných aktívnych rezervácií s možnosťou úpravy a zrušenia; minulé rezervácie sa automaticky mažú
+
+Konzultačné hodiny sú uložené v Firebase pod cestou `school_years/{year}/predmety/_consulting_{teacherUid}/timetable/` a rezervácie pod `consultation_bookings/{consultingSubjectKey}/`.
+
+### 📆 Nový semester
+
+Samostatná obrazovka (`NewSemesterActivity`) pre vytvorenie nového školského roka/semestra s ViewPager2 rozložením a tromi záložkami:
+
+- **Nastavenia** — zadanie názvu roka, kopírovanie predmetov z predchádzajúceho roka
+- **Predmety** — výber predmetov pre nový semester s vyhľadávaním a filtrami (Všetky/Vybrané/Nevybrané)
+- **Študenti** — výber študentov pre nový semester s vyhľadávaním a filtrami
+
 ### ⚙️ Nastavenia
 
 - **Vzhľad** — prepínanie tmavého režimu s paint-drop animáciou (kruhový reveal efekt)
-- **Notifikácie** — zapínanie/vypínanie živej aktualizácie rozvrhu a upozornení na zmeny, nastavenie intervalov kontroly, zobrazenie učebne a nasledujúcej hodiny v notifikácii, konfigurácia počtu minút pred prvou hodinou, optimalizácia batérie
+- **Notifikácie** — zapínanie/vypínanie živej aktualizácie rozvrhu a upozornení na zmeny, nastavenie intervalov kontroly, zobrazenie učebne a nasledujúcej hodiny v notifikácii, konfigurácia počtu minút pred prvou hodinou, pripomienky konzultačných hodín, optimalizácia batérie
 - **Admin funkcie** — správa akademických rokov a semestrov
 - **Offline funkcie** — export/import databázy, vytváranie školských rokov, nastavenie mena učiteľa
 - **Migrácia databázy** — manuálne spustenie migrácie štruktúry dát pre online aj offline režim (viď [Migrácia databázy](#-migrácia-databázy))
@@ -258,6 +293,7 @@ UniTrack ponúka plnohodnotný offline režim bez potreby Firebase alebo interne
 
 - Kompletná správa predmetov, študentov a známok
 - Hromadné hodnotenie (bulk grading) viacerých študentov naraz
+- Konzultačné hodiny učiteľov (pridávanie, správa)
 - Rozvrh a voľné dni
 - Živá notifikácia rozvrhu (s podporou semester-aware filtrovania)
 - Export celej databázy do JSON súboru (záloha)
@@ -339,16 +375,17 @@ Výsledkom je plynulý a vizuálne atraktívny prechod medzi svetlou a tmavou t�
 
 ## 🔔 Notifikácie
 
-Aplikácia využíva štyri notifikačné kanály:
+Aplikácia využíva päť notifikačných kanálov:
 
 | Kanál | Popis | Priorita |
 |---|---|---|
-| **Rozvrh hodín** | Živá aktualizácia — ukazuje aktuálnu/ďalšiu hodinu, prestávku alebo voľno (segmentovaný progress bar na Android 16) | Tichá (nízka) |
+| **Rozvrh hodín** | Živá aktualizácia — ukazuje aktuálnu/ďalšiu hodinu, prestávku alebo voľno (segmentovaný progress bar na Android 16 s červenými segmentmi pre konzultačné hodiny učiteľov) | Tichá (nízka) |
 | **Zrušené hodiny** | Upozornenie keď učiteľ označí hodinu ako zrušenú | Vysoká |
 | **Známky** | Nová, upravená alebo odstránená známka | Vysoká |
 | **Neprítomnosť** | Upozornenie na novú zaznamenanú neprítomnosť študenta | Vysoká |
+| **Konzultačné hodiny** | Pripomienky pred konzultáciou (pre študentov aj učiteľov), notifikácie o nových rezerváciách a zrušení konzultácií | Vysoká |
 
-Intervaly kontrol sú konfigurovateľné v nastaveniach — živá aktualizácia rozvrhu (predvolene každé 2 minúty) a kontrola zmien známok, neprítomnosti a zrušených hodín (predvolene každých 30 minút). Oba kanály je možné individuálne zapnúť alebo vypnúť. Notifikácie fungujú aj po reštarte zariadenia.
+Intervaly kontrol sú konfigurovateľné v nastaveniach — živá aktualizácia rozvrhu (predvolene každé 2 minúty) a kontrola zmien známok, neprítomnosti a zrušených hodín (predvolene každých 30 minút). Oba kanály je možné individuálne zapnúť alebo vypnúť. Notifikácie konzultačných hodín majú vlastný prepínač s nastaviteľným počtom minút pred pripomienkou. Notifikácie fungujú aj po reštarte zariadenia.
 
 ---
 
@@ -356,6 +393,7 @@ Intervaly kontrol sú konfigurovateľné v nastaveniach — živá aktualizácia
 
 Aplikácia vyžaduje tieto Android oprávnenia:
 
+- `INTERNET` — prístup na internet pre Firebase komunikáciu a kontrolu aktualizácií
 - `POST_NOTIFICATIONS` — zobrazovanie notifikácií (Android 13+)
 - `POST_PROMOTED_NOTIFICATIONS` — rozšírené notifikácie (Live Update na Android 16)
 - `FOREGROUND_SERVICE` — beh notifikačnej služby na pozadí
@@ -377,9 +415,9 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 | [Databáza a dátová vrstva](docs/DATABAZA.md) | Firebase Realtime Database cesty, lokálna JSON databáza, dátové modely, convenience metódy, migrácia semestrov |
 | [Dochádzka a QR kódy](docs/DOCHADZKA.md) | Manuálna dochádzka, QR kód dochádzka (učiteľ/študent), formát QR kódu, Firebase pravidlá, bezpečnosť |
 | [Migrácia databázy](docs/MIGRACIA.md) | Typy migrácií, kedy a prečo sa spúšťajú, ako fungujú pre online aj offline režim, bezpečnosť dát pri migrácii |
-| [Navigácia a UI komponenty](docs/NAVIGACIA.md) | Navigation Component, PillNavigationBar, role-based navigácia, fragmenty a adaptéry |
-| [Rozvrh hodín](docs/ROZVRH.md) | ViewPager2 navigácia, stavové karty (PAST/CURRENT/NEXT/FUTURE), živý progress bar, chip navigátor, voľné dni, filtrovanie parity |
-| [Notifikačný systém](docs/NOTIFIKACIE.md) | Kanály, konfigurovateľné intervaly, Android 16 ProgressStyle, detekcia zmien známok, neprítomnosti a zrušených hodín |
+| [Navigácia a UI komponenty](docs/NAVIGACIA.md) | Navigation Component, PillNavigationBar, role-based navigácia, fragmenty a adaptéry, konzultačné hodiny |
+| [Rozvrh hodín](docs/ROZVRH.md) | ViewPager2 navigácia, stavové karty (PAST/CURRENT/NEXT/FUTURE), živý progress bar, chip navigátor, voľné dni, filtrovanie parity, konzultačné hodiny |
+| [Notifikačný systém](docs/NOTIFIKACIE.md) | Kanály, konfigurovateľné intervaly, Android 16 ProgressStyle, detekcia zmien známok, neprítomnosti, zrušených hodín a pripomienky konzultačných hodín |
 | [Nastavenia aplikácie](docs/NASTAVENIA.md) | Podrobný popis všetkých nastavení — vzhľad, notifikácie, správa účtu, offline funkcie, SharedPreferences kľúče |
 | [Tlač a export dát](docs/TLAC_A_EXPORT.md) | PDF reporty (predmet, študent, učiteľ), export/import lokálnej databázy, formát záloh |
 | [Testovanie](docs/TESTOVANIE.md) | Metodika testovania, testovacie scenáre, matica zariadení, výsledky testovania |
@@ -390,8 +428,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.1.0
-- **Kód verzie (Google):** 33
+- **Verzia aplikácie:** 3.2.0
+- **Kód verzie (Google):** 35
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

@@ -35,9 +35,9 @@ Aplikácia je plne funkčná a pripravená na reálne nasadenie. Všetky navrhnu
 | Metrika | Hodnota |
 |---|---|
 | Celkový počet Kotlin súborov | 50+ |
-| Počet XML layoutov | 70 (vrátane 19 tabletových variantov) |
-| Počet dátových modelov | 9 |
-| Počet RecyclerView adaptérov | 10 |
+| Počet XML layoutov | 87 (vrátane tabletových variantov) |
+| Počet dátových modelov | 10+ |
+| Počet RecyclerView adaptérov | 13+ |
 | Počet notifikačných kanálov | 4 |
 | Počet PDF reportov | 3 typy |
 | Podporované Android verzie | 12 – 16 (API 31 – 36) |
@@ -133,12 +133,15 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 | **QR kód dochádzka** | Automatické zaznamenanie dochádzky cez rotujúci QR kód — učiteľ generuje, študenti skenujú, výsledky v reálnom čase |
 | **Migrácia databázy** | Automatické aj manuálne migrácie štruktúry dát (globálne predmety → per-year, per-year študenti → globálna štruktúra) |
 | **Pokročilé animácie** | Paint-drop efekt pri zmene tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, 1:1 peek navigácia v rozvrhu |
+| **Konzultačné hodiny** | Učitelia nastavujú konzultačné hodiny, študenti si ich prehliadajú a rezervujú termíny; správa rezervácií s možnosťou zrušenia a kontaktovania |
+| **Nový semester** | Samostatná obrazovka pre vytvorenie nového školského roka/semestra s výberom predmetov a študentov |
+| **Kontrola aktualizácií** | Automatická kontrola dostupnosti novej verzie z GitHub repozitára |
 
 ---
 
 ## Záver
 
-Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Evidencia prítomnosti bola rozšírená o QR kód dochádzku — učiteľ zobrazí rotujúci QR kód a študenti ho naskenujú, čím sa dochádzka zaznamená automaticky v reálnom čase. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
+Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Evidencia prítomnosti bola rozšírená o QR kód dochádzku — učiteľ zobrazí rotujúci QR kód a študenti ho naskenujú, čím sa dochádzka zaznamená automaticky v reálnom čase. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, konzultačné hodiny s rezerváciami, správu nového semestra, kontrolu aktualizácií, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
 
 ---
 

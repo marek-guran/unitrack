@@ -19,7 +19,7 @@ Oba intervaly si používateľ môže prispôsobiť v nastaveniach aplikácie a 
 
 ## Notifikačné kanály
 
-Android 8+ vyžaduje kanály. UniTrack vytvára štyri:
+Android 8+ vyžaduje kanály. UniTrack vytvára päť:
 
 ### 1. Rozvrh hodín (`next_class_channel`)
 - **Názov:** Rozvrh hodín
@@ -41,6 +41,11 @@ Android 8+ vyžaduje kanály. UniTrack vytvára štyri:
 - **Názov:** Neprítomnosť
 - **Priorita:** Vysoká (zvuk + vibrácie)
 - **Obsah:** Keď sa študentovi zaznamená nová neprítomnosť na hodine
+
+### 5. Konzultačné hodiny (`consultation_channel`)
+- **Názov:** Konzultačné hodiny
+- **Priorita:** Vysoká (zvuk + vibrácie)
+- **Obsah:** Pripomienky konzultácií (pre študentov aj učiteľov), notifikácie o nových rezerváciách a zrušení konzultácií
 
 ---
 
@@ -74,10 +79,11 @@ V nastaveniach aplikácie si používateľ môže upraviť:
 
 ### Android 16 ProgressStyle (segmentovaný progress bar)
 
-Na zariadeniach s Android 16 (API 36) notifikácia využíva natívny `Notification.ProgressStyle` so segmentmi. Každý segment reprezentuje jednu hodinu alebo prestávku a má priradenú farbu:
+Na zariadeniach s Android 16 (API 36) notifikácia využíva natívny `Notification.ProgressStyle` so segmentmi. Každý segment reprezentuje jednu hodinu, prestávku alebo konzultáciu a má priradenú farbu:
 
 - **Hodina** — oranžová (svetlá v tmavom režime)
 - **Prestávka** — zelená (svetlá v tmavom režime)
+- **Konzultačná hodina** — červená (`#D93025`, svetlá `#F28B82` v tmavom režime) — zobrazuje sa len učiteľom, ktorí majú konzultačné hodiny v rozvrhu
 
 Progress ukazuje, koľko z celkového školského dňa už uplynulo. Na starších verziách Android sa zobrazuje klasický nesegmentovaný progress bar.
 
@@ -164,6 +170,60 @@ Voľný deň koliduje s rozvrhovou hodinou ak:
 - Deň v rozvrhu padne na dátum voľného dňa (alebo do rozsahu dátumov)
 - Ak voľný deň má časový rozsah, kontroluje sa aj prekrytie časov
 - Zohľadňuje sa parita týždňa a aktuálny semester
+
+---
+
+## Notifikácie konzultačných hodín
+
+Konzultačné hodiny majú tri typy notifikácií: pripomienky pred konzultáciou (lokálne), notifikácie o nových rezerváciách a notifikácie o zrušení konzultácie (obe cez Firebase).
+
+### Pripomienky konzultácií (lokálne)
+
+Pripomienky sa spúšťajú v rámci `ACTION_NEXT_CLASS` alarmu (rovnaký interval ako živá aktualizácia rozvrhu). Fungujú pre obe role:
+
+#### Pre študentov
+
+1. Načítajú sa aktívne rezervácie študenta z `students/{uid}/consultation_timetable/`
+2. Pre každú rezerváciu na dnešný deň sa skontroluje čas:
+
+| Stav | Správa v notifikácii |
+|---|---|
+| X minút pred konzultáciou (konfigurovateľné) | „Konzultácia o X minút — {učiteľ}, {učebňa}" |
+| Práve prebieha | „Konzultácia práve začala — {učiteľ}, {učebňa}" |
+
+#### Pre učiteľov
+
+1. Načítajú sa všetky rezervácie z `consultation_bookings/{consultingSubjectKey}/`
+2. Pre každú rezerváciu na dnešný deň sa skontroluje čas:
+
+| Stav | Správa v notifikácii |
+|---|---|
+| X minút pred konzultáciou (konfigurovateľné) | „Konzultácia o X minút — {počet} študent(ov)" |
+| Práve prebieha | „Konzultácia práve začala — {počet} študent(ov)" |
+
+### Konfigurovateľné nastavenia konzultácií
+
+V nastaveniach aplikácie si používateľ môže upraviť:
+- **Zapnúť/Vypnúť** — hlavný prepínač pripomienok konzultácií (`notif_enabled_consultation`)
+- **Minúty pred konzultáciou** — koľko minút vopred sa má pripomienka zobraziť (predvolene 10 min)
+
+### Notifikácia o novej rezervácii (Firebase)
+
+Keď študent vytvorí novú rezerváciu konzultácie, odošle sa notifikácia učiteľovi cez Firebase:
+
+- **Cesta:** `notifications/{teacherUid}/{notifKey}`
+- **Typ:** `consultation_booking`
+- **Obsah:** Meno študenta, dátum, čas od–do, timestamp
+- **Kedy:** Okamžite po úspešnom vytvorení rezervácie v `ConsultingHoursFragment`
+
+### Notifikácia o zrušení konzultácie (Firebase)
+
+Keď učiteľ zruší existujúcu rezerváciu alebo vymaže konzultačnú hodinu s aktívnymi rezerváciami, odošle sa notifikácia študentovi:
+
+- **Cesta:** `notifications/{studentUid}/{notifKey}`
+- **Typ:** `consultation_cancelled`
+- **Obsah:** Informácia o zrušení konzultácie
+- **Kedy:** Pri zrušení rezervácie v `ConsultingHoursActivity`, `TeacherBookingsActivity` alebo `ConsultingHoursFragment` (ak učiteľ ruší)
 
 ---
 

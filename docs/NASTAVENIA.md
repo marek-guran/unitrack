@@ -43,6 +43,13 @@ Nastavenia notifikácií umožňujú detailne prispôsobiť správanie celého n
 | **Zapnúť/Vypnúť** | Hlavný prepínač kontroly zmien (známky, neprítomnosti, zrušené hodiny) | Switch | Zapnuté |
 | **Interval kontroly** | Ako často sa kontrolujú zmeny na serveri | 15, 30, 60, 120 min | 30 min |
 
+### Konzultačné hodiny
+
+| Nastavenie | Popis | Možnosti | Predvolené |
+|---|---|---|---|
+| **Zapnúť/Vypnúť** | Hlavný prepínač pripomienok konzultačných hodín | Switch | Zapnuté |
+| **Minúty pred konzultáciou** | Koľko minút pred konzultáciou sa má pripomienka zobraziť | Konfigurovateľné | 10 min |
+
 ### Optimalizácia batérie
 
 Tlačidlo „Vypnúť optimalizáciu batérie" otvorí systémový dialóg na povolenie výnimky z batériovej optimalizácie. Toto zabezpečí, že systém nebude obmedziť doručovanie notifikácií na pozadí. Ak je výnimka už povolená, zobrazí sa informatívna správa.
@@ -99,6 +106,13 @@ Tieto funkcie sa zobrazujú len prihlásenému adminovi:
 
 Rovnaká funkcionalita ako v offline režime — vytváranie nových školských rokov.
 
+### Nový semester
+
+Tlačidlo pre spustenie samostatnej obrazovky (`NewSemesterActivity`) na vytvorenie nového školského roka/semestra s tromi záložkami:
+- **Nastavenia** — zadanie názvu roka, kopírovanie predmetov z existujúceho roka
+- **Predmety** — výber predmetov s vyhľadávaním a filtrami
+- **Študenti** — výber študentov s vyhľadávaním a filtrami
+
 > Správa používateľov a predmetov bola v novšej verzii presunutá z nastavení do samostatných navigačných záložiek „Účty" a „Predmety", ktoré sa zobrazia len adminovi.
 
 ---
@@ -129,6 +143,8 @@ Všetky nastavenia sa ukladajú v `SharedPreferences` pod názvom `app_settings`
 | `notif_interval_changes` | Int | Interval kontroly zmien (v minútach) |
 | `notif_show_classroom` | Boolean | Zobrazenie učebne v notifikácii |
 | `notif_show_upcoming` | Boolean | Zobrazenie nasledujúcej hodiny |
+| `notif_enabled_consultation` | Boolean | Zapnuté pripomienky konzultačných hodín |
+| `notif_consultation_minutes_before` | Int | Minúty pred konzultáciou pre pripomienku |
 | `teacher_name` | String | Meno učiteľa (offline) |
 | `semester` | String | Aktuálne vybraný semester |
 

@@ -157,7 +157,13 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
 
     "students": {
       ".read": "auth != null",
-      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$uid": {
+        "consultation_timetable": {
+          ".read": "auth != null && $uid === auth.uid",
+          ".write": "auth != null && $uid === auth.uid"
+        }
+      }
     },
 
     "predmety": {
@@ -219,7 +225,14 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
 
     "school_years": {
       ".read": "auth != null",
-      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",
+      "$yearKey": {
+        "predmety": {
+          "$subjectKey": {
+            ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+          }
+        }
+      }
     },
 
     "days_off": {
@@ -227,6 +240,28 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
       "$teacherUid": {
         ".write": "auth != null && ($teacherUid === auth.uid || root.child('admins').child(auth.uid).exists())"
       }
+    },
+
+    "consultation_bookings": {
+      ".read": "auth != null",
+      "$subjectKey": {
+        ".write": "auth != null",
+        "$bookingKey": {
+          ".write": "auth != null && (!data.exists() || data.child('studentUid').val() === auth.uid || root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())"
+        }
+      }
+    },
+
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null"
+      }
+    },
+
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
     }
   }
 }
@@ -247,8 +282,11 @@ Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní 
   - **`qr_code`** — čítať môže každý prihlásený používateľ (študent potrebuje vidieť aktívny kód na overenie). Zapisovať môže každý prihlásený používateľ, ale len na mazanie (`!newData.exists()`) — tým sa zabezpečí, že študent po úspešnom skene „spotrebuje" kód a vymaže ho, čo spustí generovanie nového kódu na strane učiteľa.
   - **`qr_last_scan`** — zapisovať môže každý prihlásený používateľ, ale validácia vynucuje, že záznam musí obsahovať `uid`, `name` a `time`, a UID musí zodpovedať prihlásenému používateľovi (`newData.child('uid').val() === auth.uid`). Študent tak nemôže zaznamenať dochádzku za niekoho iného.
   - **`qr_fail`** — zapisovať môže každý prihlásený používateľ, validácia vynucuje prítomnosť polí `name`, `reason` a `time`.
-- **school_years** — Čítať môže každý prihlásený používateľ. Vytvárať a upravovať školské roky môžu len admini.
+- **school_years** — Čítať môže každý prihlásený používateľ. Vytvárať a upravovať školské roky môžu admini aj učitelia (učitelia potrebujú zápis na priraďovanie konzultačných hodín a predmetov ku školským rokom). Vnorené predmety (`predmety/$subjectKey`) môžu zapisovať admini aj učitelia.
 - **days_off** — Čítať môže každý prihlásený používateľ. Zapisovať voľné dni môže učiteľ len pre seba (`$teacherUid === auth.uid`), alebo admin pre kohokoľvek.
+- **consultation_bookings** — Čítať môže každý prihlásený používateľ (potrebné pre zobrazenie rezervácií). Na úrovni `$subjectKey` môže zapisovať každý prihlásený používateľ (študent vytvára novú rezerváciu). Na úrovni `$bookingKey` môže upraviť/zmazať rezerváciu len študent, ktorý ju vytvoril (`data.child('studentUid').val() === auth.uid`), admin alebo učiteľ. Tým sa zabezpečí, že študent nemôže manipulovať s cudzími rezerváciami.
+- **students → consultation_timetable** — Študent si môže čítať a zapisovať len vlastný rozvrh konzultácií (`$uid === auth.uid`). Ostatní používatelia nemajú prístup k cudziemu rozvrhu konzultácií.
+- **notifications** — Čítať notifikácie môže len ich adresát (`$uid === auth.uid`). Zapisovať (odosielať) notifikácie môže každý prihlásený používateľ — toto umožňuje učiteľom a systému posielať notifikácie študentom (napr. zrušenie konzultácie).
 
 ### Offline režim — lokálny JSON súbor
 

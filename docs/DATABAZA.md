@@ -60,9 +60,16 @@ root/
 │       └── {uid}/
 │           ├── email: "student@uni.sk"
 │           ├── name: "Ján Novák"
-│           └── subjects/
-│               ├── zimny: ["subject_key_1", "subject_key_2"]
-│               └── letny: ["subject_key_3"]
+│           ├── subjects/
+│           │   ├── zimny: ["subject_key_1", "subject_key_2"]
+│           │   └── letny: ["subject_key_3"]
+│           └── consultation_timetable/      # Rezervácie konzultácií študenta
+│               └── {entryKey}/
+│                   ├── bookingKey: "{bookingKey}"
+│                   ├── consultingSubjectKey: "_consulting_{uid}"
+│                   ├── date: "05.03.2026"
+│                   ├── timeFrom: "10:00"
+│                   └── timeTo: "10:30"
 │
 ├── hodnotenia/                              # Známky
 │   └── {yearKey}/
@@ -98,14 +105,33 @@ root/
 ├── teachers/
 │   └── {uid}: "ucitel@uni.sk, Meno Učiteľa" # Email a meno učiteľa
 │
-└── days_off/                                # Voľné dni
-    └── {teacherUid}/
-        └── {dayOffKey}/
-            ├── date: "23.02.2026"           # Začiatok
-            ├── dateTo: "04.03.2026"         # Koniec (prázdne = jeden deň)
-            ├── timeFrom: "12:00"            # Voliteľné
-            ├── timeTo: "14:00"              # Voliteľné
-            └── note: "Konferencia"
+├── days_off/                                # Voľné dni
+│   └── {teacherUid}/
+│       └── {dayOffKey}/
+│           ├── date: "23.02.2026"           # Začiatok
+│           ├── dateTo: "04.03.2026"         # Koniec (prázdne = jeden deň)
+│           ├── timeFrom: "12:00"            # Voliteľné
+│           ├── timeTo: "14:00"              # Voliteľné
+│           └── note: "Konferencia"
+│
+├── consultation_bookings/                   # Rezervácie konzultácií
+│   └── {consultingSubjectKey}/              # napr. "_consulting_{teacherUid}"
+│       └── {bookingKey}/
+│           ├── consultingEntryKey: "{entryKey}"  # Odkaz na konzultačnú hodinu
+│           ├── consultingSubjectKey: "_consulting_{uid}"
+│           ├── studentUid: "{uid}"
+│           ├── studentName: "Ján Novák"
+│           ├── studentEmail: "student@uni.sk"
+│           ├── date: "05.03.2026"           # Konkrétny dátum rezervácie (DD.MM.YYYY)
+│           ├── timeFrom: "10:00"            # Čas príchodu
+│           ├── timeTo: "10:30"              # Koniec termínu
+│           └── teacherUid: "{uid}"
+│
+└── notifications/                           # Notifikácie pre používateľov
+    └── {uid}/
+        └── {notificationKey}/
+            ├── type: "consultation_cancelled"  # Typ notifikácie
+            └── ...                             # Ďalšie polia podľa typu
 ```
 
 ### Konvencie pomenovania
@@ -118,6 +144,9 @@ root/
 - **`qr_fail`** = posledný neúspešný pokus o sken (nezapísaný študent, neplatný kód)
 - **`days_off`** = voľné dni (days off)
 - **`school_years`** = školské roky
+- **`consultation_bookings`** = rezervácie konzultácií (consultation bookings)
+- **`consultation_timetable`** = rozvrh konzultácií študenta (pod `students/{uid}/`)
+- **`notifications`** = notifikácie pre používateľov (napr. zrušenie konzultácie)
 
 Kľúče školských rokov používajú formát s podčiarkovníkom (`2025_2026`), zatiaľ čo zobrazený názov používa lomku (`2025/2026`).
 
@@ -329,6 +358,22 @@ data class SubjectInfo(
 data class LoggedInUser(
     val userId: String,
     val displayName: String
+)
+```
+
+### ConsultationBooking
+```kotlin
+data class ConsultationBooking(
+    val key: String = "",
+    val consultingEntryKey: String = "",  // Odkaz na konzultačnú hodinu učiteľa
+    val consultingSubjectKey: String = "", // Kľúč konzultačného predmetu (_consulting_{uid})
+    val studentUid: String = "",
+    val studentName: String = "",
+    val studentEmail: String = "",
+    val date: String = "",               // Konkrétny dátum rezervácie (DD.MM.YYYY)
+    val timeFrom: String = "",           // Čas príchodu
+    val timeTo: String = "",             // Koniec termínu
+    val teacherUid: String = ""
 )
 ```
 

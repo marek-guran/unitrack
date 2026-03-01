@@ -1957,7 +1957,10 @@ class HomeFragment : Fragment() {
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.attendanceRecyclerView)
         recyclerView.layoutManager = LinearLayoutManager(context)
 
-        val sorted = attendanceMap.values.sortedByDescending { it.date }
+        val sorted = attendanceMap.values.sortedWith(
+            compareByDescending<AttendanceEntry> { it.date }
+                .thenByDescending { it.time }
+        )
         recyclerView.adapter = object : RecyclerView.Adapter<StudentAttendanceViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StudentAttendanceViewHolder {
                 val view = LayoutInflater.from(parent.context)

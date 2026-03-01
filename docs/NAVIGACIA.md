@@ -20,6 +20,7 @@ navigation_timetable (fade)
 navigation_settings (fade)
 navigation_students (fade)
 navigation_subjects (fade)
+navigation_consulting (fade)          # Konzultačné hodiny (študentský pohľad)
 ```
 
 Domovská obrazovka (`navigation_home`) je štartovacia destinácia. Z nej vedie akcia `action_home_to_subject_detail` na detail predmetu — s argumentmi `subjectName` a `subjectKey`. Táto navigácia používa slide animáciu (zľava/sprava), kým všetky ostatné prechody používajú fade (200ms).
@@ -75,9 +76,14 @@ pillNav.setSelectedIndex(index: Int)         // Bez triggerovania callbacku
 
 Navigačná lišta sa dynamicky mení podľa role používateľa a režimu:
 
-### Online režim — bežný učiteľ/študent
+### Online režim — bežný učiteľ
 ```
 [ Domov ] [ Rozvrh ] [ Nastavenia ]
+```
+
+### Online režim — študent
+```
+[ Domov ] [ Rozvrh ] [ Konzultácie ] [ Nastavenia ]
 ```
 
 ### Online režim — admin
@@ -96,6 +102,7 @@ Navigačná lišta sa dynamicky mení podľa role používateľa a režimu:
 2. `checkAdminAndRebuildNav()` asynchrónne preverí Firebase cestu `admins/{uid}`
 3. Ak snapshot existuje → `buildNavigation()` sa zavolá znova s `includeAdminTabs = true`
 4. Navigácia sa plynulo prebuduje s novými tabmi
+5. Pre študentov (nie admin, nie učiteľ) sa pridáva záložka **Konzultácie** (`navigation_consulting`)
 
 V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pretože lokálna správa vždy vyžaduje prístup k študentom a predmetom.
 
@@ -224,6 +231,42 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Zápis do `qr_last_scan` s UID prihláseného používateľa
 - Vizuálna spätná väzba (úspech/chyba) s animáciou
 
+### ConsultingHoursFragment
+**Účel:** Študentský pohľad na konzultačné hodiny — prehliadanie a rezervácia.
+
+- **Prehľad učiteľov** — vyhľadávateľný zoznam učiteľov s aktívnymi konzultačnými hodinami
+- Pre každého učiteľa zobrazuje deň, časový rozsah, učebňu a poznámku
+- **Rezervácia termínu** — kliknutím na konzultačnú hodinu sa otvorí dialóg s výberom dátumu a preferovaného času príchodu
+- **Moje rezervácie** — zoznam vlastných aktívnych rezervácií s možnosťou úpravy a zrušenia
+- Automatické mazanie minulých rezervácií pri načítaní
+- Validácia dátumov — výber len dní zodpovedajúcich dňu v týždni konzultačnej hodiny
+
+### ConsultingHoursActivity
+**Účel:** Správa konzultačných hodín — strana učiteľa.
+
+- **Tri záložky** cez ViewPager2 s TabLayout (v offline režime 2 záložky):
+  - **Pridanie konzultačných hodín** — formulár s výberom dňa, začiatku/konca, typu miestnosti (Kabinet/Učebňa), čísla miestnosti a poznámky
+  - **Správa konzultačných hodín** — zoznam existujúcich hodín s možnosťou úpravy a mazania; pri mazaní sa kontrolujú aktívne rezervácie
+  - **Prehľad rezervácií** (len online) — vyhľadávateľný zoznam všetkých rezervácií s expandovateľnými kartami, možnosť úpravy, zrušenia a kontaktovania študenta emailom
+- Konzultačné hodiny sa ukladajú pod špeciálny predmet `_consulting_{teacherUid}` v Firebase
+
+### TeacherBookingsActivity
+**Účel:** Alternatívny prehľad rezervácií študentov pre učiteľa.
+
+- Samostatná obrazovka s vyhľadávateľným zoznamom všetkých aktívnych rezervácií
+- Expandovateľné karty s menom študenta, emailom, dátumom, časom a poznámkou
+- Akčné tlačidlá: kontaktovanie emailom, úprava termínu, zrušenie rezervácie
+- Automatické mazanie minulých rezervácií pri načítaní
+
+### NewSemesterActivity
+**Účel:** Vytvorenie nového školského roka/semestra.
+
+- **ViewPager2** s TabLayout a tromi záložkami:
+  - **Nastavenia** — zadanie názvu roka, kopírovanie predmetov z existujúceho roka
+  - **Predmety** — výber predmetov s vyhľadávaním a filtrami (Všetky/Vybrané/Nevybrané), hromadný výber/zrušenie
+  - **Študenti** — výber študentov s vyhľadávaním a filtrami, hromadný výber/zrušenie
+- Potvrdzovacie a zrušovacie tlačidlá v spodnej lište
+
 ---
 
 ## RecyclerView adaptéry
@@ -269,6 +312,9 @@ Aplikácia hojne využíva `AlertDialog` s vlastnými layoutmi pre:
 - Zápis predmetov
 - Editácia používateľa
 - Potvrdenie resetu aplikácie
+- Pridanie/úprava konzultačných hodín
+- Rezervácia konzultácie (výber dátumu a času)
+- Bottom sheet pre akcie rozvrhu (voľné dni, konzultačné hodiny)
 
 ---
 

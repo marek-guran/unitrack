@@ -375,7 +375,8 @@ class MainActivity : AppCompatActivity() {
         pillNav: PillNavigationBar,
         navController: androidx.navigation.NavController,
         includeAdminTabs: Boolean,
-        isOnline: Boolean
+        isOnline: Boolean,
+        showConsulting: Boolean = true
     ) {
         val labels = mutableListOf<String>()
         val icons = mutableListOf<Drawable>()
@@ -398,7 +399,7 @@ class MainActivity : AppCompatActivity() {
             labels.add(getString(R.string.title_subjects))
             icons.add(ContextCompat.getDrawable(this, R.drawable.ic_book)!!)
             destinations.add(R.id.navigation_subjects)
-        } else if (isOnline) {
+        } else if (isOnline && showConsulting) {
             // Students (non-admin, online) get the consulting hours tab
             labels.add(getString(R.string.title_consulting))
             icons.add(ContextCompat.getDrawable(this, R.drawable.ic_consulting)!!)
@@ -481,11 +482,18 @@ class MainActivity : AppCompatActivity() {
         navController: androidx.navigation.NavController
     ) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
-        val adminsRef = FirebaseDatabase.getInstance().reference.child("admins")
-        adminsRef.child(user.uid).get().addOnSuccessListener { snapshot ->
+        val dbRef = FirebaseDatabase.getInstance().reference
+        dbRef.child("admins").child(user.uid).get().addOnSuccessListener { snapshot ->
             if (snapshot.exists()) {
                 // User is admin — rebuild navigation with admin tabs
                 buildNavigation(pillNav, navController, includeAdminTabs = true, isOnline = true)
+            } else {
+                // Not admin — check if teacher (teachers should not see consulting booking)
+                dbRef.child("teachers").child(user.uid).get().addOnSuccessListener { teacherSnap ->
+                    if (teacherSnap.exists()) {
+                        buildNavigation(pillNav, navController, includeAdminTabs = false, isOnline = true, showConsulting = false)
+                    }
+                }
             }
         }
     }
