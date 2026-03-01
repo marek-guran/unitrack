@@ -204,8 +204,8 @@ class TimetableFragment : Fragment() {
             canDelete = { isAdmin },
             onEditClick = { entry -> showEditEntryDialog(entry) },
             onDeleteClick = { entry -> showDeleteConfirmation(entry) {} },
-            loadConsultationBookings = { entry, container, displayedDate ->
-                if ((isTeacher || isAdmin) && !isOffline) {
+            loadConsultationBookings = if (isOffline) null else { entry, container, displayedDate ->
+                if (isTeacher || isAdmin) {
                     loadConsultationBookingsForEntry(entry, container, displayedDate)
                 }
             }
@@ -2152,7 +2152,10 @@ class TimetableFragment : Fragment() {
             classroom = json.optString("classroom", ""),
             note = json.optString("note", ""),
             subjectKey = subjectKey,
-            subjectName = subjectName
+            subjectName = subjectName,
+            specificDate = json.optString("specificDate", ""),
+            specificDates = json.optString("specificDates", ""),
+            isConsultingHours = json.optBoolean("isConsultingHours", false)
         )
     }
 

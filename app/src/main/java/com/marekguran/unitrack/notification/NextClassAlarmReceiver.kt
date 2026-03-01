@@ -243,6 +243,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val todayKey = today.dayOfWeek.toKey()
+        val todayDateStr = today.format(skDateFormat)
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
         val currentSemester = getCurrentSemester(context)
@@ -261,8 +262,17 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
             val subjectName = subjectJson.optString("name", subjectKey)
             val entries = localDb.getTimetableEntries(year, subjectKey)
             for ((_, entryJson) in entries) {
+                val specificDates = entryJson.optString("specificDates", "")
+                val specificDate = entryJson.optString("specificDate", "")
                 val day = entryJson.optString("day", "")
-                if (day != todayKey) continue
+                val showToday = if (specificDates.isNotBlank()) {
+                    todayDateStr in specificDates.split(",").map { it.trim() }
+                } else if (specificDate.isNotBlank()) {
+                    specificDate == todayDateStr
+                } else {
+                    day == todayKey
+                }
+                if (!showToday) continue
                 val parity = entryJson.optString("weekParity", "every")
                 if (parity != "every" && parity != currentParity) continue
 
@@ -286,6 +296,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val now = LocalTime.now()
         val today = LocalDate.now()
         val todayKey = today.dayOfWeek.toKey()
+        val todayDateStr = today.format(skDateFormat)
         val weekNumber = today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
         val currentParity = if (weekNumber % 2 == 0) "even" else "odd"
         val year = context.getSharedPreferences("unitrack_prefs", Context.MODE_PRIVATE)
@@ -321,8 +332,17 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                             if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: continue
                             for (entrySnap in subjectSnap.child("timetable").children) {
-                                val day = entrySnap.child("day").getValue(String::class.java) ?: continue
-                                if (day != todayKey) continue
+                                val specificDates = entrySnap.child("specificDates").getValue(String::class.java) ?: ""
+                                val specificDate = entrySnap.child("specificDate").getValue(String::class.java) ?: ""
+                                val day = entrySnap.child("day").getValue(String::class.java) ?: ""
+                                val showToday = if (specificDates.isNotBlank()) {
+                                    todayDateStr in specificDates.split(",").map { it.trim() }
+                                } else if (specificDate.isNotBlank()) {
+                                    specificDate == todayDateStr
+                                } else {
+                                    day == todayKey
+                                }
+                                if (!showToday) continue
                                 val parity = entrySnap.child("weekParity").getValue(String::class.java) ?: "every"
                                 if (parity != "every" && parity != currentParity) continue
 
@@ -652,8 +672,17 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
                             if (subjectSemester.isNotEmpty() && subjectSemester != "both" && subjectSemester != currentSemester) continue
                             val subjectName = subjectSnap.child("name").getValue(String::class.java) ?: continue
                             for (entrySnap in subjectSnap.child("timetable").children) {
-                                val day = entrySnap.child("day").getValue(String::class.java) ?: continue
-                                if (day != todayKey) continue
+                                val specificDates = entrySnap.child("specificDates").getValue(String::class.java) ?: ""
+                                val specificDate = entrySnap.child("specificDate").getValue(String::class.java) ?: ""
+                                val day = entrySnap.child("day").getValue(String::class.java) ?: ""
+                                val showToday = if (specificDates.isNotBlank()) {
+                                    todayFormatted in specificDates.split(",").map { it.trim() }
+                                } else if (specificDate.isNotBlank()) {
+                                    specificDate == todayFormatted
+                                } else {
+                                    day == todayKey
+                                }
+                                if (!showToday) continue
                                 val parity = entrySnap.child("weekParity").getValue(String::class.java) ?: "every"
                                 if (parity != "every" && parity != currentParity) continue
                                 val startTime = entrySnap.child("startTime").getValue(String::class.java) ?: ""
