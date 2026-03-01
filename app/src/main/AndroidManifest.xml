@@ -65,6 +65,10 @@
             android:name=".NewSemesterActivity"
             android:exported="false"
             android:theme="@style/Theme.UniTrack" />
+        <activity
+            android:name=".PendingApprovalActivity"
+            android:exported="false"
+            android:theme="@style/Theme.UniTrack" />
 
         <receiver
             android:name=".notification.NextClassAlarmReceiver"

@@ -50,6 +50,10 @@ import kotlinx.coroutines.withContext
 
 class StudentsManageFragment : Fragment() {
 
+    companion object {
+        const val STATUS_REJECTED = "rejected"
+    }
+
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
     private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
     private val skCollator = Collator.getInstance(Locale.forLanguageTag("sk-SK")).apply { strength = Collator.SECONDARY }
@@ -65,14 +69,15 @@ class StudentsManageFragment : Fragment() {
     private val subjectNamesList = mutableListOf<String>()
     private val studentSubjectsMap = mutableMapOf<String, MutableSet<String>>()
 
-    enum class RoleFilter { ALL, STUDENTS, TEACHERS, ADMINS }
+    enum class RoleFilter { ALL, STUDENTS, TEACHERS, ADMINS, PENDING }
 
     data class StudentManageItem(
         val uid: String,
         val name: String,
         val email: String = "",
         val isTeacher: Boolean = false,
-        val isAdmin: Boolean = false
+        val isAdmin: Boolean = false,
+        val isPending: Boolean = false
     )
 
     override fun onCreateView(
@@ -96,7 +101,13 @@ class StudentsManageFragment : Fragment() {
             isOffline = isOffline,
             onClick = { student -> showStudentOptionsDialog(student) },
             onAction = { student, actionIndex ->
-                if (isOffline) {
+                if (student.isPending) {
+                    when (actionIndex) {
+                        0 -> confirmApproval(student, isTeacher = false)
+                        1 -> confirmApproval(student, isTeacher = true)
+                        2 -> rejectPendingUser(student)
+                    }
+                } else if (isOffline) {
                     when (actionIndex) {
                         0 -> {
                             if (student.isTeacher) showTeacherSubjectsDialog(student)
@@ -150,6 +161,7 @@ class StudentsManageFragment : Fragment() {
             view.findViewById<Chip>(R.id.chipStudents).setOnClickListener { currentRoleFilter = RoleFilter.STUDENTS; applyFilters() }
             view.findViewById<Chip>(R.id.chipTeachers).setOnClickListener { currentRoleFilter = RoleFilter.TEACHERS; applyFilters() }
             view.findViewById<Chip>(R.id.chipAdmins).setOnClickListener { currentRoleFilter = RoleFilter.ADMINS; applyFilters() }
+            view.findViewById<Chip>(R.id.chipPending).setOnClickListener { currentRoleFilter = RoleFilter.PENDING; applyFilters() }
         }
 
         // Setup subject filter spinner
@@ -186,10 +198,11 @@ class StudentsManageFragment : Fragment() {
 
                 if (!offline) {
                     source = when (roleFilter) {
-                        RoleFilter.ALL -> source
-                        RoleFilter.STUDENTS -> source.filter { !it.isTeacher && !it.isAdmin }
+                        RoleFilter.ALL -> source.filter { !it.isPending }
+                        RoleFilter.STUDENTS -> source.filter { !it.isTeacher && !it.isAdmin && !it.isPending }
                         RoleFilter.TEACHERS -> source.filter { it.isTeacher }
                         RoleFilter.ADMINS -> source.filter { it.isAdmin }
+                        RoleFilter.PENDING -> source.filter { it.isPending }
                     }
                 }
 
@@ -303,57 +316,69 @@ class StudentsManageFragment : Fragment() {
         db.child("admins").get().addOnSuccessListener { adminSnap ->
             db.child("teachers").get().addOnSuccessListener { teacherSnap ->
                 db.child("students").get().addOnSuccessListener { allStudentsSnap ->
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        val result = withContext(Dispatchers.Default) {
-                            val admins = adminSnap.children.mapNotNull { it.key }.toSet()
-                            val semester = prefs.getString("semester", "zimny") ?: "zimny"
-                            val savedYear = prefs.getString("school_year", null) ?: ""
-                            val teacherUids = mutableSetOf<String>()
-                            val items = mutableListOf<StudentManageItem>()
-                            val subjectsMap = mutableMapOf<String, MutableSet<String>>()
+                    db.child("pending_users").get().addOnSuccessListener { pendingSnap ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val result = withContext(Dispatchers.Default) {
+                                val admins = adminSnap.children.mapNotNull { it.key }.toSet()
+                                val semester = prefs.getString("semester", "zimny") ?: "zimny"
+                                val savedYear = prefs.getString("school_year", null) ?: ""
+                                val teacherUids = mutableSetOf<String>()
+                                val items = mutableListOf<StudentManageItem>()
+                                val subjectsMap = mutableMapOf<String, MutableSet<String>>()
 
-                            for (child in teacherSnap.children) {
-                                val uid = child.key ?: continue
-                                val value = child.value as? String ?: continue
-                                val parts = value.split(",").map { it.trim() }
-                                val email = parts.getOrElse(0) { "" }
-                                val name = parts.getOrElse(1) { email }
-                                teacherUids.add(uid)
-                                items.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
-                            }
-
-                            for (child in allStudentsSnap.children) {
-                                val uid = child.key ?: continue
-                                if (uid in teacherUids) continue
-                                // Filter by school_years enrollment
-                                if (savedYear.isNotEmpty()) {
-                                    val schoolYears = child.child("school_years")
-                                    val enrolledInYear = schoolYears.children.any { it.getValue(String::class.java) == savedYear }
-                                    if (!enrolledInYear && schoolYears.exists()) continue
+                                for (child in teacherSnap.children) {
+                                    val uid = child.key ?: continue
+                                    val value = child.value as? String ?: continue
+                                    val parts = value.split(",").map { it.trim() }
+                                    val email = parts.getOrElse(0) { "" }
+                                    val name = parts.getOrElse(1) { email }
+                                    teacherUids.add(uid)
+                                    items.add(StudentManageItem(uid, name, email, isTeacher = true, isAdmin = uid in admins))
                                 }
-                                val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
-                                val email = child.child("email").getValue(String::class.java) ?: ""
-                                items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
-                                val enrolled = mutableSetOf<String>()
-                                for (yearSnap in child.child("subjects").children) {
-                                    yearSnap.child(semester).children.forEach { subjectChild ->
-                                        val subjectKey = subjectChild.getValue(String::class.java)
-                                        if (subjectKey != null) enrolled.add(subjectKey)
+
+                                for (child in allStudentsSnap.children) {
+                                    val uid = child.key ?: continue
+                                    if (uid in teacherUids) continue
+                                    // Filter by school_years enrollment
+                                    if (savedYear.isNotEmpty()) {
+                                        val schoolYears = child.child("school_years")
+                                        val enrolledInYear = schoolYears.children.any { it.getValue(String::class.java) == savedYear }
+                                        if (!enrolledInYear && schoolYears.exists()) continue
                                     }
+                                    val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
+                                    val email = child.child("email").getValue(String::class.java) ?: ""
+                                    items.add(StudentManageItem(uid, name, email, isTeacher = false, isAdmin = uid in admins))
+                                    val enrolled = mutableSetOf<String>()
+                                    for (yearSnap in child.child("subjects").children) {
+                                        yearSnap.child(semester).children.forEach { subjectChild ->
+                                            val subjectKey = subjectChild.getValue(String::class.java)
+                                            if (subjectKey != null) enrolled.add(subjectKey)
+                                        }
+                                    }
+                                    if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
                                 }
-                                if (enrolled.isNotEmpty()) subjectsMap[uid] = enrolled
+
+                                // Load pending users (exclude rejected ones — they see status on their side)
+                                for (child in pendingSnap.children) {
+                                    val uid = child.key ?: continue
+                                    val status = child.child("status").getValue(String::class.java)
+                                    if (status == STATUS_REJECTED) continue
+                                    val name = child.child("name").getValue(String::class.java) ?: "(bez mena)"
+                                    val email = child.child("email").getValue(String::class.java) ?: ""
+                                    items.add(StudentManageItem(uid, name, email, isPending = true))
+                                }
+
+                                items.sortWith(compareBy(skCollator) { it.name })
+                                Triple(admins, items, subjectsMap)
                             }
 
-                            items.sortWith(compareBy(skCollator) { it.name })
-                            Triple(admins, items, subjectsMap)
+                            adminUids = result.first
+                            allStudentItems.clear()
+                            allStudentItems.addAll(result.second)
+                            studentSubjectsMap.clear()
+                            studentSubjectsMap.putAll(result.third)
+                            loadSubjectNamesOnline(db)
                         }
-
-                        adminUids = result.first
-                        allStudentItems.clear()
-                        allStudentItems.addAll(result.second)
-                        studentSubjectsMap.clear()
-                        studentSubjectsMap.putAll(result.third)
-                        loadSubjectNamesOnline(db)
                     }
                 }
             }
@@ -1101,6 +1126,10 @@ class StudentsManageFragment : Fragment() {
 
     // --- Card click: show options ---
     private fun showStudentOptionsDialog(student: StudentManageItem) {
+        if (student.isPending) {
+            showPendingApprovalDialog(student)
+            return
+        }
         val options = if (isOffline) {
             arrayOf("Predmety", "Premenovať", "Odstrániť")
         } else {
@@ -1130,6 +1159,135 @@ class StudentsManageFragment : Fragment() {
                 }
             }
             .show()
+    }
+
+    private fun showPendingApprovalDialog(student: StudentManageItem) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.pending_approve_title))
+            .setMessage(getString(R.string.pending_approve_message, student.name))
+            .setItems(arrayOf(
+                getString(R.string.pending_role_student),
+                getString(R.string.pending_role_teacher),
+                "Odmietnuť"
+            )) { _, which ->
+                when (which) {
+                    0 -> view?.post { confirmApproval(student, isTeacher = false) }
+                    1 -> view?.post { confirmApproval(student, isTeacher = true) }
+                    2 -> view?.post { rejectPendingUser(student) }
+                }
+            }
+            .setNegativeButton("Zrušiť", null)
+            .show()
+    }
+
+    private fun confirmApproval(student: StudentManageItem, isTeacher: Boolean) {
+        val roleName = if (isTeacher) getString(R.string.pending_role_teacher).lowercase()
+            else getString(R.string.pending_role_student).lowercase()
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = getString(R.string.pending_approve_confirm_title)
+        dialogView.findViewById<TextView>(R.id.dialogMessage).text =
+            getString(R.string.pending_approve_confirm_message, student.name, roleName)
+        val confirmBtn = dialogView.findViewById<MaterialButton>(R.id.confirmButton)
+        confirmBtn.text = "Schváliť"
+
+        val dialog = Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+        dialog.show()
+
+        dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+            .setOnClickListener { dialog.dismiss() }
+        confirmBtn.setOnClickListener {
+            dialog.dismiss()
+            approvePendingUser(student, isTeacher)
+        }
+    }
+
+    private fun approvePendingUser(student: StudentManageItem, isTeacher: Boolean) {
+        val db = FirebaseDatabase.getInstance().reference
+        if (isTeacher) {
+            val updates = mapOf<String, Any?>(
+                "pending_users/${student.uid}" to null,
+                "teachers/${student.uid}" to "${student.email}, ${student.name}"
+            )
+            db.updateChildren(updates)
+                .addOnSuccessListener {
+                    // Send password setup email now that user is approved
+                    FirebaseAuth.getInstance().sendPasswordResetEmail(student.email)
+                    Toast.makeText(requireContext(), getString(R.string.pending_approved_teacher), Toast.LENGTH_SHORT).show()
+                    loadStudents()
+                }
+                .addOnFailureListener { ex ->
+                    Toast.makeText(requireContext(), "Chyba: ${ex.message}", Toast.LENGTH_SHORT).show()
+                }
+        } else {
+            val schoolYearsRef = db.child("school_years")
+            schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
+                val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
+                val savedYear = prefs.getString("school_year", null)
+                val selectedYear = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
+                    else allYearKeys.maxOrNull() ?: ""
+                val studentObj = mutableMapOf<String, Any>(
+                    "email" to student.email,
+                    "name" to student.name
+                )
+                if (selectedYear.isNotEmpty()) {
+                    studentObj["school_years"] = listOf(selectedYear)
+                }
+                val updates = mapOf<String, Any?>(
+                    "pending_users/${student.uid}" to null,
+                    "students/${student.uid}" to studentObj
+                )
+                db.updateChildren(updates)
+                    .addOnSuccessListener {
+                        // Send password setup email now that user is approved
+                        FirebaseAuth.getInstance().sendPasswordResetEmail(student.email)
+                        Toast.makeText(requireContext(), getString(R.string.pending_approved_student), Toast.LENGTH_SHORT).show()
+                        loadStudents()
+                    }
+                    .addOnFailureListener { ex ->
+                        Toast.makeText(requireContext(), "Chyba: ${ex.message}", Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+    }
+
+    private fun rejectPendingUser(student: StudentManageItem) {
+        val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = "Odmietnuť používateľa"
+        dialogView.findViewById<TextView>(R.id.dialogMessage).text = getString(R.string.pending_reject_confirm)
+        val confirmBtn = dialogView.findViewById<MaterialButton>(R.id.confirmButton)
+        confirmBtn.text = "Odmietnuť"
+
+        val dialog = Dialog(requireContext())
+        dialog.setContentView(dialogView)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val dialogWidth = (resources.displayMetrics.widthPixels * 0.9).toInt()
+        dialog.window?.setLayout(dialogWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.attributes?.windowAnimations = R.style.UniTrack_DialogAnimation
+        dialog.show()
+
+        dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+            .setOnClickListener { dialog.dismiss() }
+        confirmBtn.setOnClickListener {
+            dialog.dismiss()
+            val db = FirebaseDatabase.getInstance().reference
+            db.child("pending_users").child(student.uid).child("status").setValue(STATUS_REJECTED)
+                .addOnSuccessListener {
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), getString(R.string.pending_rejected), Toast.LENGTH_SHORT).show()
+                        loadStudents()
+                    }
+                }
+                .addOnFailureListener { ex ->
+                    if (isAdded) {
+                        Toast.makeText(requireContext(), "Chyba: ${ex.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+        }
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -1318,11 +1476,15 @@ class StudentsManageFragment : Fragment() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val student = students[position]
-            holder.name.text = student.name
+            holder.name.text = if (student.isPending) "${student.name} ⏳" else student.name
             holder.averageText.text = "Počítam…"
 
             // Calculate average grade from all subjects
-            calculateStudentAverage(holder, student)
+            if (student.isPending) {
+                holder.averageText.text = holder.itemView.context.getString(R.string.pending_approval)
+            } else {
+                calculateStudentAverage(holder, student)
+            }
 
             val isExpanded = position == expandedPosition
             holder.expandedOptions.visibility = if (isExpanded) View.VISIBLE else View.GONE
@@ -1331,7 +1493,9 @@ class StudentsManageFragment : Fragment() {
             if (isExpanded) {
                 val ctx = holder.itemView.context
                 val density = ctx.resources.displayMetrics.density
-                val options = if (isOffline) {
+                val options = if (student.isPending) {
+                    listOf(ctx.getString(R.string.pending_role_student), ctx.getString(R.string.pending_role_teacher), "Odmietnuť")
+                } else if (isOffline) {
                     listOf("Predmety", "Premenovať", "Odstrániť")
                 } else {
                     listOf("Predmety", "Upraviť")

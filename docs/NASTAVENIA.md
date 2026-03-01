@@ -114,6 +114,16 @@ V záložke **Účty** môže admin zmeniť rolu používateľa (študent ↔ u�
 - Pri degradácii na študenta sa aktualizuje len meno a email — existujúce dáta zostávajú netknuté
 - Dotknutý používateľ uvidí zmenu okamžite v reálnom čase vďaka `ValueEventListener` v `MainActivity`
 
+### Schvaľovanie registrácií
+
+Používatelia, ktorí sa zaregistrujú cez prihlasovaciu obrazovku, sa pridajú do stavu **„Čaká na schválenie"** (`pending_users/{uid}`). V záložke **Účty** admin vidí čakajúcich používateľov cez filter chip „Čaká na schválenie" a môže:
+
+- **Schváliť ako študenta** — atomicky presunie z `pending_users/` do `students/` s priradením aktuálneho školského roka
+- **Schváliť ako učiteľa** — atomicky presunie z `pending_users/` do `teachers/`
+- **Odmietnuť** — úplne odstráni používateľa z databázy aj z Firebase Authentication. Odmietnutý používateľ sa automaticky odhlási a môže sa znova zaregistrovať s rovnakou e-mailovou adresou.
+
+Čakajúci používateľ vidí celostránkovú čakaciu obrazovku (`PendingApprovalActivity`) s logom aplikácie a informatívnou správou. Real-time listener automaticky detekuje zmenu stavu (schválenie alebo odmietnutie) a presmeruje používateľa.
+
 ### Nový semester
 
 Tlačidlo pre spustenie samostatnej obrazovky (`NewSemesterActivity`) na vytvorenie nového školského roka/semestra s tromi záložkami:

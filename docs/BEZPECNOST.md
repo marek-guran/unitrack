@@ -50,13 +50,26 @@ V offline režime sa autentifikácia nepoužíva. Používateľ pristupuje k lok
 
 ### Role používateľov
 
-UniTrack rozlišuje tri role:
+UniTrack rozlišuje tri role a jeden prechodný stav:
 
 | Rola | Detekcia | Oprávnenia |
 |---|---|---|
 | **Admin** | Firebase cesta `admins/{uid}` existuje | Správa účtov, predmetov, školských rokov, zmena rolí používateľov |
 | **Učiteľ** | Firebase cesta `teachers/{uid}` existuje | Správa známok, dochádzky, rozvrhu, voľných dní |
 | **Študent** | Žiadna z vyššie uvedených ciest | Zobrazenie vlastných známok a dochádzky |
+| **Čaká na schválenie** | Firebase cesta `pending_users/{uid}` existuje | Žiadne — zobrazí sa čakacia obrazovka |
+
+### Registrácia a schvaľovanie
+
+Po registrácii cez prihlasovaciu obrazovku sa nový používateľ pridá do `pending_users/{uid}` (nie priamo do `students/`). Administrátor v záložke **Účty** vidí čakajúcich používateľov vo filtri „Čaká na schválenie" a môže:
+
+- **Schváliť ako študenta** — atomicky presunie z `pending_users/` do `students/` s priradením aktuálneho školského roka
+- **Schváliť ako učiteľa** — atomicky presunie z `pending_users/` do `teachers/`
+- **Odmietnuť** — odstráni z `pending_users/` a zablokuje prístup do aplikácie
+
+Čakajúci používateľ vidí celostránkovú čakaciu obrazovku (`PendingApprovalActivity`) s logom aplikácie. Real-time listener na `pending_users/{uid}` detekuje schválenie alebo odmietnutie:
+- Pri schválení automaticky presmeruje do hlavnej aplikácie
+- Pri odmietnutí automaticky odhlási a presmeruje na prihlasovaciu obrazovku
 
 ### Zmena role používateľa
 
@@ -168,6 +181,20 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
       ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       "$uid": {
         ".validate": "newData.isString()"
+      }
+    },
+
+    "pending_users": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid && !data.exists()",
+        ".validate": "newData.hasChildren(['email', 'name', 'tempKey'])",
+        "status": {
+          ".write": "auth != null && $uid === auth.uid && !newData.exists()",
+          ".validate": "newData.val() === 'rejected' || !newData.exists()"
+        }
       }
     },
 
@@ -294,6 +321,7 @@ Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní 
 
 - **admins** — Čítať aj zapisovať zoznam adminov môžu len existujúci admini. Jednotlivý používateľ si môže prečítať vlastný admin záznam (`$uid === auth.uid`), čo umožňuje aplikácii zistiť, či je prihlásený používateľ admin. Validácia vynucuje, že hodnota musí byť boolean.
 - **teachers** — Čítať zoznam učiteľov môže každý prihlásený používateľ (potrebné pre výber učiteľa v UI). Zapisovať môžu len admini. Validácia vynucuje, že hodnota musí byť reťazec.
+- **pending_users** — Čítať celý zoznam čakajúcich používateľov môžu len admini. Zapisovať (schvaľovať/odstraňovať) môžu len admini. Každý čakajúci používateľ si môže čítať vlastný záznam (`$uid === auth.uid`), čo umožňuje `PendingApprovalActivity` sledovať zmeny stavu v reálnom čase. Výnimka pre zápis: nový používateľ si môže vytvoriť vlastný záznam (`$uid === auth.uid && !data.exists()`) — len jedenkrát pri registrácii. Validácia vynucuje prítomnosť polí `email`, `name` a `tempKey`. Vnorené pole `status` má osobitné pravidlá: admin ho môže nastaviť na `"rejected"` (validácia povoľuje len túto hodnotu alebo zmazanie), a používateľ si ho môže len odstrániť (`!newData.exists()`) — čím požiada o opätovné posúdenie. Pole `tempKey` obsahuje dočasné heslo použité pri vytvorení účtu — admin ho pri odmietnutí použije na prihlásenie cez sekundárnu Firebase Auth inštanciu a úplné odstránenie účtu z Firebase Authentication. Po schválení sa `tempKey` vymaže spolu s celým `pending_users/{uid}` záznamom a používateľovi sa odošle e-mail na nastavenie vlastného hesla.
 - **students** — Čítať údaje o študentoch môže každý prihlásený používateľ (potrebné pre rozvrh a zobrazenie zapísaných predmetov). Zapisovať môžu len admini a učitelia.
 - **predmety** — Čítať môže každý prihlásený používateľ. Celé predmety (vytvorenie, mazanie, zmena štruktúry) môžu zapisovať len admini. Učitelia majú povolený zápis výlučne do polí `classroom` a `note` existujúcich rozvrhových záznamov (`timetable/$entryKey/classroom` a `timetable/$entryKey/note`), a to len ak daný záznam už existuje (`data.parent().exists()`). Nemôžu vytvárať ani mazať rozvrhové záznamy.
 - **hodnotenia** — Čítanie známok je teraz granulárne: na úrovni `$subjectKey` môžu čítať len admini a učitelia (potrebné pre zobrazenie známok všetkých študentov v predmete). Na úrovni `$studentUid` si študent môže prečítať len vlastné známky (`$studentUid === auth.uid`). Žiaden študent nemôže čítať známky iného študenta. Zapisovať môžu len admini a učitelia.

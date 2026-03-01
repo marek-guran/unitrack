@@ -428,8 +428,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.2.1
-- **Kód verzie (Google):** 36
+- **Verzia aplikácie:** 3.2.2
+- **Kód verzie (Google):** 37
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

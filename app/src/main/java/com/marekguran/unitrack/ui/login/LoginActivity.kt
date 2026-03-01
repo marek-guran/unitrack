@@ -135,14 +135,42 @@ class LoginActivity : AppCompatActivity() {
             .addOnCompleteListener(this) { task ->
                 binding.loading.visibility = View.GONE
                 if (task.isSuccessful) {
-                    updateUiWithUser(firebaseAuth.currentUser?.email)
-                    startActivity(Intent(this, MainActivity::class.java))
-                    setResult(RESULT_OK)
-                    finish()
+                    val uid = firebaseAuth.currentUser?.uid
+                    if (uid == null) {
+                        showLoginFailed(R.string.login_failed)
+                        return@addOnCompleteListener
+                    }
+                    // Verify user has an active role or is pending
+                    val db = FirebaseDatabase.getInstance().reference
+                    db.child("pending_users").child(uid).get().addOnSuccessListener { pendingSnap ->
+                        if (pendingSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
+                        db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+                            if (teacherSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
+                            db.child("students").child(uid).get().addOnSuccessListener { studentSnap ->
+                                if (studentSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
+                                db.child("admins").child(uid).get().addOnSuccessListener { adminSnap ->
+                                    if (adminSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
+                                    // No role found — account was rejected, block access
+                                    firebaseAuth.signOut()
+                                    Toast.makeText(this, getString(R.string.pending_rejected_user), Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    }.addOnFailureListener {
+                        // If check fails, allow login anyway
+                        proceedToMain()
+                    }
                 } else {
                     showLoginFailed(R.string.login_failed)
                 }
             }
+    }
+
+    private fun proceedToMain() {
+        updateUiWithUser(firebaseAuth.currentUser?.email)
+        startActivity(Intent(this, MainActivity::class.java))
+        setResult(RESULT_OK)
+        finish()
     }
 
     private fun updateUiWithUser(displayName: String?) {
@@ -335,24 +363,19 @@ class LoginActivity : AppCompatActivity() {
                 if (task.isSuccessful) {
                     val userId = firebaseAuth.currentUser?.uid ?: return@addOnCompleteListener
                     val db = FirebaseDatabase.getInstance().reference
-                    val studentObj = mapOf(
+                    val pendingObj = mapOf(
                         "email" to email,
-                        "name" to name
+                        "name" to name,
+                        "tempKey" to tempPassword
                     )
-                    db.child("students").child(userId).setValue(studentObj)
+                    db.child("pending_users").child(userId).setValue(pendingObj)
                         .addOnCompleteListener {
-                            // Send password setup email and sign out
+                            // Send password setup email so the user can set their own password and log in
                             firebaseAuth.sendPasswordResetEmail(email)
-                                .addOnCompleteListener { resetTask ->
-                                    firebaseAuth.signOut()
-                                    binding.loading.visibility = View.GONE
-                                    dialog.dismiss()
-                                    if (resetTask.isSuccessful) {
-                                        Toast.makeText(this, getString(R.string.register_success), Toast.LENGTH_LONG).show()
-                                    } else {
-                                        Toast.makeText(this, getString(R.string.register_success), Toast.LENGTH_LONG).show()
-                                    }
-                                }
+                            firebaseAuth.signOut()
+                            binding.loading.visibility = View.GONE
+                            dialog.dismiss()
+                            Toast.makeText(this, getString(R.string.register_success), Toast.LENGTH_LONG).show()
                         }
                 } else {
                     binding.loading.visibility = View.GONE

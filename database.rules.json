@@ -20,6 +20,20 @@
       }
     },
 
+    "pending_users": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid && !data.exists()",
+        ".validate": "newData.hasChildren(['email', 'name', 'tempKey'])",
+        "status": {
+          ".write": "auth != null && $uid === auth.uid && !newData.exists()",
+          ".validate": "newData.val() === 'rejected' || !newData.exists()"
+        }
+      }
+    },
+
     "students": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || root.child('teachers').child(auth.uid).exists())",

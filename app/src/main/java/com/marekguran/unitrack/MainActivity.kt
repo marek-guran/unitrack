@@ -117,8 +117,30 @@ class MainActivity : AppCompatActivity() {
                 finish()
                 return
             }
+            // Check if user is pending approval BEFORE building UI.
+            // Redirect to full-screen pending activity if so; otherwise continue.
+            val dbRef = FirebaseDatabase.getInstance().reference
+            dbRef.child("pending_users").child(currentUser.uid).get().addOnSuccessListener { pendingSnap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
+                if (pendingSnap.exists()) {
+                    val intent = Intent(this, PendingApprovalActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
+                    finish()
+                } else {
+                    setupMainUI(savedInstanceState, prefs, isOffline)
+                }
+            }.addOnFailureListener {
+                // If the check fails, continue with normal setup
+                if (!isFinishing && !isDestroyed) setupMainUI(savedInstanceState, prefs, isOffline)
+            }
+            return
         }
 
+        setupMainUI(savedInstanceState, prefs, isOffline)
+    }
+
+    private fun setupMainUI(savedInstanceState: Bundle?, prefs: android.content.SharedPreferences, isOffline: Boolean) {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

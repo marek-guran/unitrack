@@ -37,6 +37,13 @@ root/
 ├── admins/
 │   └── {uid}: true                          # Zoznam admin používateľov
 │
+├── pending_users/                           # Používatelia čakajúci na schválenie
+│   └── {uid}/
+│       ├── email: "student@uni.sk"
+│       ├── name: "Ján Novák"
+│       ├── tempKey: "..."                   # Dočasné heslo (na odstránenie z Auth pri odmietnutí)
+│       └── status: "rejected"               # Voliteľné — nastavené adminom pri odmietnutí
+│
 ├── predmety/
 │   └── {subjectKey}/
 │       ├── name: "Matematika 1"
@@ -152,6 +159,7 @@ root/
 - **`consultation_timetable`** = rozvrh konzultácií študenta (pod `students/{uid}/`)
 - **`notifications`** = notifikácie pre používateľov (napr. zrušenie konzultácie)
 - **`settings`** = globálne nastavenia aplikácie (napr. `allowed_domains` — zoznam povolených emailových domén)
+- **`pending_users`** = používatelia čakajúci na schválenie administrátorom (po registrácii)
 
 Kľúče školských rokov používajú formát s podčiarkovníkom (`2025_2026`), zatiaľ čo zobrazený názov používa lomku (`2025/2026`).
 

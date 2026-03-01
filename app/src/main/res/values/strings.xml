@@ -140,12 +140,30 @@
     <string name="reset_password_sent">E-mail na obnovu hesla bol odoslaný.</string>
     <string name="reset_password_error">Chyba pri odosielaní e-mailu: %s</string>
     <string name="register_title">Registrácia</string>
-    <string name="register_email_hint">E-mail (@edu.ku.sk)</string>
+    <string name="register_email_hint">E-mail</string>
     <string name="register_name_hint">Meno a priezvisko</string>
     <string name="register_button">Zaregistrovať sa</string>
-    <string name="register_success">Účet bol vytvorený. Skontrolujte e-mail pre nastavenie hesla.</string>
+    <string name="register_success">Registrácia odoslaná. Skontrolujte e-mail pre nastavenie hesla. Váš účet musí byť schválený administrátorom.</string>
     <string name="register_invalid_domain">Registrácia je povolená len pre e-maily s doménou: %s</string>
     <string name="register_error">Chyba pri registrácii: %s</string>
+    <string name="pending_approval">Čaká na schválenie</string>
+    <string name="pending_approve_title">Schváliť používateľa</string>
+    <string name="pending_approve_message">Vyberte rolu pre %s:</string>
+    <string name="pending_approve_confirm_title">Potvrdiť schválenie</string>
+    <string name="pending_approve_confirm_message">Naozaj chcete, aby používateľ %s získal rolu %s?</string>
+    <string name="pending_role_student">Študent</string>
+    <string name="pending_role_teacher">Učiteľ</string>
+    <string name="pending_approved_student">Používateľ schválený ako študent.</string>
+    <string name="pending_approved_teacher">Používateľ schválený ako učiteľ.</string>
+    <string name="pending_rejected">Používateľ bol odmietnutý.</string>
+    <string name="pending_reject_confirm">Naozaj chcete odmietnuť tohto používateľa?</string>
+    <string name="pending_message">Váš účet čaká na schválenie administrátorom. Po schválení budete mať prístup k všetkým funkciám aplikácie.</string>
+    <string name="logout">Odhlásiť sa</string>
+    <string name="pending_rejected_user">Váš účet bol zamietnutý.</string>
+    <string name="pending_rejected_title">Účet zamietnutý</string>
+    <string name="pending_rejected_message">Váš účet bol zamietnutý administrátorom. Ak si myslíte, že ide o chybu, môžete požiadať o opätovné posúdenie.</string>
+    <string name="pending_reapply">Požiadať znova</string>
+    <string name="pending_reapply_success">Žiadosť bola znovu odoslaná.</string>
 
     <!-- Timetable one-time events & consulting hours -->
     <string name="timetable_specific_date">Dátum (napr. 15.03.2026)</string>
