@@ -117,6 +117,11 @@ class MainActivity : AppCompatActivity() {
                 finish()
                 return
             }
+            // Skip pending check for users who have been previously approved.
+            if (prefs.getString("approved_uid", null) == currentUser.uid) {
+                setupMainUI(savedInstanceState, prefs, isOffline)
+                return
+            }
             // Check if user is pending approval BEFORE building UI.
             // Redirect to full-screen pending activity if so; otherwise continue.
             val dbRef = FirebaseDatabase.getInstance().reference
@@ -128,6 +133,7 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     finish()
                 } else {
+                    prefs.edit().putString("approved_uid", currentUser.uid).apply()
                     setupMainUI(savedInstanceState, prefs, isOffline)
                 }
             }.addOnFailureListener {

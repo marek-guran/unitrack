@@ -379,6 +379,7 @@ class SettingsFragment : Fragment() {
         binding.btnChangeEmail.visibility = View.GONE
 
         binding.btnLogout.setOnClickListener {
+            requireContext().getSharedPreferences("app_settings", 0).edit().remove("approved_uid").apply()
             auth.signOut()
             val intent = Intent(requireContext(), LoginActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
