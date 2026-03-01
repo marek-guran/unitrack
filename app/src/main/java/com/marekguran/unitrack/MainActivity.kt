@@ -36,7 +36,11 @@ import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.marekguran.unitrack.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import com.marekguran.unitrack.ui.PillNavigationBar
@@ -68,6 +72,11 @@ class MainActivity : AppCompatActivity() {
 
     // Navigation destination IDs mapped to pill nav indices
     private lateinit var navDestinations: List<Int>
+
+    // Real-time listeners for role changes so navigation rebuilds automatically
+    private var roleListenerRef: DatabaseReference? = null
+    private var roleListener: ValueEventListener? = null
+    private var roleListenerFirstCallback = true
 
     // Notification permission request for Android 13+
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -483,25 +492,53 @@ class MainActivity : AppCompatActivity() {
     ) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
         val dbRef = FirebaseDatabase.getInstance().reference
-        dbRef.child("admins").child(user.uid).get().addOnSuccessListener { snapshot ->
-            if (snapshot.exists()) {
-                // User is admin — rebuild navigation with admin tabs
-                buildNavigation(pillNav, navController, includeAdminTabs = true, isOnline = true)
-            } else {
-                // Not admin — check if teacher (teachers should not see consulting booking)
-                dbRef.child("teachers").child(user.uid).get().addOnSuccessListener { teacherSnap ->
-                    if (teacherSnap.exists()) {
-                        buildNavigation(pillNav, navController, includeAdminTabs = false, isOnline = true, showConsulting = false)
+
+        // Use a real-time listener on the teacher node so that when an admin
+        // promotes or demotes this user the navigation rebuilds automatically.
+        // A user may have both teachers/{uid} and students/{uid} nodes (student
+        // data is preserved on promotion); the hierarchical check here
+        // (admins → teachers → student-default) ensures a single deterministic role.
+        roleListenerFirstCallback = true
+        val teacherRef = dbRef.child("teachers").child(user.uid)
+        roleListenerRef = teacherRef
+        roleListener = object : ValueEventListener {
+            override fun onDataChange(teacherSnap: DataSnapshot) {
+                if (isFinishing || isDestroyed) return
+                // Check admin status on every change as well
+                dbRef.child("admins").child(user.uid).get().addOnSuccessListener { adminSnap ->
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
+                    when {
+                        adminSnap.exists() ->
+                            buildNavigation(pillNav, navController, includeAdminTabs = true, isOnline = true)
+                        teacherSnap.exists() ->
+                            buildNavigation(pillNav, navController, includeAdminTabs = false, isOnline = true, showConsulting = false)
+                        else ->
+                            buildNavigation(pillNav, navController, includeAdminTabs = false, isOnline = true, showConsulting = true)
+                    }
+                    // On subsequent callbacks (actual role change), navigate to
+                    // Home so the whole UI refreshes for the new role.
+                    if (roleListenerFirstCallback) {
+                        roleListenerFirstCallback = false
+                    } else {
+                        val opts = NavOptions.Builder()
+                            .setPopUpTo(R.id.navigation_home, true)
+                            .build()
+                        navController.navigate(R.id.navigation_home, null, opts)
+                        pillNav.setSelectedIndex(0)
                     }
                 }
             }
+            override fun onCancelled(error: DatabaseError) {}
         }
+        teacherRef.addValueEventListener(roleListener!!)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         noInternetDialog?.dismiss()
+        // Remove the real-time role listener to prevent leaks
+        roleListener?.let { roleListenerRef?.removeEventListener(it) }
         // Prevent bitmap leak — but not if the activity is being recreated
         // for a theme change, because the new activity still needs the bitmap.
         if (!themeChangeInProgress) {

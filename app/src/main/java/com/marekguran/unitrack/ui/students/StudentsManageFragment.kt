@@ -234,6 +234,7 @@ class StudentsManageFragment : Fragment() {
                 val keys = mutableListOf<String>()
                 val names = mutableListOf<String>()
                 for ((key, subjectJson) in subjects) {
+                    if (key.startsWith("_consulting_")) continue
                     val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
                     keys.add(key)
                     names.add(name)
@@ -465,6 +466,8 @@ class StudentsManageFragment : Fragment() {
         val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_edit_account, null)
         val editName = dialogView.findViewById<TextInputEditText>(R.id.editAccountName)
         val textEmail = dialogView.findViewById<TextView>(R.id.textAccountEmail)
+        val switchRole = dialogView.findViewById<SwitchMaterial>(R.id.switchAccountRole)
+        val textRole = dialogView.findViewById<TextView>(R.id.textAccountRole)
         val btnReset = dialogView.findViewById<MaterialButton>(R.id.btnForcePasswordReset)
         val statusText = dialogView.findViewById<TextView>(R.id.textEditStatus)
         val confirmBtn = dialogView.findViewById<MaterialButton>(R.id.confirmButton)
@@ -472,6 +475,12 @@ class StudentsManageFragment : Fragment() {
 
         editName.setText(student.name)
         textEmail.text = student.email
+
+        switchRole.isChecked = student.isTeacher
+        textRole.text = if (student.isTeacher) "Učiteľ" else "Študent"
+        switchRole.setOnCheckedChangeListener { _, isChecked ->
+            textRole.text = if (isChecked) "Učiteľ" else "Študent"
+        }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)
@@ -506,20 +515,64 @@ class StudentsManageFragment : Fragment() {
                 statusText.text = "Zadajte meno."
                 return@setOnClickListener
             }
+            val newIsTeacher = switchRole.isChecked
             val db = FirebaseDatabase.getInstance().reference
-            if (student.isTeacher) {
-                db.child("teachers").child(student.uid).setValue("${student.email}, $newName")
+            if (newIsTeacher == student.isTeacher) {
+                // Role unchanged – just update the name
+                if (student.isTeacher) {
+                    db.child("teachers").child(student.uid).setValue("${student.email}, $newName")
+                        .addOnSuccessListener {
+                            Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                            loadStudents()
+                            dialog.dismiss()
+                        }
+                } else {
+                    db.child("students").child(student.uid).child("name").setValue(newName)
+                        .addOnSuccessListener {
+                            Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                            loadStudents()
+                            dialog.dismiss()
+                        }
+                }
+            } else if (newIsTeacher) {
+                // Student → Teacher (atomic multi-path update)
+                // Keep students/{uid} data intact so it can be restored if role is reverted
+                confirmBtn.isEnabled = false
+                statusText.visibility = View.VISIBLE
+                statusText.text = "Mením rolu..."
+                val updates = mapOf<String, Any?>(
+                    "teachers/${student.uid}" to "${student.email}, $newName"
+                )
+                db.updateChildren(updates)
                     .addOnSuccessListener {
-                        Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Rola zmenená na Učiteľ.", Toast.LENGTH_SHORT).show()
                         loadStudents()
                         dialog.dismiss()
                     }
+                    .addOnFailureListener { ex ->
+                        statusText.text = "Chyba: ${ex.message}"
+                        confirmBtn.isEnabled = true
+                    }
             } else {
-                db.child("students").child(student.uid).child("name").setValue(newName)
+                // Teacher → Student (atomic multi-path update)
+                // Update only name/email fields to preserve any existing student data (subjects, school_years)
+                confirmBtn.isEnabled = false
+                statusText.visibility = View.VISIBLE
+                statusText.text = "Mením rolu..."
+                val updates = mapOf<String, Any?>(
+                    "teachers/${student.uid}" to null,
+                    "students/${student.uid}/email" to student.email,
+                    "students/${student.uid}/name" to newName
+                )
+                db.updateChildren(updates)
                     .addOnSuccessListener {
-                        Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "Rola zmenená na Študent.", Toast.LENGTH_SHORT).show()
                         loadStudents()
                         dialog.dismiss()
+                    }
+                    .addOnFailureListener { ex ->
+                        statusText.text = "Chyba: ${ex.message}"
+                        confirmBtn.isEnabled = true
                     }
             }
         }
@@ -654,6 +707,7 @@ class StudentsManageFragment : Fragment() {
         // Only show subjects with no teacher or this teacher's subjects
         val items = mutableListOf<SubjectEnrollItem>()
         for ((key, subjectJson) in subjects) {
+            if (key.startsWith("_consulting_")) continue
             val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
             val teacherEmail = subjectJson.optString("teacherEmail", "")
             if (teacherEmail.isBlank() || teacherEmail.equals(teacher.email, ignoreCase = true)) {
@@ -726,6 +780,7 @@ class StudentsManageFragment : Fragment() {
                 val items = mutableListOf<SubjectEnrollItem>()
                 for (subjectSnap in subjectsSnap.children) {
                     val key = subjectSnap.key ?: continue
+                    if (key.startsWith("_consulting_")) continue
                     val name = subjectSnap.child("name").getValue(String::class.java)
                         ?: key.replaceFirstChar { it.uppercaseChar() }
                     val teacherEmail = subjectSnap.child("teacherEmail").getValue(String::class.java) ?: ""
@@ -854,6 +909,7 @@ class StudentsManageFragment : Fragment() {
 
             items.clear()
             for ((key, subjectJson) in subjects) {
+                if (key.startsWith("_consulting_")) continue
                 val name = subjectJson.optString("name", key.replaceFirstChar { it.uppercaseChar() })
                 val subjectSemester = subjectJson.optString("semester", "both")
                 if (subjectSemester != "both" && subjectSemester != semester) continue
@@ -983,6 +1039,7 @@ class StudentsManageFragment : Fragment() {
                             items.clear()
                             for (subjectSnap in subjectsSnap.children) {
                                 val key = subjectSnap.key ?: continue
+                                if (key.startsWith("_consulting_")) continue
                                 val name = subjectSnap.child("name").getValue(String::class.java)
                                     ?: key.replaceFirstChar { it.uppercaseChar() }
                                 val subjectSemester = subjectSnap.child("semester").getValue(String::class.java) ?: "both"
@@ -1156,6 +1213,7 @@ class StudentsManageFragment : Fragment() {
                         val teacherSubjects = mutableMapOf<String, MutableSet<String>>()
                         for (subjectSnap in subjectsSnap.children) {
                             val key = subjectSnap.key ?: continue
+                            if (key.startsWith("_consulting_")) continue
                             val name = subjectSnap.child("name").getValue(String::class.java)
                                 ?: key.replaceFirstChar { it.uppercaseChar() }
                             keys.add(key)
