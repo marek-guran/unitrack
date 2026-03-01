@@ -178,6 +178,16 @@ Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
 | 11.2 | Kopírovanie predmetov z existujúceho roka | Predmety sa prekopírujú | ✅ |
 | 11.3 | Výber a odznačenie predmetov/študentov | Filtre a hromadný výber fungujú | ✅ |
 
+### 12. Zmena role používateľa (online admin)
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 12.1 | Povýšenie študenta na učiteľa | Rola sa zmení, dáta študenta zostávajú zachované | ✅ |
+| 12.2 | Degradácia učiteľa na študenta | Rola sa zmení, existujúce predmety a školské roky zostávajú zachované | ✅ |
+| 12.3 | Real-time aktualizácia navigácie po zmene role | Navigácia dotknutého používateľa sa okamžite prebuduje | ✅ |
+| 12.4 | Presmerovanie na domovskú obrazovku po zmene role | Používateľ je automaticky presmerovaný na Home | ✅ |
+| 12.5 | Zachovanie dát po opakovanej zmene role (študent → učiteľ → študent) | Žiadne dáta sa nestratia pri opakovaných zmenách | ✅ |
+
 ---
 
 ## Overenie kompatibility

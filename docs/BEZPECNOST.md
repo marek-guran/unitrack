@@ -54,24 +54,40 @@ UniTrack rozlišuje tri role:
 
 | Rola | Detekcia | Oprávnenia |
 |---|---|---|
-| **Admin** | Firebase cesta `admins/{uid}` existuje | Správa účtov, predmetov, školských rokov |
+| **Admin** | Firebase cesta `admins/{uid}` existuje | Správa účtov, predmetov, školských rokov, zmena rolí používateľov |
 | **Učiteľ** | Firebase cesta `teachers/{uid}` existuje | Správa známok, dochádzky, rozvrhu, voľných dní |
 | **Študent** | Žiadna z vyššie uvedených ciest | Zobrazenie vlastných známok a dochádzky |
 
+### Zmena role používateľa
+
+Admin môže zmeniť rolu používateľa (študent ↔ učiteľ) cez obrazovku Účty. Zmena role je implementovaná bezpečne:
+
+- **Atomická operácia:** Zmena prebieha cez Firebase `updateChildren()`, čo zaručuje konzistentnosť
+- **Zachovanie dát:** Pri povýšení na učiteľa sa pridá `teachers/{uid}`, ale `students/{uid}` zostáva netknutý. Pri degradácii na študenta sa `teachers/{uid}` odstráni a `students/{uid}` sa aktualizuje len s menom a emailom — existujúce predmety, školské roky a konzultácie zostávajú zachované
+- **Real-time aktualizácia:** Dotknutý používateľ má v `MainActivity` aktívny `ValueEventListener` na `teachers/{uid}`, takže zmenu role uvidí okamžite bez reštartu aplikácie
+- **Oprávnenia:** Len admin môže meniť role — Firebase Security Rules zabezpečujú, že zápis do `teachers/` a `admins/` je povolený len pre existujúcich adminov
+
 ### Detekcia admin práv
 
-Admin detekcia prebieha asynchrónne pri spustení aplikácie:
+Admin detekcia prebieha v reálnom čase pri spustení aplikácie cez `ValueEventListener`:
 
 ```kotlin
 // MainActivity.kt
-db.child("admins").child(uid).get().addOnSuccessListener { snapshot ->
-    if (snapshot.exists()) {
-        // Prebudovanie navigácie s admin tabmi
+val teacherRef = dbRef.child("teachers").child(uid)
+teacherRef.addValueEventListener(object : ValueEventListener {
+    override fun onDataChange(teacherSnap: DataSnapshot) {
+        dbRef.child("admins").child(uid).get().addOnSuccessListener { adminSnap ->
+            when {
+                adminSnap.exists() -> buildNavigation(includeAdminTabs = true)
+                teacherSnap.exists() -> buildNavigation(includeAdminTabs = false, showConsulting = false)
+                else -> buildNavigation(includeAdminTabs = false, showConsulting = true)
+            }
+        }
     }
-}
+})
 ```
 
-Toto je client-side kontrola, ktorá ovplyvňuje zobrazenie UI. Skutočná ochrana dát musí byť zabezpečená na strane Firebase cez Security Rules a App Check.
+Toto je client-side kontrola, ktorá ovplyvňuje zobrazenie UI. Skutočná ochrana dát musí byť zabezpečená na strane Firebase cez Security Rules a App Check. Listener reaguje na zmeny v reálnom čase — ak admin zmení rolu používateľa, jeho navigácia sa okamžite prebuduje.
 
 ---
 
@@ -261,7 +277,10 @@ Pre produkčné nasadenie UniTracku sa odporúča nastaviť nasledujúce pravidl
 
     "settings": {
       ".read": "auth != null",
-      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "allowed_domains": {
+        ".read": true
+      }
     }
   }
 }
@@ -287,6 +306,7 @@ Firebase Security Rules sa vyhodnocujú na strane servera pri každom čítaní 
 - **consultation_bookings** — Čítať môže každý prihlásený používateľ (potrebné pre zobrazenie rezervácií). Na úrovni `$subjectKey` môže zapisovať každý prihlásený používateľ (študent vytvára novú rezerváciu). Na úrovni `$bookingKey` môže upraviť/zmazať rezerváciu len študent, ktorý ju vytvoril (`data.child('studentUid').val() === auth.uid`), admin alebo učiteľ. Tým sa zabezpečí, že študent nemôže manipulovať s cudzími rezerváciami.
 - **students → consultation_timetable** — Študent si môže čítať a zapisovať len vlastný rozvrh konzultácií (`$uid === auth.uid`). Ostatní používatelia nemajú prístup k cudziemu rozvrhu konzultácií.
 - **notifications** — Čítať notifikácie môže len ich adresát (`$uid === auth.uid`). Zapisovať (odosielať) notifikácie môže každý prihlásený používateľ — toto umožňuje učiteľom a systému posielať notifikácie študentom (napr. zrušenie konzultácie).
+- **settings** — Čítať môže každý prihlásený používateľ. Zapisovať môžu len admini. Vnorený uzol `allowed_domains` má verejný prístup na čítanie (`.read: true`) — umožňuje aplikácii načítať zoznam povolených emailových domén ešte pred prihlásením (napr. na validáciu registrácie).
 
 ### Offline režim — lokálny JSON súbor
 

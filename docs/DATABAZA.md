@@ -103,7 +103,7 @@ root/
 │                       └── absent: true
 │
 ├── teachers/
-│   └── {uid}: "ucitel@uni.sk, Meno Učiteľa" # Email a meno učiteľa
+│   └── {uid}: "ucitel@uni.sk, Meno Učiteľa" # Email a meno učiteľa (pridanie = povýšenie na učiteľa, odstránenie = degradácia na študenta)
 │
 ├── days_off/                                # Voľné dni
 │   └── {teacherUid}/
@@ -132,6 +132,10 @@ root/
         └── {notificationKey}/
             ├── type: "consultation_cancelled"  # Typ notifikácie
             └── ...                             # Ďalšie polia podľa typu
+
+└── settings/                                # Globálne nastavenia
+    └── allowed_domains/                     # Povolené emailové domény (verejne čitateľné)
+        └── {index}: "uni.sk"
 ```
 
 ### Konvencie pomenovania
@@ -147,6 +151,7 @@ root/
 - **`consultation_bookings`** = rezervácie konzultácií (consultation bookings)
 - **`consultation_timetable`** = rozvrh konzultácií študenta (pod `students/{uid}/`)
 - **`notifications`** = notifikácie pre používateľov (napr. zrušenie konzultácie)
+- **`settings`** = globálne nastavenia aplikácie (napr. `allowed_domains` — zoznam povolených emailových domén)
 
 Kľúče školských rokov používajú formát s podčiarkovníkom (`2025_2026`), zatiaľ čo zobrazený názov používa lomku (`2025/2026`).
 

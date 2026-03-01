@@ -23,7 +23,7 @@ Cieľ práce pozostáva z piatich kľúčových častí. Každá je nižšie ana
 | Architektúra aplikácie | MVVM vzor (ViewModel + LiveData + Fragmenty) | [ARCHITEKTURA.md](ARCHITEKTURA.md) |
 | Návrh databázy | Stromová JSON štruktúra (Firebase + lokálna replika) | [DATABAZA.md](DATABAZA.md) |
 | Návrh používateľského rozhrania | Material Design 3, responzívne layouty (telefón + tablet) | [NAVIGACIA.md](NAVIGACIA.md) |
-| Návrh notifikačného systému | 4 kanály, konfigurovateľné intervaly, Android 16 podpora | [NOTIFIKACIE.md](NOTIFIKACIE.md) |
+| Návrh notifikačného systému | 5 kanálov, konfigurovateľné intervaly, Android 16 podpora | [NOTIFIKACIE.md](NOTIFIKACIE.md) |
 | Návrh bezpečnostného modelu | Firebase Auth, App Check (Play Integrity), role-based prístup, offline sandbox | [BEZPECNOST.md](BEZPECNOST.md) |
 
 ---
@@ -38,7 +38,7 @@ Aplikácia je plne funkčná a pripravená na reálne nasadenie. Všetky navrhnu
 | Počet XML layoutov | 87 (vrátane tabletových variantov) |
 | Počet dátových modelov | 10+ |
 | Počet RecyclerView adaptérov | 13+ |
-| Počet notifikačných kanálov | 4 |
+| Počet notifikačných kanálov | 5 |
 | Počet PDF reportov | 3 typy |
 | Podporované Android verzie | 12 – 16 (API 31 – 36) |
 
@@ -123,7 +123,7 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 | **Export/import databázy** | Zálohovanie a obnova celej databázy ako JSON súbor |
 | **PDF reporty** | Tri typy: report predmetu, výsledky študenta, prehľad učiteľa |
 | **Vlastná navigácia** | PillNavigationBar — animovaná „pilulka" s adaptívnym dizajnom |
-| **Správa účtov** | Administrácia používateľov s priradením rolí (admin, učiteľ, študent) |
+| **Správa účtov** | Administrácia používateľov s priradením rolí (admin, učiteľ, študent), zmena role v reálnom čase s okamžitou aktualizáciou navigácie a zachovaním dát |
 | **Správa predmetov** | Vytváranie, editácia, priradenie semestrov s automatickou migráciou dát |
 | **Splash obrazovka** | Animovaný vstupný screen s logom a slide-up animáciou |
 | **Reset hesla** | Odoslanie emailu na obnovu hesla |

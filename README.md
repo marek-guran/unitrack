@@ -38,7 +38,7 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 - **QR kód dochádzka** — učiteľ zobrazí rotujúci QR kód, študenti ho naskenujú fotoaparátom a dochádzka sa zaznamená automaticky v reálnom čase
 - **Správa rozvrhu** — týždenný rozvrh s filtrami (párny/nepárny týždeň, dnes), podpora voľných dní
 - **Správa predmetov** — vytváranie, editácia a priradenie predmetov k semestrom (zimný/letný/obidva)
-- **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent)
+- **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent) s možnosťou zmeny role v reálnom čase (online režim) — pri zmene role sa UI okamžite aktualizuje a dáta zostávajú zachované
 - **Akademická analytika** — priemery známok, percentá dochádzky, navrhovaná známka
 - **Migrácia databázy** — automatická aj manuálna migrácia štruktúry databázy (globálne predmety → per-year, per-year študenti → globálna štruktúra, migrácia pri zmene semestra predmetu) pre online aj offline režim
 - **Animácie a prechody** — paint-drop animácia pri prepínaní tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, slide-up splash, fade prechody medzi obrazovkami
@@ -242,7 +242,7 @@ Učitelia môžu pridávať **voľné dni** (dovolenky) s dátumom, časovým ro
 
 ### 👥 Študenti / Účty
 
-V online režime (pre adminov) sa zobrazuje ako **„Účty"** — správa všetkých používateľov systému s filtrovaním podľa role (študent, učiteľ, admin).
+V online režime (pre adminov) sa zobrazuje ako **„Účty"** — správa všetkých používateľov systému s filtrovaním podľa role (študent, učiteľ, admin). Admin môže zmeniť rolu používateľa (študent ↔ učiteľ) a zmena sa prejaví okamžite v reálnom čase — navigácia dotknutého používateľa sa automaticky prebuduje bez straty dát.
 
 V offline režime sa zobrazuje ako **„Študenti"** — pridávanie a odstraňovanie študentov, správa zápisov predmetov.
 
@@ -428,8 +428,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.2.0
-- **Kód verzie (Google):** 35
+- **Verzia aplikácie:** 3.2.1
+- **Kód verzie (Google):** 36
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

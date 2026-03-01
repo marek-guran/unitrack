@@ -72,7 +72,15 @@ LoginActivity
 
 ### Detekcia admin práv
 
-Pri online štarte `MainActivity` posiela dotaz na Firebase cestu `admins/{uid}`. Ak existuje, navigácia sa prestaví — pridajú sa taby **Účty** a **Predmety**. Toto prebieha asynchrónne, takže bežný učiteľ neuvidí admin taby nikdy, ale admin ich uvidí po krátkom oneskorení (zvyčajne nepostrehnuteľnom).
+Pri online štarte `MainActivity` nastaví real-time `ValueEventListener` na Firebase cestu `teachers/{uid}`. Pri každej zmene tohto uzla sa asynchrónne overí aj cesta `admins/{uid}`. Podľa výsledku sa navigácia dynamicky prebuduje:
+
+- Ak `admins/{uid}` existuje → admin taby (Účty, Predmety)
+- Ak `teachers/{uid}` existuje → učiteľská navigácia (bez Konzultácií)
+- Ak ani jedno → študentská navigácia (s Konzultáciami)
+
+Prvé zavolanie listenera (počiatočné načítanie) len nastaví navigáciu. Každé ďalšie zavolanie (skutočná zmena role) navyše presmeruje používateľa na domovskú obrazovku, aby sa UI okamžite prispôsobilo novej role. Listener sa odregistruje v `onDestroy()`.
+
+Toto zabezpečuje, že ak admin zmení rolu používateľa, dotknutý používateľ uvidí zmenu okamžite v reálnom čase bez nutnosti reštartu aplikácie.
 
 ---
 

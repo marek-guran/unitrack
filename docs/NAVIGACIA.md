@@ -99,10 +99,14 @@ Navigačná lišta sa dynamicky mení podľa role používateľa a režimu:
 ### Ako prebieha detekcia
 
 1. Pri spustení sa najprv zobrazí navigácia bez admin tabov
-2. `checkAdminAndRebuildNav()` asynchrónne preverí Firebase cestu `admins/{uid}`
-3. Ak snapshot existuje → `buildNavigation()` sa zavolá znova s `includeAdminTabs = true`
-4. Navigácia sa plynulo prebuduje s novými tabmi
-5. Pre študentov (nie admin, nie učiteľ) sa pridáva záložka **Konzultácie** (`navigation_consulting`)
+2. `checkAdminAndRebuildNav()` nastaví real-time `ValueEventListener` na Firebase cestu `teachers/{uid}`
+3. Pri každej zmene sa asynchrónne overí aj `admins/{uid}`
+4. Podľa výsledku sa navigácia prebuduje:
+   - Admin → `includeAdminTabs = true` (taby Účty, Predmety)
+   - Učiteľ → základná navigácia bez Konzultácií
+   - Študent → navigácia s Konzultáciami
+5. Prvé zavolanie listenera len nastaví navigáciu; ďalšie zavolania (zmena role) navyše presmerujú na domovskú obrazovku
+6. Listener sa odregistruje v `onDestroy()` pre prevenciu memory leakov
 
 V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pretože lokálna správa vždy vyžaduje prístup k študentom a predmetom.
 
@@ -151,6 +155,10 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 **Účel:** Správa študentov (offline) alebo účtov (online admin).
 
 - **Online:** Filter podľa role (Všetci / Študenti / Učitelia / Admini), editácia emailu, priradenie rolí
+- **Online — zmena role:** Admin môže zmeniť rolu používateľa (študent ↔ učiteľ) cez editačný dialóg. Zmena prebieha atomicky cez Firebase `updateChildren()`:
+  - **Povýšenie na učiteľa:** pridá sa záznam `teachers/{uid}`, dáta študenta (`students/{uid}`) zostávajú zachované
+  - **Degradácia na študenta:** záznam `teachers/{uid}` sa odstráni, `students/{uid}` sa aktualizuje len s menom a emailom — existujúce predmety, školské roky a konzultácie zostávajú netknuté
+  - Zmena role sa dotknutému používateľovi prejaví okamžite v reálnom čase — jeho navigácia sa automaticky prebuduje vďaka `ValueEventListener` v `MainActivity`
 - **Offline:** Pridávanie/mazanie študentov, správa zápisov predmetov podľa semestra
 - Vyhľadávanie podľa mena/emailu
 

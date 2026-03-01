@@ -106,6 +106,14 @@ Tieto funkcie sa zobrazujú len prihlásenému adminovi:
 
 Rovnaká funkcionalita ako v offline režime — vytváranie nových školských rokov.
 
+### Zmena role používateľa
+
+V záložke **Účty** môže admin zmeniť rolu používateľa (študent ↔ učiteľ). Zmena role:
+- Prebieha atomicky cez Firebase `updateChildren()`
+- Pri povýšení na učiteľa sa dáta študenta zachovajú (predmety, školské roky, konzultácie)
+- Pri degradácii na študenta sa aktualizuje len meno a email — existujúce dáta zostávajú netknuté
+- Dotknutý používateľ uvidí zmenu okamžite v reálnom čase vďaka `ValueEventListener` v `MainActivity`
+
 ### Nový semester
 
 Tlačidlo pre spustenie samostatnej obrazovky (`NewSemesterActivity`) na vytvorenie nového školského roka/semestra s tromi záložkami:
