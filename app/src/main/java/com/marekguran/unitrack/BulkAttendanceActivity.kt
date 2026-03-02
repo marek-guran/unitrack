@@ -16,6 +16,7 @@ import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.requireOnline
 import com.marekguran.unitrack.data.model.AttendanceEntry
 import com.marekguran.unitrack.data.model.AttendanceStudentAdapter
 import com.marekguran.unitrack.data.model.StudentDetail
@@ -193,6 +194,7 @@ class BulkAttendanceActivity : AppCompatActivity() {
     }
 
     private fun submitAttendance() {
+        if (!requireOnline()) return
         val isOffline = OfflineMode.isOffline(this)
         val dateStr = selectedDate.toString()
         val timeStr = selectedTime.format(DateTimeFormatter.ofPattern("HH:mm"))

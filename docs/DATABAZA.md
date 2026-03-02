@@ -28,6 +28,47 @@ if (OfflineMode.isOffline(context)) {
 
 ## Firebase Realtime Database
 
+### Firebase Disk Persistence a Cache-First Loading
+
+V `UniTrackApplication.onCreate()` je zapnutá disk persistence:
+
+```kotlin
+FirebaseDatabase.getInstance().setPersistenceEnabled(true)
+```
+
+Toto umožňuje Firebase SDK lokálne cachovať všetky načítané dáta. Keď sa rovnaká cesta načíta znova, dáta sú dostupné okamžite z lokálnej cache bez čakania na server.
+
+Pre maximálne využitie tejto cache aplikácia používa rozšírenie `getFromCache()` (definované v `data/FirebaseExtensions.kt`), ktoré nahrádza štandardné `Query.get()`:
+
+```kotlin
+fun Query.getFromCache(): Task<DataSnapshot> {
+    val source = TaskCompletionSource<DataSnapshot>()
+    addListenerForSingleValueEvent(object : ValueEventListener {
+        override fun onDataChange(snapshot: DataSnapshot) {
+            source.trySetResult(snapshot)
+        }
+        override fun onCancelled(error: DatabaseError) {
+            source.trySetException(error.toException())
+        }
+    })
+    return source.task
+}
+```
+
+**Prečo `getFromCache()` namiesto `get()`:**
+- `Query.get()` vždy skúsi server ako prvý a na cache sa obráti len keď je zariadenie offline — čo spôsobuje viditeľné oneskorenie
+- `getFromCache()` (obaľujúci `addListenerForSingleValueEvent`) číta najprv z lokálnej cache — ak dáta existujú, odpoveď je okamžitá
+- Všetky Firebase čítacie operácie naprieč celou aplikáciou boli nahradené volaním `.getFromCache()`
+
+### Ochrana zápisov pri strate spojenia
+
+V online režime sú všetky Firebase zápisy chránené cez `requireOnline()` guard (definovaný v `data/ConnectivityGuard.kt`). Ak je zariadenie dočasne odpojené od Firebase:
+- Zápis sa nevykoná
+- Zobrazí sa štylizovaný Snackbar „Ste offline – môžete iba prezerať"
+- Používateľ môže naďalej prehliadať dáta z lokálnej cache
+
+Stav pripojenia monitoruje `FirebaseConnectionMonitor` (singleton), ktorý sleduje Firebase cestu `.info/connected` a poskytuje synchronný prístup (`isConnected`) aj reaktívne LiveData (`connected`).
+
 ### Štruktúra stromu
 
 Firebase používa stromovú JSON štruktúru. Tu je prehľad hlavných ciest:

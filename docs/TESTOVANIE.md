@@ -127,6 +127,31 @@ Aplikácia bola testovaná na nasledujúcich zariadeniach a emulátoroch:
 | 6.4 | Reset aplikácie | Všetky dáta sa vymažú, presmerovanie na login | ✅ |
 | 6.5 | Živá notifikácia v offline | Rozvrh sa číta z lokálnej databázy | ✅ |
 
+### 6a. Cache-first loading a ochrana zápisov (online režim)
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 6a.1 | Načítanie dát po prvom spustení | Dáta sa stiahnu zo servera a uložia do cache | ✅ |
+| 6a.2 | Opakované načítanie dát (cache) | Dáta sa zobrazia okamžite z lokálnej cache | ✅ |
+| 6a.3 | Strata spojenia počas prehliadania | Offline banner sa zobrazí, dáta z cache sú naďalej dostupné | ✅ |
+| 6a.4 | Pokus o zápis pri offline stave | Snackbar „Ste offline – môžete iba prezerať", zápis sa nevykoná | ✅ |
+| 6a.5 | Obnovenie spojenia po výpadku | Offline banner zmizne, zápisy sú opäť povolené | ✅ |
+| 6a.6 | QR FAB tlačidlá pri offline stave | FAB sa zašedne a stane sa neaktívnym | ✅ |
+| 6a.7 | QR aktivita pri strate spojenia | Celostránkový offline overlay blokuje interakciu | ✅ |
+| 6a.8 | requireOnline() v lokálnom offline režime | Guard vždy vráti true (lokálne zápisy sú povolené) | ✅ |
+
+### 6b. Hromadná dochádzka (BulkAttendanceActivity)
+
+| # | Scenár | Očakávaný výsledok | Stav |
+|---|---|---|---|
+| 6b.1 | Otvorenie hromadnej dochádzky | Zobrazí sa zoznam študentov s prepínačom prítomný/neprítomný | ✅ |
+| 6b.2 | Označenie všetkých ako prítomných | Chip „Označiť všetkých" nastaví všetkých na prítomných | ✅ |
+| 6b.3 | Výber dátumu a času | Dátum a čas sa správne nastavia | ✅ |
+| 6b.4 | Uloženie dochádzky (online) | Záznamy sa uložia do Firebase | ✅ |
+| 6b.5 | Uloženie dochádzky (offline) | Záznamy sa uložia do lokálnej databázy | ✅ |
+| 6b.6 | Zrušenie s neuloženými zmenami | Potvrdzovací dialóg pred zatvorením | ✅ |
+| 6b.7 | requireOnline() guard | Zápis sa nevykoná pri offline stave v online režime | ✅ |
+
 ### 7. Správa predmetov a semestrov
 
 | # | Scenár | Očakávaný výsledok | Stav |

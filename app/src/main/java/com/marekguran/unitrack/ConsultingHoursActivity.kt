@@ -21,6 +21,8 @@ import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import java.time.LocalDate
@@ -209,7 +211,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            saveConsultingHours(dayKey, startTime, endTime, classroom, note)
+            if (!saveConsultingHours(dayKey, startTime, endTime, classroom, note)) return@setOnClickListener
             // Clear fields
             editStartTime.text?.clear()
             editEndTime.text?.clear()
@@ -237,7 +239,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
         picker.show(supportFragmentManager, "time_picker_consulting")
     }
 
-    private fun saveConsultingHours(day: String, startTime: String, endTime: String, classroom: String, note: String) {
+    private fun saveConsultingHours(day: String, startTime: String, endTime: String, classroom: String, note: String): Boolean {
         val consultingSubjectKey = "_consulting_$currentUserUid"
 
         if (isOffline) {
@@ -256,6 +258,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
             }
             localDb.addTimetableEntry(selectedSchoolYear, consultingSubjectKey, entry)
         } else {
+            if (!requireOnline()) return false
             val entryKey = UUID.randomUUID().toString().replace("-", "")
             val data = mapOf<String, Any>(
                 "day" to day,
@@ -272,6 +275,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
             subjectRef.child("isConsultingHours").setValue(true)
             subjectRef.child("timetable").child(entryKey).setValue(data)
         }
+        return true
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -312,7 +316,8 @@ class ConsultingHoursActivity : AppCompatActivity() {
         } else {
             db.child("school_years").child(selectedSchoolYear).child("predmety")
                 .child(consultingSubjectKey).child("timetable")
-                .get().addOnSuccessListener { snapshot ->
+                .getFromCache().addOnSuccessListener { snapshot ->
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
                     manageEntries.clear()
                     for (snap in snapshot.children) {
                         val key = snap.key ?: continue
@@ -354,9 +359,11 @@ class ConsultingHoursActivity : AppCompatActivity() {
             refreshManageData()
             return
         }
+        if (!requireOnline()) return
 
         // Check if students are booked for this entry
-        db.child("consultation_bookings").child(consultingSubjectKey).get().addOnSuccessListener { snapshot ->
+        db.child("consultation_bookings").child(consultingSubjectKey).getFromCache().addOnSuccessListener { snapshot ->
+            if (isFinishing || isDestroyed) return@addOnSuccessListener
             val bookedStudents = mutableListOf<DataSnapshot>()
             for (bookingSnap in snapshot.children) {
                 val ek = bookingSnap.child("consultingEntryKey").getValue(String::class.java) ?: ""
@@ -391,6 +398,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
     }
 
     private fun performDelete(consultingSubjectKey: String, entry: ConsultingEntry, bookedStudents: List<DataSnapshot>) {
+        if (!requireOnline()) return
         db.child("school_years").child(selectedSchoolYear).child("predmety")
             .child(consultingSubjectKey).child("timetable").child(entry.key).removeValue()
 
@@ -401,7 +409,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
 
             db.child("consultation_bookings").child(consultingSubjectKey).child(bookingKey).removeValue()
 
-            db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { snap ->
+            db.child("students").child(studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { snap ->
                 for (child in snap.children) {
                     if (child.child("bookingKey").getValue(String::class.java) == bookingKey) {
                         child.ref.removeValue()
@@ -502,6 +510,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
                 Snackbar.make(findViewById(R.id.viewPager), getString(R.string.consulting_manage_updated), Snackbar.LENGTH_SHORT).show()
                 refreshManageData()
             } else {
+                if (!requireOnline()) return@setOnClickListener
                 db.child("school_years").child(selectedSchoolYear).child("predmety")
                     .child(consultingSubjectKey).child("timetable").child(entry.key).updateChildren(updates)
                     .addOnSuccessListener {
@@ -569,7 +578,8 @@ class ConsultingHoursActivity : AppCompatActivity() {
     private fun loadAllBookings(onComplete: () -> Unit) {
         if (currentUserUid.isBlank() || selectedSchoolYear.isBlank()) { onComplete(); return }
 
-        db.child("school_years").child(selectedSchoolYear).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+        db.child("school_years").child(selectedSchoolYear).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
+            if (isFinishing || isDestroyed) return@addOnSuccessListener
             allBookings.clear()
             val consultingKeys = mutableListOf<String>()
 
@@ -587,7 +597,8 @@ class ConsultingHoursActivity : AppCompatActivity() {
             var remaining = consultingKeys.size
             val today = LocalDate.now()
             for (consultingKey in consultingKeys) {
-                db.child("consultation_bookings").child(consultingKey).get().addOnSuccessListener { bookingsSnap ->
+                db.child("consultation_bookings").child(consultingKey).getFromCache().addOnSuccessListener { bookingsSnap ->
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
                     for (snap in bookingsSnap.children) {
                         val bookingKey = snap.key ?: continue
                         val teacherUid = snap.child("teacherUid").getValue(String::class.java) ?: ""
@@ -601,7 +612,7 @@ class ConsultingHoursActivity : AppCompatActivity() {
                         if (parsedDate != null && parsedDate.isBefore(today)) {
                             snap.ref.removeValue()
                             if (studentUid.isNotBlank()) {
-                                db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { stSnap ->
+                                db.child("students").child(studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { stSnap ->
                                     for (child in stSnap.children) {
                                         if (child.child("bookingKey").getValue(String::class.java) == bookingKey) {
                                             child.ref.removeValue()
@@ -675,10 +686,11 @@ class ConsultingHoursActivity : AppCompatActivity() {
     }
 
     private fun performCancelBooking(booking: BookingItem, pageView: View) {
+        if (!requireOnline()) return
         db.child("consultation_bookings").child(booking.consultingSubjectKey).child(booking.bookingKey).removeValue()
 
         if (booking.studentUid.isNotBlank()) {
-            db.child("students").child(booking.studentUid).child("consultation_timetable").get().addOnSuccessListener { snap ->
+            db.child("students").child(booking.studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { snap ->
                 for (child in snap.children) {
                     if (child.child("bookingKey").getValue(String::class.java) == booking.bookingKey) {
                         child.ref.removeValue()
@@ -793,11 +805,12 @@ class ConsultingHoursActivity : AppCompatActivity() {
     }
 
     private fun updateBooking(booking: BookingItem, newDate: String, newTimeFrom: String, pageView: View) {
+        if (!requireOnline()) return
         val bookingUpdates = mapOf("date" to newDate, "timeFrom" to newTimeFrom)
         db.child("consultation_bookings").child(booking.consultingSubjectKey).child(booking.bookingKey).updateChildren(bookingUpdates)
 
         if (booking.studentUid.isNotBlank()) {
-            db.child("students").child(booking.studentUid).child("consultation_timetable").get().addOnSuccessListener { snap ->
+            db.child("students").child(booking.studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { snap ->
                 for (child in snap.children) {
                     if (child.child("bookingKey").getValue(String::class.java) == booking.bookingKey) {
                         val parsedDate = try { LocalDate.parse(newDate, skDateFormat) } catch (_: Exception) { null }

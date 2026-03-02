@@ -54,6 +54,43 @@ Každý záznam obsahuje:
 
 ---
 
+## Hromadná dochádzka (BulkAttendanceActivity)
+
+Okrem manuálneho zaznamenávania dochádzky cez dialóg v detaile predmetu je k dispozícii samostatná obrazovka `BulkAttendanceActivity` pre hromadné zaznamenanie dochádzky celej skupiny naraz.
+
+### Spustenie
+
+Učiteľ otvorí hromadnú dochádzku z detailu predmetu → záložka „Dochádzka" → tlačidlo pre hromadné zaznamenanie.
+
+### Rozhranie
+
+- **MaterialToolbar** s názvom predmetu a tlačidlom na zatvorenie
+- **Výber dátumu** — MaterialDatePicker (predvolene aktuálny dátum)
+- **Výber času** — MaterialTimePicker (24-hodinový formát, predvolene aktuálny čas)
+- **Chip „Označiť všetkých"** — nastaví všetkých študentov na prítomných
+- **RecyclerView** so zoznamom študentov — pri každom študentovi prepínač prítomný/neprítomný s voliteľnou poznámkou
+- **Spodná lišta** — tlačidlá Zrušiť a Uložiť
+
+### Ochrana dát
+
+- **requireOnline() guard** — zápis sa vykoná len pri aktívnom pripojení k Firebase (v online režime)
+- **Potvrdenie zrušenia** — ak existujú neuložené zmeny, zobrazí sa potvrdzovací dialóg
+- **OnBackPressedCallback** — systémové tlačidlo „Späť" tiež zobrazí potvrdzovací dialóg
+
+### Podpora offline režimu
+
+V offline režime sa záznamy ukladajú priamo do lokálnej JSON databázy cez `LocalDatabase.addAttendanceEntry()`.
+
+### Databázová cesta
+
+Záznamy sa ukladajú rovnako ako pri manuálnej dochádzke:
+
+```
+pritomnost/{školský_rok}/{semester}/{predmet}/{študent_uid}/{dátum}
+```
+
+---
+
 ## QR kód dochádzka
 
 QR kód dochádzka je automatizovaný spôsob zaznamenávania prítomnosti, ktorý funguje len v online režime. Učiteľ zobrazí na svojom zariadení rotujúci QR kód a študenti ho naskenujú svojimi zariadeniami.
@@ -257,6 +294,16 @@ QR kód dochádzka vyžaduje špeciálne Firebase Security Rules, ktoré umožň
 - QR kód dochádzka funguje len v online režime (vyžaduje Firebase)
 - Študent musí mať nainštalovanú aplikáciu UniTrack a byť prihlásený
 - Vyžaduje oprávnenie fotoaparátu
+
+### Offline handling QR funkcií
+
+QR kód dochádzka vyžaduje aktívne pripojenie k Firebase pre atomické transakcie. Aplikácia implementuje viacúrovňovú ochranu:
+
+- **FAB tlačidlá** — v detaile predmetu (`SubjectDetailFragment`) aj na domovskej obrazovke (`HomeFragment`) sú FAB tlačidlá pre QR skener a QR dochádzku monitorované cez Firebase `.info/connected` listener. Keď je zariadenie offline, FAB sa vizuálne zašedne a stane sa neaktívnym.
+- **QrAttendanceActivity** (strana učiteľa) — ak sa pripojenie stratí počas aktívnej relácie, zobrazí sa celostránkový offline overlay, ktorý blokuje interakciu až do obnovenia spojenia.
+- **QrScannerActivity** (strana študenta) — rovnaký celostránkový offline overlay sa zobrazí pri strate spojenia počas skenovania.
+
+Tieto opatrenia zabraňujú situáciám, kedy by sa QR kód úspešne naskenoval, ale zápis do Firebase by sa nevykonal.
 
 ---
 

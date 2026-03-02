@@ -22,6 +22,7 @@ import com.marekguran.unitrack.R
 import com.marekguran.unitrack.databinding.ActivityLoginBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
+import com.marekguran.unitrack.data.getFromCache
 import com.marekguran.unitrack.MainActivity
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.model.AppConstants
@@ -142,13 +143,17 @@ class LoginActivity : AppCompatActivity() {
                     }
                     // Verify user has an active role or is pending
                     val db = FirebaseDatabase.getInstance().reference
-                    db.child("pending_users").child(uid).get().addOnSuccessListener { pendingSnap ->
+                    db.child("pending_users").child(uid).getFromCache().addOnSuccessListener { pendingSnap ->
+                        if (isFinishing || isDestroyed) return@addOnSuccessListener
                         if (pendingSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
-                        db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+                        db.child("teachers").child(uid).getFromCache().addOnSuccessListener { teacherSnap ->
+                            if (isFinishing || isDestroyed) return@addOnSuccessListener
                             if (teacherSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
-                            db.child("students").child(uid).get().addOnSuccessListener { studentSnap ->
+                            db.child("students").child(uid).getFromCache().addOnSuccessListener { studentSnap ->
+                                if (isFinishing || isDestroyed) return@addOnSuccessListener
                                 if (studentSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
-                                db.child("admins").child(uid).get().addOnSuccessListener { adminSnap ->
+                                db.child("admins").child(uid).getFromCache().addOnSuccessListener { adminSnap ->
+                                    if (isFinishing || isDestroyed) return@addOnSuccessListener
                                     if (adminSnap.exists()) { proceedToMain(); return@addOnSuccessListener }
                                     // No role found — account was rejected, block access
                                     firebaseAuth.signOut()
@@ -332,7 +337,8 @@ class LoginActivity : AppCompatActivity() {
 
     private fun checkAllowedDomainsAndRegister(email: String, name: String, dialog: android.app.Dialog) {
         val db = FirebaseDatabase.getInstance().reference
-        db.child("settings").child("allowed_domains").get().addOnSuccessListener { snapshot ->
+        db.child("settings").child("allowed_domains").getFromCache().addOnSuccessListener { snapshot ->
+            if (isFinishing || isDestroyed) return@addOnSuccessListener
             val domains = snapshot.getValue(String::class.java)
             val allowedDomains = if (!domains.isNullOrBlank()) {
                 domains.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }

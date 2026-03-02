@@ -17,6 +17,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.marekguran.unitrack.data.getFromCache
 import com.marekguran.unitrack.ui.students.StudentsManageFragment
 
 /**
@@ -75,13 +76,13 @@ class PendingApprovalActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return
                 if (!snapshot.exists()) {
                     // Pending entry removed — check if approved or rejected
-                    db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+                    db.child("teachers").child(uid).getFromCache().addOnSuccessListener { teacherSnap ->
                         if (isFinishing || isDestroyed) return@addOnSuccessListener
                         if (teacherSnap.exists()) {
                             goToMain()
                             return@addOnSuccessListener
                         }
-                        db.child("students").child(uid).get().addOnSuccessListener { studentSnap ->
+                        db.child("students").child(uid).getFromCache().addOnSuccessListener { studentSnap ->
                             if (isFinishing || isDestroyed) return@addOnSuccessListener
                             if (studentSnap.exists()) {
                                 goToMain()

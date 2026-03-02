@@ -19,6 +19,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.requireOnline
 import com.marekguran.unitrack.data.model.Mark
 import org.json.JSONObject
 import java.time.Instant
@@ -172,6 +173,8 @@ class BulkGradeActivity : AppCompatActivity() {
     }
 
     private fun submitGrades() {
+        if (!requireOnline()) return
+
         // Validate: at least one grade must be selected
         val gradedStudents = selectedGrades.filter { it.value.isNotBlank() }
         if (gradedStudents.isEmpty()) {

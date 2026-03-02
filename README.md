@@ -63,12 +63,15 @@ Aplikácia funguje v dvoch režimoch: **online** (cez Firebase s App Check ochra
 - **Evidencia známok** — pridávanie, úprava a mazanie hodnotení (A až Fx) s názvom, popisom a váhou
 - **Hromadné hodnotenie (Bulk Grading)** — zadávanie známok viacerým študentom naraz s výberom známky cez chip komponenty, spoločným dátumom a voliteľnými poznámkami pre každého študenta
 - **Sledovanie dochádzky** — zaznamenávanie prítomnosti/neprítomnosti študentov podľa dátumu
+- **Hromadná dochádzka (Bulk Attendance)** — samostatná obrazovka pre zaznamenanie dochádzky celej skupiny naraz s výberom dátumu, času a jednotlivých prítomností/neprítomností
 - **QR kód dochádzka** — učiteľ zobrazí rotujúci QR kód, študenti ho naskenujú fotoaparátom a dochádzka sa zaznamená automaticky v reálnom čase
 - **Správa rozvrhu** — týždenný rozvrh s filtrami (párny/nepárny týždeň, dnes), podpora voľných dní
 - **Správa predmetov** — vytváranie, editácia a priradenie predmetov k semestrom (zimný/letný/obidva)
 - **Správa študentov a účtov** — administrácia používateľov, priradenie rolí (učiteľ, admin, študent) s možnosťou zmeny role v reálnom čase (online režim) — pri zmene role sa UI okamžite aktualizuje a dáta zostávajú zachované
 - **Akademická analytika** — priemery známok, percentá dochádzky, navrhovaná známka
 - **Migrácia databázy** — automatická aj manuálna migrácia štruktúry databázy (globálne predmety → per-year, per-year študenti → globálna štruktúra, migrácia pri zmene semestra predmetu) pre online aj offline režim
+- **Cache-first loading** — Firebase disk persistence s `getFromCache()` rozšírením pre okamžité načítavanie dát z lokálnej cache, výrazne zlepšujúce odozvu UI v online režime
+- **Ochrana zápisov pri strate spojenia** — centralizovaný `FirebaseConnectionMonitor` + `requireOnline()` guard chránia všetky Firebase zápisy, offline banner informuje používateľa o stave pripojenia, QR funkcie sa blokujú pri offline stave
 - **Animácie a prechody** — paint-drop animácia pri prepínaní tmavého režimu (kruhový reveal), plynulé expand/collapse animácie, slide-up splash, fade prechody medzi obrazovkami
 - **Tmavý režim** — prepínateľný v nastaveniach, zapamätá si voľbu používateľa (aplikuje sa už od spustenia, vrátane ikon stavového riadku)
 - **Export a import databázy** — zálohovanie a obnova celej lokálnej databázy ako JSON súbor
@@ -129,6 +132,9 @@ UniTrack/
 │       │   │   └── SwipeableFrameLayout.kt       # Gestá pre swipe navigáciu
 │       │   ├── data/                   # Dátová vrstva
 │       │   │   ├── model/              # Dátové modely (Mark, Student, Timetable, ConsultationBooking...)
+│       │   │   ├── ConnectivityGuard.kt  # requireOnline() guard — ochrana Firebase zápisov pri offline stave
+│       │   │   ├── FirebaseConnectionMonitor.kt  # Centralizovaný monitoring pripojenia cez .info/connected
+│       │   │   ├── FirebaseExtensions.kt  # getFromCache() rozšírenie pre cache-first loading
 │       │   │   ├── LocalDatabase.kt    # Lokálna JSON databáza + migračné metódy
 │       │   │   ├── LoginDataSource.kt  # Prihlásenie cez Firebase
 │       │   │   ├── LoginRepository.kt  # Repository pre prihlásenie
@@ -137,11 +143,13 @@ UniTrack/
 │       │   ├── update/                 # Kontrola aktualizácií z GitHub
 │       │   │   └── UpdateChecker.kt    # Sťahovanie a kontrola najnovšej verzie
 │       │   ├── BulkGradeActivity.kt    # Hromadné zadávanie známok viacerým študentom
+│       │   ├── BulkAttendanceActivity.kt  # Hromadné zaznamenávanie dochádzky celej skupiny
 │       │   ├── ConsultingHoursActivity.kt  # Správa konzultačných hodín (učiteľ — pridávanie, správa, rezervácie)
 │       │   ├── TeacherBookingsActivity.kt  # Prehľad rezervácií študentov (učiteľ)
 │       │   ├── NewSemesterActivity.kt  # Vytvorenie nového školského roka/semestra
 │       │   ├── QrAttendanceActivity.kt # QR kód dochádzka (strana učiteľa — generovanie a monitorovanie)
 │       │   ├── QrScannerActivity.kt    # QR kód skener (strana študenta — skenovanie a overenie)
+│       │   ├── PendingApprovalActivity.kt  # Celostránková čakacia obrazovka pre neschválených používateľov
 │       │   ├── SplashActivity.kt       # Animovaná splash obrazovka (slide-up + fade)
 │       │   ├── MainActivity.kt         # Hlavná aktivita s navigáciou a paint-drop animáciou
 │       │   └── UniTrackApplication.kt  # Application trieda (inicializácia tmavého režimu + App Check)
@@ -456,8 +464,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.2.4
-- **Kód verzie (Google):** 39
+- **Verzia aplikácie:** 3.2.5
+- **Kód verzie (Google):** 40
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

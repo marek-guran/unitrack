@@ -218,6 +218,16 @@ V offline režime sa admin taby (s názvom „Študenti") zobrazujú vždy, pret
 - Vyhľadávanie a filtrovanie študentov
 - Podpora online aj offline režimu
 
+### BulkAttendanceActivity
+**Účel:** Hromadné zaznamenávanie dochádzky celej skupiny naraz.
+
+- RecyclerView so zoznamom študentov s prepínačom prítomný/neprítomný
+- Výber dátumu cez MaterialDatePicker a času cez MaterialTimePicker
+- Chip „Označiť všetkých" pre hromadné nastavenie prítomnosti
+- Voliteľné poznámky pre neprítomných študentov
+- `requireOnline()` guard pred zápisom v online režime
+- Podpora online aj offline režimu
+
 ### QrAttendanceActivity
 **Účel:** QR kód dochádzka — strana učiteľa.
 
@@ -326,12 +336,42 @@ Aplikácia hojne využíva `AlertDialog` s vlastnými layoutmi pre:
 
 ---
 
-## Monitorovanie internetu
+## Monitorovanie pripojenia k Firebase
 
-`MainActivity` spúšťa periodickú kontrolu pripojenia každých 10 sekúnd (len v online režime). Ak nie je internet:
-- Zobrazí sa `AlertDialog` s možnosťou otvoriť Wi-Fi nastavenia
-- Dialog je `setCancelable(false)` — používateľ ho musí explicitne zavrieť
-- Po obnovení pripojenia sa dialog automaticky zatvára
+UniTrack implementuje centralizovaný systém monitorovania pripojenia k Firebase, ktorý zabezpečuje bezpečné správanie v online režime pri nestabilnom pripojení.
+
+### FirebaseConnectionMonitor
+
+`FirebaseConnectionMonitor` je singleton, ktorý monitoruje stav pripojenia cez špeciálny Firebase uzol `.info/connected`. Spúšťa sa v `MainActivity.onCreate()` a poskytuje:
+
+- **`isConnected`** — synchronný `@Volatile` boolean pre rýchle kontroly (používaný v `requireOnline()`)
+- **`connected`** — `LiveData<Boolean>` pre reaktívne UI pozorovanie (používané pre offline banner)
+
+### Offline banner
+
+V `MainActivity` sa pri strate pripojenia k Firebase zobrazí červený banner na vrchu obrazovky s textom „Režim offline: Zobrazujú sa uložené dáta." Banner je riadený cez LiveData pozorovanie:
+
+```kotlin
+FirebaseConnectionMonitor.connected.observe(this) { online ->
+    binding.offlineBanner?.visibility = if (online) View.GONE else View.VISIBLE
+}
+```
+
+Banner je implementovaný ako `TextView` v `activity_main.xml` s `android:visibility="gone"` ako predvolený stav.
+
+### requireOnline() guard
+
+Rozšírenia pre `Fragment` a `Activity` (v `ConnectivityGuard.kt`) chránia všetky Firebase zápisy:
+
+- Ak je pripojenie aktívne → vráti `true`, operácia pokračuje
+- Ak je zariadenie offline → zobrazí štylizovaný Snackbar „Ste offline – môžete iba prezerať" a vráti `false`
+- V lokálnom offline režime (`OfflineMode.isOffline`) vždy vráti `true`
+
+Snackbar je štylizovaný cez `styleOfflineSnackbar()` — zaoblené rohy, theme-aware farby, ukotvenie nad `PillNavigationBar`, vysoká elevácia (100dp) aby sa zobrazil aj nad otvorenými dialógmi.
+
+### QR kód funkcie
+
+QR skener a QR dochádzka monitorujú pripojenie nezávisle cez vlastné `.info/connected` listenery. FAB tlačidlá sa zašednia a QR aktivity zobrazujú celostránkový overlay pri strate spojenia.
 
 ---
 

@@ -165,6 +165,7 @@ Všetky nastavenia sa ukladajú v `SharedPreferences` pod názvom `app_settings`
 | `notif_consultation_minutes_before` | Int | Minúty pred konzultáciou pre pripomienku |
 | `teacher_name` | String | Meno učiteľa (offline) |
 | `semester` | String | Aktuálne vybraný semester |
+| `approved_uid` | String | Cache-ovaný UID schváleného používateľa — preskočí opakovanú kontrolu `pending_users` pri následných prihláseniach. Vymaže sa pri odhlásení. |
 
 ---
 

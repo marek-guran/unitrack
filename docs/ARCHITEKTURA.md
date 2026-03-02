@@ -34,13 +34,15 @@ Používa sa tam, kde je to užitočné — napríklad `DashboardViewModel` drž
 
 Duálny backend: buď Firebase Realtime Database (online), alebo `LocalDatabase` — vlastná JSON databáza uložená v súbore (offline). O tom, ktorý sa používa, rozhoduje `OfflineMode`.
 
+V online režime je zapnutá **Firebase disk persistence** (`setPersistenceEnabled(true)`), čo umožňuje lokálne cachovanie dát a okamžité odpovede z lokálnej cache. Všetky čítacie operácie používajú **cache-first** stratégiu cez rozšírenie `getFromCache()`, ktoré číta najprv z lokálnej cache a až potom kontaktuje server. Zápisy sú chránené **connectivity guardom** (`requireOnline()`), ktorý zabráni zápisom keď je zariadenie offline a zobrazí informačný Snackbar.
+
 ---
 
 ## Životný cyklus aplikácie
 
 ### Spustenie (cold start)
 
-1. `UniTrackApplication.onCreate()` — inicializácia Application triedy, aplikovanie tmavého režimu zo `SharedPreferences`, inicializácia Firebase App Check (Play Integrity pre release, Debug provider pre vývoj)
+1. `UniTrackApplication.onCreate()` — inicializácia Application triedy, aplikovanie tmavého režimu zo `SharedPreferences`, zapnutie Firebase disk persistence (`setPersistenceEnabled(true)`) pre lokálne cachovanie dát, inicializácia Firebase App Check (Play Integrity pre release, Debug provider pre vývoj)
 2. `SplashActivity.onCreate()`:
    - Aplikuje tmavý režim (záloha pre prípad, že Application ešte nestihla)
    - Skryje ActionBar a nastaví edge-to-edge zobrazenie
@@ -55,6 +57,7 @@ Duálny backend: buď Firebase Realtime Database (online), alebo `LocalDatabase`
        - Existuje → pokračuje na hlavnú obrazovku
    - Postaví navigáciu (`buildNavigation()`)
    - V online režime asynchrónne overí admin práva (`checkAdminAndRebuildNav()`)
+   - Spustí `FirebaseConnectionMonitor` — centralizovaný monitoring pripojenia cez `.info/connected`, ktorý riadi offline banner a write guardy
    - Vytvorí notifikačné kanály a naplánuje alarmy
    - Vyžiada oprávnenie `POST_NOTIFICATIONS` (Android 13+)
 
@@ -94,13 +97,18 @@ com.marekguran.unitrack/
 ├── MainActivity.kt              # Vstupný bod po splashi, navigácia, internet check
 ├── UniTrackApplication.kt       # Application trieda (inicializácia témy + App Check)
 ├── BulkGradeActivity.kt         # Hromadné zadávanie známok (expand/collapse animácie)
+├── BulkAttendanceActivity.kt    # Hromadné zaznamenávanie dochádzky (prítomný/neprítomný pre celú skupinu)
 ├── ConsultingHoursActivity.kt   # Správa konzultačných hodín (učiteľ — pridávanie, správa, rezervácie)
 ├── TeacherBookingsActivity.kt   # Prehľad rezervácií študentov (učiteľ — alternatívne zobrazenie)
 ├── NewSemesterActivity.kt       # Vytvorenie nového školského roka/semestra (záložky: nastavenia, predmety, študenti)
 ├── QrAttendanceActivity.kt      # QR kód dochádzka — strana učiteľa (generovanie, monitorovanie)
 ├── QrScannerActivity.kt         # QR kód skener — strana študenta (skenovanie, overenie)
+├── PendingApprovalActivity.kt   # Celostránková čakacia obrazovka pre neschválených používateľov
 ├── SubjectDetailFragment.kt     # Detail predmetu (ViewPager2 — známky, dochádzka, študenti)
 ├── data/                        # Dátová vrstva
+│   ├── ConnectivityGuard.kt    # requireOnline() rozšírenia pre Fragment/Activity — guard Firebase zápisov
+│   ├── FirebaseConnectionMonitor.kt  # Singleton monitor pripojenia cez .info/connected (LiveData + sync)
+│   ├── FirebaseExtensions.kt   # getFromCache() rozšírenie pre cache-first loading z Firebase
 │   ├── LocalDatabase.kt         # Offline JSON databáza s convenience a migračnými metódami
 │   ├── LoginDataSource.kt       # Prihlásenie (scaffold, reálne cez Firebase)
 │   ├── LoginRepository.kt       # Repository pre prihlásenie
@@ -154,6 +162,54 @@ Pre offline režim sa používa jednoduchý JSON súbor (`local_db.json`) namies
 ### Prečo nie sú všetky fragmenty cez ViewModel?
 
 Niektoré obrazovky (napr. `SettingsFragment`, `TimetableFragment`) sú relatívne jednoduché — načítajú dáta z Firebase/lokálnej DB a zobrazia ich. Pridávanie ViewModel vrstvy by tam neprinieslo výrazný benefit. ViewModel sa používa tam, kde je to naozaj užitočné — pri prihlásení (validácia, stav formulára) a dashboarde.
+
+### Cache-first loading (online režim)
+
+V online režime je zapnutá **Firebase disk persistence** (`setPersistenceEnabled(true)` v `UniTrackApplication.onCreate()`), čo umožňuje Firebase SDK lokálne cachovať dáta. Štandardná metóda `Query.get()` vždy kontaktuje server ako prvý a na lokálnu cache sa obráti len pri offline stave, čo spôsobuje viditeľné oneskorenia pri každom načítaní dát.
+
+Rozšírenie `getFromCache()` (v `data/FirebaseExtensions.kt`) obaľuje `addListenerForSingleValueEvent` do `Task`, čím sa dáta čítajú najprv z lokálnej cache — ak boli predtým stiahnuté, výsledok je okamžitý. Server sa kontaktuje na pozadí a cache sa aktualizuje.
+
+```kotlin
+// Namiesto:
+ref.get().addOnSuccessListener { ... }
+
+// Používame:
+ref.getFromCache().addOnSuccessListener { ... }
+```
+
+Všetky Firebase `.get()` volania naprieč celou aplikáciou boli nahradené volaním `.getFromCache()`, čo výrazne zlepšuje odozvu UI pri načítavaní dát.
+
+### Ochrana zápisov pri strate spojenia (connectivity guard)
+
+Pri online režime môže používateľ dočasne stratiť pripojenie k Firebase. Aby sa predišlo tichým chybám alebo nekonzistentným dátam, aplikácia implementuje centralizovaný systém ochrany zápisov:
+
+1. **`FirebaseConnectionMonitor`** (singleton) — monitoruje stav pripojenia cez `.info/connected` uzol Firebase. Poskytuje `isConnected` (synchronný prístup) a `connected` (LiveData pre reaktívne UI).
+
+2. **`requireOnline()`** (rozšírenia v `ConnectivityGuard.kt`) — guard funkcie pre `Fragment` a `Activity`, ktoré skontrolujú stav pripojenia pred zápisom:
+   - Ak je pripojenie aktívne → vráti `true` a operácia pokračuje
+   - Ak je zariadenie offline → zobrazí štylizovaný Snackbar „Ste offline – môžete iba prezerať" a vráti `false`
+   - V lokálnom offline režime (`OfflineMode.isOffline`) vždy vráti `true` (zápisy do lokálnej DB sú vždy povolené)
+
+3. **Offline banner** — v `MainActivity` sa pri strate spojenia zobrazí červený banner „Režim offline: Zobrazujú sa uložené dáta." na vrchu obrazovky. Banner je riadený cez LiveData pozorovanie `FirebaseConnectionMonitor.connected`.
+
+```kotlin
+// Príklad použitia v Activity/Fragment:
+fun onSaveClicked() {
+    if (!requireOnline()) return   // Ak je offline, zobrazí Snackbar a ukončí
+    // ... pokračuj so zápisom do Firebase
+}
+```
+
+Tento systém zabezpečuje, že používateľ v online režime môže bezpečne prehliadať dáta z cache, ale nemôže vykonávať zápisy pokiaľ nie je pripojenie k Firebase aktívne.
+
+### Ochrana pred memory leakmi v async callbackoch
+
+Všetky asynchronné callbacky z Firebase operácií obsahujú ochranné kontroly:
+
+- **Fragmenty:** Kontrola `_binding == null` na začiatku každého callbacku, aby sa predišlo prístupu k viewom po zničení fragmentu
+- **Activity:** Kontrola `isFinishing || isDestroyed` pred aktualizáciou UI, aby sa predišlo operáciám na zničenej aktivite
+
+Tieto guardy zabraňujú pádom aplikácie pri rýchlom prepínaní obrazoviek alebo pri návrate z pozadia.
 
 ---
 

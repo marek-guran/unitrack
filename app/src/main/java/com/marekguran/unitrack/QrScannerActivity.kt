@@ -19,6 +19,8 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import com.journeyapps.barcodescanner.BarcodeCallback
 import com.journeyapps.barcodescanner.BarcodeResult
 import com.journeyapps.barcodescanner.DecoratedBarcodeView
@@ -36,6 +38,10 @@ class QrScannerActivity : AppCompatActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var hasScanned = false
+
+    private var connectedListener: ValueEventListener? = null
+    private var connectedRef: DatabaseReference? = null
+    private var isFirebaseConnected = true
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -58,6 +64,7 @@ class QrScannerActivity : AppCompatActivity() {
         errorLabel = findViewById(R.id.errorLabel)
 
         findViewById<MaterialButton>(R.id.btnClose).setOnClickListener { finish() }
+        findViewById<MaterialButton>(R.id.offlineCloseBtn).setOnClickListener { finish() }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
@@ -66,6 +73,30 @@ class QrScannerActivity : AppCompatActivity() {
         } else {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
+
+        // Monitor Firebase connection state
+        val ref = FirebaseDatabase.getInstance().getReference(".info/connected")
+        connectedRef = ref
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val connected = snapshot.getValue(Boolean::class.java) ?: false
+                isFirebaseConnected = connected
+                val offlineOverlay = findViewById<View>(R.id.offlineOverlay)
+                if (connected) {
+                    offlineOverlay.animate().alpha(0f).setDuration(200).withEndAction {
+                        offlineOverlay.visibility = View.GONE
+                    }.start()
+                    barcodeView.resume()
+                } else {
+                    offlineOverlay.visibility = View.VISIBLE
+                    offlineOverlay.animate().alpha(1f).setDuration(200).start()
+                    barcodeView.pause()
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        connectedListener = listener
+        ref.addValueEventListener(listener)
     }
 
     private fun startScanning() {
@@ -79,6 +110,7 @@ class QrScannerActivity : AppCompatActivity() {
     }
 
     private fun handleScanResult(scannedText: String) {
+        if (!requireOnline()) return
         // Parse: UNITRACK|{year}|{semester}|{subjectKey}|{code}
         val parts = scannedText.split("|")
         if (parts.size != 5 || parts[0] != "UNITRACK") {
@@ -109,7 +141,8 @@ class QrScannerActivity : AppCompatActivity() {
 
         // Step 1: Check if student is enrolled in this subject
         db.child("students").child(uid).child("subjects").child(year).child(semester)
-            .get().addOnSuccessListener { enrollSnap ->
+            .getFromCache().addOnSuccessListener { enrollSnap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 val enrolledSubjects = mutableListOf<String>()
                 if (enrollSnap.exists()) {
                     for (child in enrollSnap.children) {
@@ -128,7 +161,8 @@ class QrScannerActivity : AppCompatActivity() {
 
                 // Step 2: Fetch subject name for confirmation display
                 db.child("school_years").child(year).child("predmety").child(subjectKey)
-                    .child("name").get().addOnSuccessListener { nameSnap ->
+                    .child("name").getFromCache().addOnSuccessListener { nameSnap ->
+                        if (isFinishing || isDestroyed) return@addOnSuccessListener
                         val subjectName = nameSnap.getValue(String::class.java)
                             ?: subjectKey.replaceFirstChar { it.uppercaseChar() }
 
@@ -286,6 +320,7 @@ class QrScannerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        connectedListener?.let { connectedRef?.removeEventListener(it) }
         handler.removeCallbacksAndMessages(null)
     }
 
@@ -316,7 +351,7 @@ class QrScannerActivity : AppCompatActivity() {
     /** Look up real name from students/{uid}/name, fall back to displayName. */
     private fun resolveStudentName(uid: String, callback: (String) -> Unit) {
         val fallback = FirebaseAuth.getInstance().currentUser?.displayName ?: "Študent"
-        db.child("students").child(uid).child("name").get()
+        db.child("students").child(uid).child("name").getFromCache()
             .addOnSuccessListener { snap ->
                 callback(snap.getValue(String::class.java)?.takeIf { it.isNotBlank() } ?: fallback)
             }

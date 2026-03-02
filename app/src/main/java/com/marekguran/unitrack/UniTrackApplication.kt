@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.google.firebase.database.FirebaseDatabase
 
 class UniTrackApplication : Application() {
     override fun onCreate() {
@@ -19,6 +20,12 @@ class UniTrackApplication : Application() {
             if (useDark) AppCompatDelegate.MODE_NIGHT_YES
             else AppCompatDelegate.MODE_NIGHT_NO
         )
+
+        // Enable Firebase Realtime Database disk persistence so that data is
+        // cached locally. This lets the app serve cached data instantly and
+        // continue working when the device temporarily loses connectivity.
+        // Must be called before any other FirebaseDatabase usage.
+        FirebaseDatabase.getInstance().setPersistenceEnabled(true)
 
         val firebaseAppCheck = FirebaseAppCheck.getInstance()
         if (BuildConfig.DEBUG) {

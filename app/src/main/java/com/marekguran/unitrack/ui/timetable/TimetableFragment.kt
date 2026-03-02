@@ -37,6 +37,8 @@ import com.google.firebase.database.*
 import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.requireOnline
+import com.marekguran.unitrack.data.getFromCache
 import com.marekguran.unitrack.data.model.DayOff
 import com.marekguran.unitrack.data.model.TimetableEntry
 import com.marekguran.unitrack.databinding.FragmentTimetableBinding
@@ -638,13 +640,15 @@ class TimetableFragment : Fragment() {
 
     private fun checkUserRoleAndLoad() {
         // Check if teacher
-        db.child("teachers").child(currentUserUid).get().addOnSuccessListener { snap ->
+        db.child("teachers").child(currentUserUid).getFromCache().addOnSuccessListener { snap ->
+            if (!isAdded || _binding == null) return@addOnSuccessListener
             if (snap.exists()) {
                 isTeacher = true
                 binding.fabTeacherActions.visibility = View.VISIBLE
             }
             // Check if admin
-            db.child("admins").child(currentUserUid).get().addOnSuccessListener { adminSnap ->
+            db.child("admins").child(currentUserUid).getFromCache().addOnSuccessListener { adminSnap ->
+                if (!isAdded || _binding == null) return@addOnSuccessListener
                 if (adminSnap.exists()) {
                     isAdmin = true
                     binding.fabTeacherActions.visibility = View.VISIBLE
@@ -1299,6 +1303,7 @@ class TimetableFragment : Fragment() {
     // ── Update timetable entry ────────────────────────────────────────────────
 
     private fun updateTimetableEntry(entry: TimetableEntry, day: String, startTime: String, endTime: String, weekParity: String, classroom: String, note: String, specificDates: String = "") {
+        if (!requireOnline()) return
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
         val entryRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(entry.subjectKey).child("timetable").child(entry.key)
@@ -1447,6 +1452,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun saveDayOff(date: String, dateTo: String, timeFrom: String, timeTo: String, note: String) {
+        if (!requireOnline()) return
         val dayOffJson = JSONObject().apply {
             put("date", date)
             if (dateTo.isNotBlank()) put("dateTo", dateTo)
@@ -1544,6 +1550,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun saveConsultingHours(day: String, startTime: String, endTime: String, classroom: String, note: String, specificDate: String) {
+        if (!requireOnline()) return
         val consultingSubjectKey = "_consulting_$currentUserUid"
         val entryKey = java.util.UUID.randomUUID().toString().replace("-", "")
 
@@ -1587,7 +1594,7 @@ class TimetableFragment : Fragment() {
         val consultingSubjectKey = "_consulting_$currentUserUid"
         val subjectRef = db.child("school_years").child(selectedSchoolYear).child("predmety").child(consultingSubjectKey).child("timetable")
 
-        subjectRef.get().addOnSuccessListener { snapshot ->
+        subjectRef.getFromCache().addOnSuccessListener { snapshot ->
             if (!isAdded) return@addOnSuccessListener
             val entries = mutableListOf<Pair<String, TimetableEntry>>()
             for (snap in snapshot.children) {
@@ -1668,7 +1675,7 @@ class TimetableFragment : Fragment() {
 
     private fun deleteConsultingHoursEntry(consultingSubjectKey: String, entryKey: String, entry: TimetableEntry, parentDialog: android.app.Dialog) {
         // Check if there are bookings for this entry
-        db.child("consultation_bookings").child(consultingSubjectKey).get().addOnSuccessListener { snapshot ->
+        db.child("consultation_bookings").child(consultingSubjectKey).getFromCache().addOnSuccessListener { snapshot ->
             if (!isAdded) return@addOnSuccessListener
             val bookedStudents = mutableListOf<DataSnapshot>()
             for (bookingSnap in snapshot.children) {
@@ -1706,6 +1713,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun performDeleteConsultingEntry(consultingSubjectKey: String, entryKey: String, bookedStudents: List<DataSnapshot>, entry: TimetableEntry) {
+        if (!requireOnline()) return
         // Remove the timetable entry
         db.child("school_years").child(selectedSchoolYear).child("predmety")
             .child(consultingSubjectKey).child("timetable").child(entryKey).removeValue()
@@ -1720,7 +1728,8 @@ class TimetableFragment : Fragment() {
             db.child("consultation_bookings").child(consultingSubjectKey).child(bookingKey).removeValue()
 
             // Remove from student's timetable
-            db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { snap ->
+            db.child("students").child(studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { snap ->
+                if (!isAdded || _binding == null) return@addOnSuccessListener
                 for (child in snap.children) {
                     if (child.child("bookingKey").getValue(String::class.java) == bookingKey) {
                         child.ref.removeValue()
@@ -1771,7 +1780,7 @@ class TimetableFragment : Fragment() {
                             val bKey = bookingSnap.key ?: ""
                             bookingSnap.ref.removeValue()
                             if (studentUid.isNotBlank() && bKey.isNotBlank()) {
-                                db.child("students").child(studentUid).child("consultation_timetable").get().addOnSuccessListener { stSnap ->
+                                db.child("students").child(studentUid).child("consultation_timetable").getFromCache().addOnSuccessListener { stSnap ->
                                     for (child in stSnap.children) {
                                         if (child.child("bookingKey").getValue(String::class.java) == bKey) {
                                             child.ref.removeValue()
@@ -2049,6 +2058,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun updateDayOff(dayOff: DayOff, ownerUid: String, date: String, dateTo: String, timeFrom: String, timeTo: String, note: String) {
+        if (!requireOnline()) return
         val newJson = JSONObject().apply {
             put("date", date)
             if (dateTo.isNotBlank()) put("dateTo", dateTo)
@@ -2107,6 +2117,7 @@ class TimetableFragment : Fragment() {
     }
 
     private fun deleteDayOff(dayOff: DayOff, ownerUid: String) {
+        if (!requireOnline()) return
         if (isOffline) {
             localDb.removeDayOff(ownerUid, dayOff.key)
             loadOfflineTimetable()
@@ -2127,6 +2138,7 @@ class TimetableFragment : Fragment() {
     // ── Delete timetable entry ────────────────────────────────────────────────
 
     private fun deleteTimetableEntry(entry: TimetableEntry) {
+        if (!requireOnline()) return
         if (entry.key.isBlank() || entry.subjectKey.isBlank()) return
 
         if (isOffline) {

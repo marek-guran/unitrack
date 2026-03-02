@@ -53,6 +53,7 @@ Toto je prvá kľúčová časť cieľa. Aplikácia implementuje kompletný syst
 | **Zaznamenanie dochádzky** | Učiteľ označí študentov ako prítomných/neprítomných | `SubjectDetailFragment.showMarkAttendanceDialog()` |
 | **QR kód dochádzka** | Učiteľ zobrazí rotujúci QR kód, študenti ho naskenujú a dochádzka sa zaznamená automaticky | `QrAttendanceActivity`, `QrScannerActivity` |
 | **Hromadné zaznamenanie** | Dialóg so zoznamom všetkých študentov, chipové tlačidlá prítomný/neprítomný, tlačidlo „Označiť všetkých" | `SubjectDetailFragment.showMarkAttendanceDialog()` |
+| **Hromadná dochádzka** | Samostatná obrazovka pre hromadné zaznamenanie dochádzky celej skupiny s výberom dátumu a času | `BulkAttendanceActivity` |
 | **Výber dátumu** | DatePicker pre ľubovoľný dátum záznamu | `SubjectDetailFragment` — DatePickerDialog |
 | **Úprava záznamu** | Zmena dátumu, času, poznámky a stavu prítomnosti | `SubjectDetailFragment.showEditAttendanceDialog()` |
 | **Mazanie záznamu** | Odstránenie s potvrdením a možnosťou vrátenia (Undo) | `SubjectDetailFragment.removeAttendance()` |
@@ -136,12 +137,16 @@ Okrem stanovených požiadaviek boli implementované ďalšie funkcie, ktoré zv
 | **Konzultačné hodiny** | Učitelia nastavujú konzultačné hodiny, študenti si ich prehliadajú a rezervujú termíny; správa rezervácií s možnosťou zrušenia a kontaktovania |
 | **Nový semester** | Samostatná obrazovka pre vytvorenie nového školského roka/semestra s výberom predmetov a študentov |
 | **Kontrola aktualizácií** | Automatická kontrola dostupnosti novej verzie z GitHub repozitára |
+| **Cache-first loading** | Firebase disk persistence + `getFromCache()` rozšírenie pre okamžité načítavanie dát z lokálnej cache, výrazne zlepšujúce odozvu UI |
+| **Ochrana zápisov pri strate spojenia** | Centralizovaný `FirebaseConnectionMonitor` + `requireOnline()` guard chránia všetky Firebase zápisy, offline banner informuje používateľa, QR funkcie sa blokujú pri offline stave |
+| **Hromadná dochádzka** | BulkAttendanceActivity — zaznamenanie dochádzky celej skupiny naraz s výberom dátumu, času a jednotlivých prítomností/neprítomností |
+| **Ochrana async callbackov** | Binding null guardy vo Fragmentoch a isFinishing/isDestroyed guardy v Activity bránia memory leakom a pádom pri rýchlom prepínaní obrazoviek |
 
 ---
 
 ## Záver
 
-Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Evidencia prítomnosti bola rozšírená o QR kód dochádzku — učiteľ zobrazí rotujúci QR kód a študenti ho naskenujú, čím sa dochádzka zaznamená automaticky v reálnom čase. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie, konzultačné hodiny s rezerváciami, správu nového semestra, kontrolu aktualizácií, pokročilé animácie, Firebase App Check ochranu a migráciu databázy, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
+Cieľ diplomovej práce — **návrh a kompletná realizácia mobilnej aplikácie na evidenciu prítomnosti a hodnotenia študentov** — bol naplnený v plnom rozsahu. Obe kľúčové časti (evidencia prítomnosti a hodnotenie) sú implementované kompletne vrátane CRUD operácií, percentuálnych prehľadov, notifikácií, PDF exportov a duálneho online/offline režimu. Evidencia prítomnosti bola rozšírená o QR kód dochádzku — učiteľ zobrazí rotujúci QR kód a študenti ho naskenujú, čím sa dochádzka zaznamená automaticky v reálnom čase. Nad rámec cieľa bola aplikácia rozšírená o správu rozvrhu, voľných dní, účtov a predmetov, hromadné hodnotenie a hromadnú dochádzku, konzultačné hodiny s rezerváciami, správu nového semestra, kontrolu aktualizácií, pokročilé animácie, Firebase App Check ochranu, migráciu databázy, cache-first loading pre okamžitú odozvu UI a centralizovanú ochranu zápisov pri strate spojenia s informačným offline bannerom, čo z nej robí ucelený a bezpečný nástroj pre akademickú správu.
 
 ---
 

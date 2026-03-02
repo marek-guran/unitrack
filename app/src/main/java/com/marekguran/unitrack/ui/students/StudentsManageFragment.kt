@@ -40,6 +40,8 @@ import com.google.firebase.database.*
 import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import java.security.SecureRandom
 import java.text.Collator
 import java.util.Locale
@@ -313,10 +315,14 @@ class StudentsManageFragment : Fragment() {
         subjectKeysList.clear()
         subjectNamesList.clear()
 
-        db.child("admins").get().addOnSuccessListener { adminSnap ->
-            db.child("teachers").get().addOnSuccessListener { teacherSnap ->
-                db.child("students").get().addOnSuccessListener { allStudentsSnap ->
-                    db.child("pending_users").get().addOnSuccessListener { pendingSnap ->
+        db.child("admins").getFromCache().addOnSuccessListener { adminSnap ->
+            if (!isAdded) return@addOnSuccessListener
+            db.child("teachers").getFromCache().addOnSuccessListener { teacherSnap ->
+                if (!isAdded) return@addOnSuccessListener
+                db.child("students").getFromCache().addOnSuccessListener { allStudentsSnap ->
+                    if (!isAdded) return@addOnSuccessListener
+                    db.child("pending_users").getFromCache().addOnSuccessListener { pendingSnap ->
+                        if (!isAdded) return@addOnSuccessListener
                         viewLifecycleOwner.lifecycleScope.launch {
                             val result = withContext(Dispatchers.Default) {
                                 val admins = adminSnap.children.mapNotNull { it.key }.toSet()
@@ -460,6 +466,7 @@ class StudentsManageFragment : Fragment() {
 
         cancelBtn.setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val email = editEmail.text.toString().trim()
             val name = editName.text.toString().trim()
             val isTeacher = switchRole.isChecked
@@ -534,6 +541,7 @@ class StudentsManageFragment : Fragment() {
 
         cancelBtn.setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val newName = editName.text.toString().trim()
             if (newName.isEmpty()) {
                 statusText.visibility = View.VISIBLE
@@ -547,6 +555,7 @@ class StudentsManageFragment : Fragment() {
                 if (student.isTeacher) {
                     db.child("teachers").child(student.uid).setValue("${student.email}, $newName")
                         .addOnSuccessListener {
+                            if (!isAdded) return@addOnSuccessListener
                             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
                             loadStudents()
                             dialog.dismiss()
@@ -554,6 +563,7 @@ class StudentsManageFragment : Fragment() {
                 } else {
                     db.child("students").child(student.uid).child("name").setValue(newName)
                         .addOnSuccessListener {
+                            if (!isAdded) return@addOnSuccessListener
                             Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
                             loadStudents()
                             dialog.dismiss()
@@ -570,6 +580,7 @@ class StudentsManageFragment : Fragment() {
                 )
                 db.updateChildren(updates)
                     .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
                         Toast.makeText(requireContext(), "Rola zmenená na Učiteľ.", Toast.LENGTH_SHORT).show()
                         loadStudents()
                         dialog.dismiss()
@@ -591,6 +602,7 @@ class StudentsManageFragment : Fragment() {
                 )
                 db.updateChildren(updates)
                     .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
                         Toast.makeText(requireContext(), "Rola zmenená na Študent.", Toast.LENGTH_SHORT).show()
                         loadStudents()
                         dialog.dismiss()
@@ -647,7 +659,7 @@ class StudentsManageFragment : Fragment() {
                             }
                     } else {
                         val schoolYearsRef = db.child("school_years")
-                        schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
+                        schoolYearsRef.getFromCache().addOnSuccessListener { schoolSnapshot ->
                             val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
                             val savedYear = prefs.getString("school_year", null)
                             val selectedYear = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
@@ -789,12 +801,14 @@ class StudentsManageFragment : Fragment() {
     @SuppressLint("NotifyDataSetChanged")
     private fun showTeacherSubjectsDialogOnline(teacher: StudentManageItem) {
         val db = FirebaseDatabase.getInstance().reference
-        db.child("school_years").get().addOnSuccessListener { schoolSnap ->
+        db.child("school_years").getFromCache().addOnSuccessListener { schoolSnap ->
+            if (!isAdded) return@addOnSuccessListener
             val allYearKeys = schoolSnap.children.mapNotNull { it.key }
             val savedYear = prefs.getString("school_year", null)
             val year = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
                 else allYearKeys.maxOrNull() ?: return@addOnSuccessListener
-            db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+            db.child("school_years").child(year).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
+                if (!isAdded) return@addOnSuccessListener
                 val dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_teacher_subjects, null)
                 val searchEdit = dialogView.findViewById<EditText>(R.id.searchSubjectEditText)
                 val recyclerView = dialogView.findViewById<RecyclerView>(R.id.subjectsRecyclerView)
@@ -843,6 +857,7 @@ class StudentsManageFragment : Fragment() {
                 cancelButton.setOnClickListener { dialog.dismiss() }
 
                 saveButton.setOnClickListener {
+                    if (!requireOnline()) return@setOnClickListener
                     for (item in items) {
                         val original = subjectsSnap.child(item.key).child("teacherEmail").getValue(String::class.java) ?: ""
                         if (item.enrolled && !original.equals(teacher.email, ignoreCase = true)) {
@@ -991,7 +1006,8 @@ class StudentsManageFragment : Fragment() {
     private fun showEnrollDialogOnline(student: StudentManageItem) {
         val db = FirebaseDatabase.getInstance().reference
 
-        db.child("school_years").get().addOnSuccessListener { schoolSnap ->
+        db.child("school_years").getFromCache().addOnSuccessListener { schoolSnap ->
+            if (!isAdded) return@addOnSuccessListener
             val yearKeys = schoolSnap.children.mapNotNull { it.key }.sortedDescending()
             if (yearKeys.isEmpty()) return@addOnSuccessListener
             val yearDisplay = yearKeys.map { yearChild ->
@@ -1052,9 +1068,11 @@ class StudentsManageFragment : Fragment() {
                 val year = yearKeys[yearIdx]
                 val semester = semesterKeys.getOrElse(spinnerSemester.selectedItemPosition) { "zimny" }
 
-                db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+                db.child("school_years").child(year).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
+                    if (!isAdded) return@addOnSuccessListener
                     db.child("students").child(student.uid).child("subjects").child(year).child(semester)
-                        .get().addOnSuccessListener { enrollSnap ->
+                        .getFromCache().addOnSuccessListener { enrollSnap ->
+                            if (!isAdded) return@addOnSuccessListener
                             val currentList = mutableListOf<String>()
                             for (child in enrollSnap.children) {
                                 val subjectKey = child.getValue(String::class.java)
@@ -1109,6 +1127,7 @@ class StudentsManageFragment : Fragment() {
             dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }
 
             saveButton.setOnClickListener {
+                if (!requireOnline()) return@setOnClickListener
                 val yearIdx = spinnerYear.selectedItemPosition
                 if (yearIdx < 0 || yearIdx >= yearKeys.size) return@setOnClickListener
                 val year = yearKeys[yearIdx]
@@ -1117,6 +1136,7 @@ class StudentsManageFragment : Fragment() {
                 db.child("students").child(student.uid)
                     .child("subjects").child(year).child(semester).setValue(enrolled)
                     .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
                         Toast.makeText(requireContext(), "Zápisy uložené", Toast.LENGTH_SHORT).show()
                         dialog.dismiss()
                     }
@@ -1207,6 +1227,7 @@ class StudentsManageFragment : Fragment() {
     }
 
     private fun approvePendingUser(student: StudentManageItem, isTeacher: Boolean) {
+        if (!requireOnline()) return
         val db = FirebaseDatabase.getInstance().reference
         if (isTeacher) {
             val updates = mapOf<String, Any?>(
@@ -1215,17 +1236,20 @@ class StudentsManageFragment : Fragment() {
             )
             db.updateChildren(updates)
                 .addOnSuccessListener {
+                    if (!isAdded) return@addOnSuccessListener
                     // Send password setup email now that user is approved
                     FirebaseAuth.getInstance().sendPasswordResetEmail(student.email)
                     Toast.makeText(requireContext(), getString(R.string.pending_approved_teacher), Toast.LENGTH_SHORT).show()
                     loadStudents()
                 }
                 .addOnFailureListener { ex ->
+                    if (!isAdded) return@addOnFailureListener
                     Toast.makeText(requireContext(), "Chyba: ${ex.message}", Toast.LENGTH_SHORT).show()
                 }
         } else {
             val schoolYearsRef = db.child("school_years")
-            schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
+            schoolYearsRef.getFromCache().addOnSuccessListener { schoolSnapshot ->
+                if (!isAdded) return@addOnSuccessListener
                 val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
                 val savedYear = prefs.getString("school_year", null)
                 val selectedYear = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
@@ -1243,12 +1267,14 @@ class StudentsManageFragment : Fragment() {
                 )
                 db.updateChildren(updates)
                     .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
                         // Send password setup email now that user is approved
                         FirebaseAuth.getInstance().sendPasswordResetEmail(student.email)
                         Toast.makeText(requireContext(), getString(R.string.pending_approved_student), Toast.LENGTH_SHORT).show()
                         loadStudents()
                     }
                     .addOnFailureListener { ex ->
+                        if (!isAdded) return@addOnFailureListener
                         Toast.makeText(requireContext(), "Chyba: ${ex.message}", Toast.LENGTH_SHORT).show()
                     }
             }
@@ -1273,6 +1299,7 @@ class StudentsManageFragment : Fragment() {
         dialogView.findViewById<MaterialButton>(R.id.cancelButton)
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             dialog.dismiss()
             val db = FirebaseDatabase.getInstance().reference
             db.child("pending_users").child(student.uid).child("status").setValue(STATUS_REJECTED)
@@ -1309,6 +1336,7 @@ class StudentsManageFragment : Fragment() {
             .setTitle("Premenovať")
             .setView(textInputLayout)
             .setPositiveButton("Uložiť") { _, _ ->
+                if (!requireOnline()) return@setPositiveButton
                 val newName = input.text.toString().trim()
                 if (newName.isEmpty()) {
                     Toast.makeText(requireContext(), "Zadajte meno.", Toast.LENGTH_SHORT).show()
@@ -1322,12 +1350,14 @@ class StudentsManageFragment : Fragment() {
                     if (student.isTeacher) {
                         db.child("teachers").child(student.uid).setValue("${student.email}, $newName")
                             .addOnSuccessListener {
+                                if (!isAdded) return@addOnSuccessListener
                                 Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
                                 loadStudents()
                             }
                     } else {
                         db.child("students").child(student.uid).child("name").setValue(newName)
                             .addOnSuccessListener {
+                                if (!isAdded) return@addOnSuccessListener
                                 Toast.makeText(requireContext(), "Uložené.", Toast.LENGTH_SHORT).show()
                                 loadStudents()
                             }
@@ -1353,7 +1383,8 @@ class StudentsManageFragment : Fragment() {
     }
 
     private fun loadSubjectNamesOnline(db: DatabaseReference) {
-        db.child("school_years").get().addOnSuccessListener { schoolSnap ->
+        db.child("school_years").getFromCache().addOnSuccessListener { schoolSnap ->
+            if (!isAdded) return@addOnSuccessListener
             val allYearKeys = schoolSnap.children.mapNotNull { it.key }
             val savedYear = prefs.getString("school_year", null)
             val year = if (!savedYear.isNullOrEmpty() && savedYear in allYearKeys) savedYear
@@ -1362,7 +1393,8 @@ class StudentsManageFragment : Fragment() {
                     applyFilters()
                     return@addOnSuccessListener
                 }
-            db.child("school_years").child(year).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+            db.child("school_years").child(year).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
+                if (!isAdded) return@addOnSuccessListener
                 val studentItemsSnapshot = allStudentItems.toList()
                 viewLifecycleOwner.lifecycleScope.launch {
                     val result = withContext(Dispatchers.Default) {
@@ -1398,10 +1430,12 @@ class StudentsManageFragment : Fragment() {
                     applyFilters()
                 }
             }.addOnFailureListener {
+                if (!isAdded) return@addOnFailureListener
                 populateSubjectSpinner()
                 applyFilters()
             }
         }.addOnFailureListener {
+            if (!isAdded) return@addOnFailureListener
             populateSubjectSpinner()
             applyFilters()
         }
@@ -1467,6 +1501,8 @@ class StudentsManageFragment : Fragment() {
             val name: TextView = view.findViewById(R.id.textStudentName)
             val averageText: TextView = view.findViewById(R.id.textStudentAverage)
             val expandedOptions: LinearLayout = view.findViewById(R.id.expandedOptions)
+            /** UID of the student currently bound to this ViewHolder. */
+            var boundUid: String = ""
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -1476,6 +1512,7 @@ class StudentsManageFragment : Fragment() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val student = students[position]
+            holder.boundUid = student.uid
             holder.name.text = if (student.isPending) "${student.name} ⏳" else student.name
             holder.averageText.text = "Počítam…"
 
@@ -1581,8 +1618,10 @@ class StudentsManageFragment : Fragment() {
                     return
                 }
                 val db = FirebaseDatabase.getInstance().reference
+                val expectedUid = student.uid
                 db.child("students").child(student.uid).child("subjects").child(year).child(semester)
-                    .get().addOnSuccessListener { subjectsSnap ->
+                    .getFromCache().addOnSuccessListener { subjectsSnap ->
+                        if (holder.boundUid != expectedUid) return@addOnSuccessListener
                         val subjectKeys = mutableListOf<String>()
                         for (child in subjectsSnap.children) {
                             child.getValue(String::class.java)?.let { subjectKeys.add(it) }
@@ -1595,7 +1634,8 @@ class StudentsManageFragment : Fragment() {
                         var pending = subjectKeys.size
                         for (subjectKey in subjectKeys) {
                             db.child("hodnotenia").child(year).child(semester).child(subjectKey).child(student.uid)
-                                .get().addOnSuccessListener { marksSnap ->
+                                .getFromCache().addOnSuccessListener { marksSnap ->
+                                    if (holder.boundUid != expectedUid) return@addOnSuccessListener
                                     for (markSnap in marksSnap.children) {
                                         val grade = markSnap.child("grade").getValue(String::class.java) ?: ""
                                         GRADE_MAP[grade]?.let { allGrades.add(it) }
@@ -1603,11 +1643,13 @@ class StudentsManageFragment : Fragment() {
                                     pending--
                                     if (pending == 0) holder.averageText.text = formatAverage(allGrades)
                                 }.addOnFailureListener {
+                                    if (holder.boundUid != expectedUid) return@addOnFailureListener
                                     pending--
                                     if (pending == 0) holder.averageText.text = formatAverage(allGrades)
                                 }
                         }
                     }.addOnFailureListener {
+                        if (holder.boundUid != expectedUid) return@addOnFailureListener
                         holder.averageText.text = "—"
                     }
             }

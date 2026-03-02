@@ -31,6 +31,8 @@ import com.google.firebase.database.*
 import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import org.json.JSONObject
 import java.text.Collator
 import java.util.Calendar
@@ -188,6 +190,7 @@ class SubjectsManageFragment : Fragment() {
         db.child("school_years").child(selectedSchoolYear).child("predmety")
             .addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
+                    if (!isAdded) return
                     viewLifecycleOwner.lifecycleScope.launch {
                         val items = withContext(Dispatchers.Default) {
                             val result = mutableListOf<SubjectManageItem>()
@@ -277,7 +280,7 @@ class SubjectsManageFragment : Fragment() {
 
     private fun setupYearSpinnerOnline(yearSpinner: Spinner) {
         val db = FirebaseDatabase.getInstance().reference
-        db.child("school_years").get().addOnSuccessListener { snap ->
+        db.child("school_years").getFromCache().addOnSuccessListener { snap ->
             if (!isAdded) return@addOnSuccessListener
             val keys = mutableListOf<String>()
             val names = mutableMapOf<String, String>()
@@ -354,6 +357,7 @@ class SubjectsManageFragment : Fragment() {
         dialogView.findViewById<MaterialButton>(R.id.cancelButton)
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val name = input.text.toString().trim()
             if (name.isEmpty()) {
                 Toast.makeText(requireContext(), "Zadajte názov predmetu.", Toast.LENGTH_SHORT).show()
@@ -369,6 +373,7 @@ class SubjectsManageFragment : Fragment() {
                 val key = db.child("school_years").child(selectedSchoolYear).child("predmety").push().key ?: return@setOnClickListener
                 db.child("school_years").child(selectedSchoolYear).child("predmety").child(key).setValue(mapOf("name" to name, "teacherEmail" to "", "semester" to selectedSemester))
                     .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
                         loadSubjects()
                     }
             }
@@ -504,7 +509,8 @@ class SubjectsManageFragment : Fragment() {
         val db = FirebaseDatabase.getInstance().reference
 
         // Load current semester value from Firebase
-        db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
+        db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).child("semester").getFromCache().addOnSuccessListener { semSnap ->
+            if (!isAdded) return@addOnSuccessListener
             val currentSemester = semSnap.getValue(String::class.java) ?: "both"
             val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
             spinnerSemester.setSelection(semIndex)
@@ -521,6 +527,7 @@ class SubjectsManageFragment : Fragment() {
 
         db.child("teachers").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                if (!isAdded) return
                 for (child in snapshot.children) {
                     val value = child.value as? String
                     value?.let {
@@ -562,6 +569,7 @@ class SubjectsManageFragment : Fragment() {
             confirmDeleteSubject(subject)
         }
         dialogView.findViewById<android.widget.Button>(R.id.btnSave).setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val newNameUi = editTextSubjectName.text.toString().trim()
             val selectedIdx = spinnerTeachers.selectedItemPosition
             val assign = teacherEmails.getOrElse(selectedIdx) { "" }
@@ -601,12 +609,14 @@ class SubjectsManageFragment : Fragment() {
         dialogView.findViewById<MaterialButton>(R.id.cancelButton)
             .setOnClickListener { dialog.dismiss() }
         confirmBtn.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             if (isOffline) {
                 localDb.removeSubject(selectedSchoolYear, subject.key)
                 loadSubjects()
             } else {
                 val db = FirebaseDatabase.getInstance().reference
                 db.child("school_years").child(selectedSchoolYear).child("predmety").child(subject.key).removeValue().addOnSuccessListener {
+                    if (!isAdded) return@addOnSuccessListener
                     loadSubjects()
                 }
             }
@@ -959,6 +969,7 @@ class SubjectsManageFragment : Fragment() {
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         btnSave.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val isSpecificDays = spinnerDay.selectedItemPosition == specificDaysIndex
             val day = if (isSpecificDays) "monday" else dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
             val startTime = editStartTime.text?.toString()?.trim() ?: ""
@@ -994,7 +1005,10 @@ class SubjectsManageFragment : Fragment() {
             } else {
                 val db = FirebaseDatabase.getInstance().reference
                 db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(entryKey)
-                    .setValue(entryMap).addOnSuccessListener { onUpdated() }
+                    .setValue(entryMap).addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
+                        onUpdated()
+                    }
             }
             dialog.dismiss()
         }
@@ -1006,6 +1020,7 @@ class SubjectsManageFragment : Fragment() {
                 .setTitle("Odstrániť z rozvrhu")
                 .setMessage(getString(R.string.timetable_delete_entry_confirm))
                 .setPositiveButton("Odstrániť") { _, _ ->
+                    if (!requireOnline()) return@setPositiveButton
                     if (isOfflineMode) {
                         localDb.removeTimetableEntry(selectedSchoolYear, subjectKey, entryKey)
                     } else {
@@ -1085,6 +1100,7 @@ class SubjectsManageFragment : Fragment() {
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         btnSave.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val isSpecificDays = spinnerDay.selectedItemPosition == specificDaysIndex
             val day = if (isSpecificDays) "monday" else dayKeys.getOrElse(spinnerDay.selectedItemPosition) { "monday" }
             val startTime = editStartTime.text?.toString()?.trim() ?: ""
@@ -1132,7 +1148,10 @@ class SubjectsManageFragment : Fragment() {
                 if (specificDatesStr.isNotBlank()) entryMap["specificDates"] = specificDatesStr
                 val key = db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").push().key ?: return@setOnClickListener
                 db.child("school_years").child(selectedSchoolYear).child("predmety").child(subjectKey).child("timetable").child(key).setValue(entryMap)
-                    .addOnSuccessListener { onAdded() }
+                    .addOnSuccessListener {
+                        if (!isAdded) return@addOnSuccessListener
+                        onAdded()
+                    }
             }
             dialog.dismiss()
         }

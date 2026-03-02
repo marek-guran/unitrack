@@ -22,6 +22,8 @@ import com.google.android.material.timepicker.TimeFormat
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import com.marekguran.unitrack.R
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import com.marekguran.unitrack.data.model.AppConstants.toKey
 import com.marekguran.unitrack.data.model.TimetableEntry
 import java.text.Collator
@@ -190,6 +192,7 @@ class ConsultingHoursFragment : Fragment() {
     }
 
     private fun cancelBooking(booking: MyBooking) {
+        if (!requireOnline()) return
         val confirmView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_confirm, null)
         confirmView.findViewById<TextView>(R.id.dialogTitle).text = "Zrušiť rezerváciu"
         confirmView.findViewById<TextView>(R.id.dialogMessage).text = "Naozaj chcete zrušiť túto rezerváciu?"
@@ -370,6 +373,7 @@ class ConsultingHoursFragment : Fragment() {
     }
 
     private fun updateBooking(booking: MyBooking, newDate: String, newTimeFrom: String, newTimeTo: String, newNote: String = "") {
+        if (!requireOnline()) return
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
 
         val parsedDate = try { LocalDate.parse(newDate, skDateFormat) } catch (e: Exception) { null }
@@ -460,7 +464,7 @@ class ConsultingHoursFragment : Fragment() {
         if (schoolYear.isBlank()) { onComplete(); return }
 
         // Load all teachers first to get names
-        db.child("teachers").get().addOnSuccessListener { teachersSnap ->
+        db.child("teachers").getFromCache().addOnSuccessListener { teachersSnap ->
             if (!isAdded) return@addOnSuccessListener
             val teacherMap = mutableMapOf<String, Pair<String, String>>() // uid -> (name, email)
             for (snap in teachersSnap.children) {
@@ -473,7 +477,7 @@ class ConsultingHoursFragment : Fragment() {
             }
 
             // Now load consulting subjects
-            db.child("school_years").child(schoolYear).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+            db.child("school_years").child(schoolYear).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
                 if (!isAdded) return@addOnSuccessListener
                 allTeachers.clear()
                 val emailToUid = teacherMap.entries.associate { it.value.second.lowercase() to it.key }
@@ -670,11 +674,12 @@ class ConsultingHoursFragment : Fragment() {
     }
 
     private fun bookConsultation(teacher: TeacherConsulting, entry: TimetableEntry, date: String, arrivalTime: String, bookingNote: String = "") {
+        if (!requireOnline()) return
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val email = FirebaseAuth.getInstance().currentUser?.email ?: ""
 
         // Get student name
-        db.child("students").child(uid).child("name").get().addOnSuccessListener { nameSnap ->
+        db.child("students").child(uid).child("name").getFromCache().addOnSuccessListener { nameSnap ->
             if (!isAdded) return@addOnSuccessListener
             val studentName = nameSnap.getValue(String::class.java) ?: email.substringBefore("@")
 

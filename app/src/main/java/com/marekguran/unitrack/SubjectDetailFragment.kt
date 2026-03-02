@@ -32,6 +32,9 @@ import com.marekguran.unitrack.databinding.FragmentSubjectDetailBinding
 import com.marekguran.unitrack.ui.home.AttendanceAdapter
 import com.marekguran.unitrack.data.OfflineMode
 import com.marekguran.unitrack.data.LocalDatabase
+import com.marekguran.unitrack.data.FirebaseConnectionMonitor
+import com.marekguran.unitrack.data.requireOnline
+import com.marekguran.unitrack.data.getFromCache
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
@@ -50,7 +53,10 @@ import android.os.CancellationSignal
 import android.print.PageRange
 import android.print.PrintDocumentInfo
 import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.GenericTypeIndicator
+import com.google.firebase.database.ValueEventListener
 import androidx.viewpager2.widget.ViewPager2
 import com.marekguran.unitrack.ui.SubjectDetailPagerAdapter
 import android.widget.LinearLayout
@@ -368,6 +374,8 @@ class SubjectDetailFragment : Fragment() {
 
     private val isOffline by lazy { OfflineMode.isOffline(requireContext()) }
     private val localDb by lazy { LocalDatabase.getInstance(requireContext()) }
+    private var isFirebaseConnected: Boolean = true
+
 
     private fun getTeacherName(): String {
         return if (isOffline) {
@@ -627,6 +635,14 @@ class SubjectDetailFragment : Fragment() {
             loadStudentsForSubject(openedSubject!!)
         }
 
+        // Monitor Firebase connection state to disable QR features when offline
+        if (!isOffline) {
+            FirebaseConnectionMonitor.connected.observe(viewLifecycleOwner) { online ->
+                isFirebaseConnected = online
+                if (_binding != null) updateQrAttendanceFabAppearance()
+            }
+        }
+
         return binding.root
     }
 
@@ -662,7 +678,8 @@ class SubjectDetailFragment : Fragment() {
             return
         }
         // Use new DB students/year/studentUid
-        db.child("students").get().addOnSuccessListener { studentsSnap ->
+        db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+            if (_binding == null) return@addOnSuccessListener
             for (studentSnap in studentsSnap.children) {
                 val studentUid = studentSnap.key ?: continue
                 val studentObj = studentSnap.getValue(StudentDbModel::class.java)
@@ -674,8 +691,9 @@ class SubjectDetailFragment : Fragment() {
                     .child(selectedSemester)
                     .child(dbSubjectKey)
                     .child(studentUid)
-                    .get()
-                    .addOnSuccessListener { marksSnap ->
+                    .getFromCache()
+                    .addOnSuccessListener marksSuccess@{ marksSnap ->
+                        if (_binding == null) return@marksSuccess
                         val marks = marksSnap.children.mapNotNull { snap ->
                             snap.getValue(Mark::class.java)?.let { mark ->
                                 MarkWithKey(key = snap.key ?: "", mark = mark)
@@ -688,8 +706,9 @@ class SubjectDetailFragment : Fragment() {
                             .child(selectedSemester)
                             .child(dbSubjectKey)
                             .child(studentUid)
-                            .get()
-                            .addOnSuccessListener { attSnap ->
+                            .getFromCache()
+                            .addOnSuccessListener attSuccess@{ attSnap ->
+                                if (_binding == null) return@attSuccess
                                 val attendanceMap = attSnap.children.associate { dateSnap ->
                                     val key = dateSnap.key!!
                                     val entry = dateSnap.getValue(AttendanceEntry::class.java) ?: AttendanceEntry(key)
@@ -801,7 +820,8 @@ class SubjectDetailFragment : Fragment() {
         val chipEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollEnrolled)
         val chipNotEnrolled = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.chipEnrollNotEnrolled)
 
-        db.child("students").get().addOnSuccessListener { snap ->
+        db.child("students").getFromCache().addOnSuccessListener { snap ->
+            if (_binding == null) return@addOnSuccessListener
             val items = mutableListOf<EnrollStudentItem>()
             for (studentSnap in snap.children) {
                 val uid = studentSnap.key!!
@@ -863,11 +883,13 @@ class SubjectDetailFragment : Fragment() {
             dialogView.findViewById<Button>(R.id.cancelEnrollmentsButton).setOnClickListener { dialog.dismiss() }
 
             saveButton.setOnClickListener {
+                if (!requireOnline()) return@setOnClickListener
                 val subjectKey = openedSubjectKey ?: ""
                 var pending = items.size
                 for (item in items) {
                     val ref = db.child("students").child(item.uid).child("subjects").child(selectedSchoolYear).child(selectedSemester)
-                    ref.get().addOnSuccessListener { snapshot: DataSnapshot ->
+                    ref.getFromCache().addOnSuccessListener innerSuccess@{ snapshot: DataSnapshot ->
+                        if (_binding == null) return@innerSuccess
                         val current = snapshot.getValue(object : GenericTypeIndicator<List<String>>() {}) ?: emptyList()
                         val newList = current.toMutableList()
                         if (item.enrolled && !newList.contains(subjectKey)) {
@@ -876,6 +898,7 @@ class SubjectDetailFragment : Fragment() {
                             newList.remove(subjectKey)
                         }
                         ref.setValue(newList).addOnCompleteListener {
+                            if (_binding == null) return@addOnCompleteListener
                             pending--
                             if (pending == 0) {
                                 Snackbar.make(requireView(), "Zápisy uložené", Snackbar.LENGTH_LONG).also { styleSnackbar(it) }.show()
@@ -1275,13 +1298,17 @@ class SubjectDetailFragment : Fragment() {
                 localDb.addMark(selectedSchoolYear, selectedSemester, openedSubjectKey ?: "", student.studentUid, markJson)
                 refreshFragmentView()
             } else {
+                if (!requireOnline()) return@setOnClickListener
                 db.child("hodnotenia")
                     .child(selectedSchoolYear)
                     .child(selectedSemester)
                     .child(openedSubjectKey ?: "")
                     .child(student.studentUid)
                     .push()
-                    .setValue(mark) { _, _ -> refreshFragmentView() }
+                    .setValue(mark) { _, _ ->
+                        if (_binding == null) return@setValue
+                        refreshFragmentView()
+                    }
             }
             dialog.dismiss()
         }
@@ -1386,13 +1413,17 @@ class SubjectDetailFragment : Fragment() {
                 localDb.updateMark(selectedSchoolYear, selectedSemester, openedSubjectKey ?: "", student.studentUid, markWithKey.key, markJson)
                 onUpdated()
             } else {
+                if (!requireOnline()) return@setOnClickListener
                 db.child("hodnotenia")
                     .child(selectedSchoolYear)
                     .child(selectedSemester)
                     .child(openedSubjectKey ?: "")
                     .child(student.studentUid)
                     .child(markWithKey.key)
-                    .setValue(updatedMark) { _, _ -> onUpdated() }
+                    .setValue(updatedMark) { _, _ ->
+                        if (_binding == null) return@setValue
+                        onUpdated()
+                    }
             }
             dialog.dismiss()
         }
@@ -1429,7 +1460,10 @@ class SubjectDetailFragment : Fragment() {
                 .child(openedSubjectKey ?: return)
                 .child(student.studentUid)
                 .child(markWithKey.key)
-                .removeValue { _, _ -> onUpdated() }
+                .removeValue { _, _ ->
+                    if (_binding == null) return@removeValue
+                    onUpdated()
+                }
         }
     }
 
@@ -1520,8 +1554,9 @@ class SubjectDetailFragment : Fragment() {
                 .child(selectedSemester)
                 .child(sanitized)
                 .child(studentUid)
-                .get()
+                .getFromCache()
                 .addOnSuccessListener { attSnap ->
+                    if (_binding == null) return@addOnSuccessListener
                     val attendanceMap = attSnap.children.associate { dateSnap ->
                         val key = dateSnap.key!!
                         val entry = dateSnap.getValue(AttendanceEntry::class.java) ?: AttendanceEntry(key)
@@ -1695,6 +1730,7 @@ class SubjectDetailFragment : Fragment() {
             refreshFragmentView()
             onAdded?.invoke()
         } else {
+            if (!requireOnline()) return
             val pushRef = db.child("pritomnost")
                 .child(selectedSchoolYear)
                 .child(selectedSemester)
@@ -1702,6 +1738,7 @@ class SubjectDetailFragment : Fragment() {
                 .child(student.studentUid)
                 .push()
             pushRef.setValue(entry) { _, _ ->
+                if (_binding == null) return@setValue
                 refreshFragmentView()
                 onAdded?.invoke()
             }
@@ -1730,6 +1767,7 @@ class SubjectDetailFragment : Fragment() {
                     refreshFragmentView()
                 }.also { styleSnackbar(it) }.show()
         } else {
+            if (!requireOnline()) return
             val ref = db.child("pritomnost")
                 .child(selectedSchoolYear)
                 .child(selectedSemester)
@@ -1737,10 +1775,15 @@ class SubjectDetailFragment : Fragment() {
                 .child(student.studentUid)
                 .child(entryKey)
             ref.removeValue { _, _ ->
+                if (_binding == null) return@removeValue
                 refreshFragmentView()
                 Snackbar.make(view, "Dochádzka vymazaná", Snackbar.LENGTH_LONG)
                     .setAction("Späť") {
-                        ref.setValue(entry) { _, _ -> refreshFragmentView() }
+                        if (!requireOnline()) return@setAction
+                        ref.setValue(entry) { _, _ ->
+                            if (_binding == null) return@setValue
+                            refreshFragmentView()
+                        }
                     }.also { styleSnackbar(it) }.show()
             }
         }
@@ -1831,7 +1874,8 @@ class SubjectDetailFragment : Fragment() {
                 .child(student.studentUid)
                 .child(entry.entryKey)
 
-            attendanceRef.get().addOnSuccessListener { snapshot ->
+            attendanceRef.getFromCache().addOnSuccessListener { snapshot ->
+                if (_binding == null) return@addOnSuccessListener
                 var isAbsent = entry.absent
                 var note = entry.note
                 var time = entry.time
@@ -1866,12 +1910,16 @@ class SubjectDetailFragment : Fragment() {
             localDb.updateAttendanceEntry(selectedSchoolYear, selectedSemester, sanitized, student.studentUid, entryKey, entryJson)
             refreshFragmentView()
         } else {
+            if (!requireOnline()) return
             val ref = db.child("pritomnost")
                 .child(selectedSchoolYear)
                 .child(selectedSemester)
                 .child(sanitized)
                 .child(student.studentUid)
-            ref.child(entryKey).setValue(newEntry) { _, _ -> refreshFragmentView() }
+            ref.child(entryKey).setValue(newEntry) { _, _ ->
+                if (_binding == null) return@setValue
+                refreshFragmentView()
+            }
         }
     }
 
@@ -2085,6 +2133,11 @@ class SubjectDetailFragment : Fragment() {
         // Wire up the QR Attendance button (online only)
         if (!isOffline) {
             binding.qrAttendanceButton?.setOnClickListener {
+                if (!isFirebaseConnected) {
+                    Snackbar.make(requireView(), "Nedostupné v offline režime", Snackbar.LENGTH_SHORT)
+                        .also { styleSnackbar(it) }.show()
+                    return@setOnClickListener
+                }
                 if (students.isEmpty()) {
                     Snackbar.make(requireView(), "Žiadni študenti na prezenčku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
                     return@setOnClickListener
@@ -2099,6 +2152,7 @@ class SubjectDetailFragment : Fragment() {
                 }
                 qrAttendanceLauncher.launch(intent)
             }
+            updateQrAttendanceFabAppearance()
         }
 
         // Hide/show FABs on scroll
@@ -2355,6 +2409,21 @@ class SubjectDetailFragment : Fragment() {
             LocalDate.parse(dateString, inputFormatter).format(outputFormatter)
         } catch (e: Exception) {
             dateString // fallback to original if parse fails
+        }
+    }
+
+    private fun updateQrAttendanceFabAppearance() {
+        val fab = binding.qrAttendanceButton ?: return
+        if (fab.visibility != View.VISIBLE) return
+        val typedValue = android.util.TypedValue()
+        if (isFirebaseConnected) {
+            fab.alpha = 1f
+            requireContext().theme.resolveAttribute(com.google.android.material.R.attr.colorTertiary, typedValue, true)
+            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(typedValue.data)
+        } else {
+            fab.alpha = 0.5f
+            requireContext().theme.resolveAttribute(com.google.android.material.R.attr.colorOutline, typedValue, true)
+            fab.backgroundTintList = android.content.res.ColorStateList.valueOf(typedValue.data)
         }
     }
 

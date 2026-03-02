@@ -27,6 +27,7 @@ import com.google.firebase.database.*
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.marekguran.unitrack.data.requireOnline
 import java.util.UUID
 
 class QrAttendanceActivity : AppCompatActivity() {
@@ -34,6 +35,9 @@ class QrAttendanceActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var scanListener: ValueEventListener? = null
     private var failListener: ValueEventListener? = null
+    private var connectedListener: ValueEventListener? = null
+    private var connectedRef: DatabaseReference? = null
+    private var isFirebaseConnected = true
     private val presentStudentUids = mutableSetOf<String>()
     private var currentCode = ""
     private var lastScanTimestamp: Long = 0
@@ -128,6 +132,7 @@ class QrAttendanceActivity : AppCompatActivity() {
 
         findViewById<MaterialButton>(R.id.btnClose).setOnClickListener { confirmClose() }
         findViewById<MaterialButton>(R.id.btnEndAttendance).setOnClickListener { endAttendance() }
+        findViewById<MaterialButton>(R.id.offlineCloseBtn).setOnClickListener { finish() }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -136,6 +141,7 @@ class QrAttendanceActivity : AppCompatActivity() {
         })
 
         // Generate first QR code and start listening
+        if (!requireOnline()) return
         generateNewCode()
         // Clear stale data from previous sessions before attaching listeners
         qrLastScanRef().removeValue()
@@ -156,6 +162,28 @@ class QrAttendanceActivity : AppCompatActivity() {
             .setDuration(500)
             .setInterpolator(OvershootInterpolator(1.2f))
             .start()
+
+        // Monitor Firebase connection state
+        val connRef = FirebaseDatabase.getInstance().getReference(".info/connected")
+        connectedRef = connRef
+        val connListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val connected = snapshot.getValue(Boolean::class.java) ?: false
+                isFirebaseConnected = connected
+                val offlineOverlay = findViewById<View>(R.id.offlineOverlay)
+                if (connected) {
+                    offlineOverlay.animate().alpha(0f).setDuration(200).withEndAction {
+                        offlineOverlay.visibility = View.GONE
+                    }.start()
+                } else {
+                    offlineOverlay.visibility = View.VISIBLE
+                    offlineOverlay.animate().alpha(1f).setDuration(200).start()
+                }
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        connectedListener = connListener
+        connRef.addValueEventListener(connListener)
     }
 
     private fun qrCodeRef() = db.child("pritomnost")
@@ -168,6 +196,7 @@ class QrAttendanceActivity : AppCompatActivity() {
         .child(schoolYear).child(semester).child(subjectKey).child("qr_fail")
 
     private fun generateNewCode() {
+        if (!requireOnline()) return
         currentCode = UUID.randomUUID().toString().replace("-", "").take(16)
         val qrContent = "UNITRACK|$schoolYear|$semester|$subjectKey|$currentCode"
         val bitmap = generateQrBitmap(qrContent, 512)
@@ -359,6 +388,7 @@ class QrAttendanceActivity : AppCompatActivity() {
     }
 
     private fun endAttendance() {
+        if (!requireOnline()) return
         val presentCount = presentStudentUids.size
         val absentCount = studentUids.size - presentCount
 
@@ -366,6 +396,7 @@ class QrAttendanceActivity : AppCompatActivity() {
             .setTitle("Ukončiť prezenčku?")
             .setMessage("Prítomní: $presentCount\nNeprítomní: $absentCount")
             .setPositiveButton("Ukončiť") { _, _ ->
+                if (!requireOnline()) return@setPositiveButton
                 saveAttendanceAndFinish()
             }
             .setNegativeButton("Neukončiť", null)
@@ -429,6 +460,7 @@ class QrAttendanceActivity : AppCompatActivity() {
                 .setTitle("Zrušiť prezenčku?")
                 .setMessage("Údaje o dochádzke nebudú uložené.")
                 .setPositiveButton("Zrušiť") { _, _ ->
+                    if (!requireOnline()) return@setPositiveButton
                     qrCodeRef().removeValue()
                     qrLastScanRef().removeValue()
                     qrFailRef().removeValue()
@@ -437,6 +469,7 @@ class QrAttendanceActivity : AppCompatActivity() {
                 .setNegativeButton("Pokračovať", null)
                 .show()
         } else {
+            if (!requireOnline()) return
             qrCodeRef().removeValue()
             qrLastScanRef().removeValue()
             qrFailRef().removeValue()
@@ -450,6 +483,7 @@ class QrAttendanceActivity : AppCompatActivity() {
         activeDialog = null
         confirmationOverlay.animate().cancel()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        connectedListener?.let { connectedRef?.removeEventListener(it) }
         scanListener?.let { qrLastScanRef().removeEventListener(it) }
         failListener?.let { qrFailRef().removeEventListener(it) }
         handler.removeCallbacksAndMessages(null)

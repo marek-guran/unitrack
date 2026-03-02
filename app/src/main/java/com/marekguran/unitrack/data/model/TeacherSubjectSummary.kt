@@ -5,5 +5,7 @@ data class TeacherSubjectSummary(
     val subjectName: String,
     val studentCount: Int,
     val averageMark: String,
-    val averageAttendance: String = "-"
+    val averageAttendance: String = "-",
+    val rawAttPresent: Int = 0,
+    val rawAttTotal: Int = 0
 )

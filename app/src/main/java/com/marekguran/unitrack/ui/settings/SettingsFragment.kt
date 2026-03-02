@@ -31,7 +31,9 @@ import com.marekguran.unitrack.ui.login.LoginActivity
 import com.marekguran.unitrack.data.model.SubjectInfo
 import com.marekguran.unitrack.data.model.SubjectAdapterAdmin
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.requireOnline
 import com.marekguran.unitrack.data.LocalDatabase
+import com.marekguran.unitrack.data.getFromCache
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import android.content.Context
 import android.graphics.Bitmap
@@ -364,6 +366,7 @@ class SettingsFragment : Fragment() {
             } else {
                 auth.sendPasswordResetEmail(email)
                     .addOnCompleteListener { task ->
+                        if (_binding == null) return@addOnCompleteListener
                         if (task.isSuccessful) {
                             binding.textResetStatus.text =
                                 "E-mail na obnovu hesla bol odoslaný na: $email."
@@ -407,6 +410,7 @@ class SettingsFragment : Fragment() {
                 if (newEmail.isBlank() || !Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) return@setOnClickListener
                 auth.currentUser?.verifyBeforeUpdateEmail(newEmail)
                     ?.addOnCompleteListener { task ->
+                        if (_binding == null) return@addOnCompleteListener
                         if (task.isSuccessful) {
                             Toast.makeText(requireContext(), getString(R.string.change_email_success, newEmail), Toast.LENGTH_LONG).show()
                         } else {
@@ -532,7 +536,8 @@ class SettingsFragment : Fragment() {
         val currentUser = auth.currentUser ?: return
         val adminsRef = FirebaseDatabase.getInstance().reference.child("admins")
 
-        adminsRef.child(currentUser.uid).get().addOnSuccessListener { snapshot ->
+        adminsRef.child(currentUser.uid).getFromCache().addOnSuccessListener { snapshot ->
+            if (_binding == null) return@addOnSuccessListener
             if (snapshot.exists()) {
                 // Admin user/subject management is now in nav tabs — hide from settings
                 binding.layoutAddUser.visibility = View.GONE
@@ -565,18 +570,20 @@ class SettingsFragment : Fragment() {
 
         val dbRef = FirebaseDatabase.getInstance().reference
         // Load current value
-        dbRef.child("settings").child("allowed_domains").get().addOnSuccessListener { snapshot ->
+        dbRef.child("settings").child("allowed_domains").getFromCache().addOnSuccessListener { snapshot ->
             if (!isAdded || _binding == null) return@addOnSuccessListener
             val current = snapshot.getValue(String::class.java) ?: AppConstants.DEFAULT_ALLOWED_DOMAIN
             binding.editAllowedDomains.setText(current)
         }
 
         binding.btnSaveAllowedDomains.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val domains = binding.editAllowedDomains.text?.toString()?.trim() ?: ""
             if (domains.isBlank()) return@setOnClickListener
             dbRef.child("settings").child("allowed_domains").setValue(domains)
                 .addOnSuccessListener {
-                    if (isAdded) Toast.makeText(requireContext(), getString(R.string.allowed_domains_saved), Toast.LENGTH_SHORT).show()
+                    if (!isAdded || _binding == null) return@addOnSuccessListener
+                    Toast.makeText(requireContext(), getString(R.string.allowed_domains_saved), Toast.LENGTH_SHORT).show()
                 }
         }
     }
@@ -614,6 +621,7 @@ class SettingsFragment : Fragment() {
         }
 
         binding.btnRemoveSubject.setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val subjectInput = binding.editSubjectName.text?.toString()?.trim() ?: ""
             if (subjectInput.isEmpty()) {
                 binding.textAddSubjectStatus.text = "Zadajte názov predmetu na odstránenie."
@@ -630,6 +638,7 @@ class SettingsFragment : Fragment() {
             dbRef.child("school_years").child(currentYear).child("predmety").orderByChild("name").equalTo(subjectInput)
                 .addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
+                        if (_binding == null) return
                         if (!snapshot.exists()) {
                             binding.textAddSubjectStatus.text = "Predmet nebol nájdený."
                             return
@@ -641,6 +650,7 @@ class SettingsFragment : Fragment() {
                         binding.textAddSubjectStatus.text = "Predmet odstránený."
                     }
                     override fun onCancelled(error: DatabaseError) {
+                        if (_binding == null) return
                         binding.textAddSubjectStatus.text = "Chyba pri odstraňovaní predmetu: ${error.message}"
                     }
                 })
@@ -717,7 +727,8 @@ class SettingsFragment : Fragment() {
         val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
         val currentYear = uniPrefs.getString("school_year", null) ?: ""
 
-        db.child("school_years").child(currentYear).child("predmety").child(subject.key).child("semester").get().addOnSuccessListener { semSnap ->
+        db.child("school_years").child(currentYear).child("predmety").child(subject.key).child("semester").getFromCache().addOnSuccessListener { semSnap ->
+            if (_binding == null) return@addOnSuccessListener
             val currentSemester = semSnap.getValue(String::class.java) ?: "both"
             val semIndex = semesterKeys.indexOf(currentSemester).let { if (it == -1) 0 else it }
             spinnerSemester.setSelection(semIndex)
@@ -725,6 +736,7 @@ class SettingsFragment : Fragment() {
 
         db.child("teachers").addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
+                if (_binding == null) return
                 for (child in snapshot.children) {
                     val value = child.value as? String
                     value?.let {
@@ -753,17 +765,21 @@ class SettingsFragment : Fragment() {
             dialog.dismiss()
         }
         dialogView.findViewById<Button>(R.id.btnDelete).setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val key = subject.key
             db.child("school_years").child(currentYear).child("predmety").child(key).removeValue()
                 .addOnSuccessListener {
+                    if (_binding == null) return@addOnSuccessListener
                     Toast.makeText(requireContext(), "Predmet odstránený.", Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
                 }
                 .addOnFailureListener {
+                    if (_binding == null) return@addOnFailureListener
                     Toast.makeText(requireContext(), "Chyba pri odstraňovaní: ${it.message}", Toast.LENGTH_SHORT).show()
                 }
         }
         dialogView.findViewById<Button>(R.id.btnSave).setOnClickListener {
+            if (!requireOnline()) return@setOnClickListener
             val newNameUi = editTextSubjectName.text.toString().trim()
             val selectedIdx = spinnerTeachers.selectedItemPosition
             val assign = teacherEmails.getOrElse(selectedIdx) { "" }
@@ -860,6 +876,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun addOrEditSubject(subjectInput: String, teacherEmail: String?) {
+        if (!requireOnline()) return
         val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
         val currentYear = uniPrefs.getString("school_year", null) ?: ""
         if (currentYear.isEmpty()) {
@@ -876,6 +893,7 @@ class SettingsFragment : Fragment() {
         )
         db.child(key).setValue(subjectObj)
             .addOnSuccessListener {
+                if (_binding == null) return@addOnSuccessListener
                 if (teacherEmail.isNullOrEmpty()) {
                     binding.textAddSubjectStatus.text = "Predmet bol uložený bez učiteľa."
                 } else {
@@ -883,6 +901,7 @@ class SettingsFragment : Fragment() {
                 }
             }
             .addOnFailureListener {
+                if (_binding == null) return@addOnFailureListener
                 binding.textAddSubjectStatus.text = "Chyba pri ukladaní predmetu: ${it.message}"
             }
     }
@@ -902,12 +921,14 @@ class SettingsFragment : Fragment() {
     }
 
     private fun createNewUser(email: String, name: String, isTeacher: Boolean) {
+        if (!requireOnline()) return
         val password = generateRandomPassword()
         val secondaryAuth = getSecondaryAuth()
         val db = FirebaseDatabase.getInstance().reference
 
         secondaryAuth.createUserWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->
+                if (_binding == null) return@addOnCompleteListener
                 if (task.isSuccessful) {
                     val newUser: FirebaseUser? = task.result?.user
                     val userId = newUser?.uid ?: return@addOnCompleteListener
@@ -915,8 +936,10 @@ class SettingsFragment : Fragment() {
                         val dbRef = db.child("teachers").child(userId)
                         dbRef.setValue("$email, $name")
                             .addOnSuccessListener {
+                                if (_binding == null) return@addOnSuccessListener
                                 secondaryAuth.sendPasswordResetEmail(email)
                                     .addOnCompleteListener { resetTask ->
+                                        if (_binding == null) return@addOnCompleteListener
                                         if (resetTask.isSuccessful) {
                                             binding.textAddUserStatus.text =
                                                 "Učiteľ pridaný a e-mail na nastavenie hesla odoslaný."
@@ -928,13 +951,15 @@ class SettingsFragment : Fragment() {
                                     }
                             }
                             .addOnFailureListener { ex ->
+                                if (_binding == null) return@addOnFailureListener
                                 binding.textAddUserStatus.text = "Chyba pri ukladaní do DB: ${ex.message}"
                                 secondaryAuth.signOut()
                             }
                     } else {
                         // Find the selected school year from preferences, with fallback to latest
                         val schoolYearsRef = FirebaseDatabase.getInstance().reference.child("school_years")
-                        schoolYearsRef.get().addOnSuccessListener { schoolSnapshot ->
+                        schoolYearsRef.getFromCache().addOnSuccessListener { schoolSnapshot ->
+                            if (_binding == null) return@addOnSuccessListener
                             val allYearKeys = schoolSnapshot.children.mapNotNull { it.key }
                             val uniPrefs = requireContext().getSharedPreferences("unitrack_prefs", 0)
                             val savedYear = uniPrefs.getString("school_year", null)
@@ -951,7 +976,8 @@ class SettingsFragment : Fragment() {
                             val currentSemester = prefs.getString("semester", "zimny") ?: "zimny"
 
                             db.child("school_years").child(selectedYear).child("predmety")
-                                .get().addOnSuccessListener { predSnap ->
+                                .getFromCache().addOnSuccessListener { predSnap ->
+                                    if (_binding == null) return@addOnSuccessListener
                                     val subjects = predSnap.children.mapNotNull { it.key }
                                     val subjectsMap = mapOf(selectedYear to mapOf(currentSemester to subjects))
                                     val studentObj = mapOf(
@@ -961,8 +987,10 @@ class SettingsFragment : Fragment() {
                                     )
                                     db.child("students").child(userId).setValue(studentObj)
                                         .addOnSuccessListener {
+                                            if (_binding == null) return@addOnSuccessListener
                                             secondaryAuth.sendPasswordResetEmail(email)
                                                 .addOnCompleteListener { resetTask ->
+                                                    if (_binding == null) return@addOnCompleteListener
                                                     if (resetTask.isSuccessful) {
                                                         binding.textAddUserStatus.text =
                                                             "Študent pridaný do aktuálneho školského roku a semestra, e-mail na nastavenie hesla odoslaný."
@@ -974,6 +1002,7 @@ class SettingsFragment : Fragment() {
                                                 }
                                         }
                                         .addOnFailureListener { ex ->
+                                            if (_binding == null) return@addOnFailureListener
                                             binding.textAddUserStatus.text = "Chyba pri ukladaní do DB: ${ex.message}"
                                             secondaryAuth.signOut()
                                         }
@@ -1059,7 +1088,7 @@ class SettingsFragment : Fragment() {
             callback(needsSubjectMigration || needsStudentMigration)
         } else {
             val db = FirebaseDatabase.getInstance().reference
-            db.child("predmety").get().addOnSuccessListener { predSnap ->
+            db.child("predmety").getFromCache().addOnSuccessListener { predSnap ->
                 if (_binding == null) return@addOnSuccessListener
                 val needsSubjectMigration = predSnap.exists() && predSnap.childrenCount > 0
                 if (needsSubjectMigration) {
@@ -1067,7 +1096,7 @@ class SettingsFragment : Fragment() {
                     return@addOnSuccessListener
                 }
                 // Also check for per-year student structure
-                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
                     if (_binding == null) return@addOnSuccessListener
                     val yearPattern = Regex("\\d{4}_\\d{4}")
                     val needsStudentMigration = studentsSnap.children.any {
@@ -1132,9 +1161,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun migrateOnlineDb() {
+        if (!requireOnline()) return
         val db = FirebaseDatabase.getInstance().reference
         // Step 1: Migrate global subjects to school years
-        db.child("predmety").get().addOnSuccessListener { predSnap ->
+        db.child("predmety").getFromCache().addOnSuccessListener { predSnap ->
             val safeBinding = _binding ?: return@addOnSuccessListener
             val hasGlobalSubjects = predSnap.exists() && predSnap.childrenCount > 0L
 
@@ -1148,7 +1178,7 @@ class SettingsFragment : Fragment() {
 
             fun migrateStudentsOnline(appliedMigrations: MutableList<String>) {
                 // Step 2: Migrate per-year students to global structure
-                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
                     val sb = _binding ?: return@addOnSuccessListener
                     val yearPattern = Regex("\\d{4}_\\d{4}")
                     val yearKeys = studentsSnap.children.filter { (it.key ?: "").matches(yearPattern) }
@@ -1192,6 +1222,7 @@ class SettingsFragment : Fragment() {
                     }
 
                     db.child("students").setValue(newStudents).addOnSuccessListener {
+                        if (_binding == null) return@addOnSuccessListener
                         appliedMigrations.add("študenti migrovaní")
                         showMigrationSuccess(appliedMigrations)
                     }.addOnFailureListener {
@@ -1212,7 +1243,7 @@ class SettingsFragment : Fragment() {
             }
 
             // Migrate subjects to school years first
-            db.child("school_years").get().addOnSuccessListener { yearsSnap ->
+            db.child("school_years").getFromCache().addOnSuccessListener { yearsSnap ->
                 val sb = _binding ?: return@addOnSuccessListener
                 var migratedCount = 0
                 var checkedCount = 0
@@ -1221,6 +1252,7 @@ class SettingsFragment : Fragment() {
                 if (totalYears == 0) {
                     // No school years, just remove global subjects and migrate students
                     db.child("predmety").removeValue().addOnSuccessListener {
+                        if (_binding == null) return@addOnSuccessListener
                         migrateStudentsOnline(mutableListOf("globálne predmety odstránené"))
                     }
                     return@addOnSuccessListener
@@ -1228,6 +1260,7 @@ class SettingsFragment : Fragment() {
 
                 fun onAllSubjectsChecked() {
                     db.child("predmety").removeValue().addOnSuccessListener {
+                        if (_binding == null) return@addOnSuccessListener
                         val applied = mutableListOf<String>()
                         if (migratedCount > 0) {
                             applied.add("predmety migrované ($migratedCount rokov)")
@@ -1250,6 +1283,7 @@ class SettingsFragment : Fragment() {
                         db.child("school_years").child(yearKey).child("predmety")
                             .setValue(globalSubjects)
                             .addOnCompleteListener {
+                                if (_binding == null) return@addOnCompleteListener
                                 migratedCount++
                                 checkedCount++
                                 if (checkedCount >= totalYears) onAllSubjectsChecked()
@@ -1312,7 +1346,8 @@ class SettingsFragment : Fragment() {
             binding.recyclerSchoolYears.adapter?.notifyDataSetChanged()
         } else {
             val db = FirebaseDatabase.getInstance().reference.child("school_years")
-            db.get().addOnSuccessListener { snap ->
+            db.getFromCache().addOnSuccessListener { snap ->
+                if (_binding == null) return@addOnSuccessListener
                 schoolYearItems.clear()
                 for (child in snap.children) {
                     val key = child.key ?: continue
@@ -1371,10 +1406,13 @@ class SettingsFragment : Fragment() {
                 loadSchoolYears()
                 dialog.dismiss()
             } else {
+                if (!requireOnline()) return@setOnClickListener
                 val db = FirebaseDatabase.getInstance().reference
                 db.child("school_years").child(item.key).removeValue().addOnSuccessListener {
+                    if (_binding == null) return@addOnSuccessListener
                     // Remove enrollment data for deleted year from each student
-                    db.child("students").get().addOnSuccessListener { studentsSnap ->
+                    db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+                        if (_binding == null) return@addOnSuccessListener
                         val updates = mutableMapOf<String, Any?>()
                         for (studentSnap in studentsSnap.children) {
                             val uid = studentSnap.key ?: continue
@@ -1410,7 +1448,7 @@ class SettingsFragment : Fragment() {
             val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
             val currentUser = auth.currentUser
             if (currentUser != null) {
-                FirebaseDatabase.getInstance().reference.child("teachers").child(currentUser.uid).get()
+                FirebaseDatabase.getInstance().reference.child("teachers").child(currentUser.uid).getFromCache()
                     .addOnSuccessListener { snap ->
                         if (_binding == null) return@addOnSuccessListener
                         if (snap.exists()) {

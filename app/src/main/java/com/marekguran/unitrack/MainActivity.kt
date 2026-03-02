@@ -41,7 +41,9 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import com.marekguran.unitrack.data.FirebaseConnectionMonitor
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
 import com.marekguran.unitrack.notification.NextClassAlarmReceiver
 import com.marekguran.unitrack.ui.PillNavigationBar
 import com.marekguran.unitrack.update.UpdateChecker
@@ -69,6 +71,10 @@ class MainActivity : AppCompatActivity() {
     private var dialogDismissedManually = false
     private val handler = Handler(Looper.getMainLooper())
     private val checkInterval: Long = 10000
+
+    /** Active theme-reveal animator — cancelled in [onDestroy] to avoid leaking
+     *  the full-screen bitmap and the old decor-view hierarchy. */
+    private var themeRevealAnimator: android.animation.Animator? = null
 
     // Navigation destination IDs mapped to pill nav indices
     private lateinit var navDestinations: List<Int>
@@ -125,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             // Check if user is pending approval BEFORE building UI.
             // Redirect to full-screen pending activity if so; otherwise continue.
             val dbRef = FirebaseDatabase.getInstance().reference
-            dbRef.child("pending_users").child(currentUser.uid).get().addOnSuccessListener { pendingSnap ->
+            dbRef.child("pending_users").child(currentUser.uid).getFromCache().addOnSuccessListener { pendingSnap ->
                 if (isFinishing || isDestroyed) return@addOnSuccessListener
                 if (pendingSnap.exists()) {
                     val intent = Intent(this, PendingApprovalActivity::class.java)
@@ -260,6 +266,7 @@ class MainActivity : AppCompatActivity() {
                                     ).toFloat()
 
                                     val revealAnim = android.animation.ValueAnimator.ofFloat(0f, maxRadius)
+                                    themeRevealAnimator = revealAnim
                                     revealAnim.duration = 700
                                     revealAnim.interpolator = DecelerateInterpolator(1.8f)
                                     revealAnim.addUpdateListener { anim ->
@@ -268,6 +275,7 @@ class MainActivity : AppCompatActivity() {
                                     }
                                     revealAnim.addListener(object : android.animation.AnimatorListenerAdapter() {
                                         override fun onAnimationEnd(a: android.animation.Animator) {
+                                            themeRevealAnimator = null
                                             if (overlay.parent != null) decorView.removeView(overlay)
                                             if (!oldBitmap.isRecycled) oldBitmap.recycle()
                                         }
@@ -325,6 +333,16 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        // Push the offline banner below the system status bar so it doesn't overlap
+        binding.offlineBanner?.let { banner ->
+            ViewCompat.setOnApplyWindowInsetsListener(banner) { view, insets ->
+                val statusBarInset = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                val verticalPad = (6 * resources.displayMetrics.density).toInt()
+                view.setPadding(view.paddingLeft, statusBarInset + verticalPad, view.paddingRight, verticalPad)
+                insets
+            }
+        }
+
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment_activity_main) as NavHostFragment
         val navController = navHostFragment.navController
@@ -356,6 +374,15 @@ class MainActivity : AppCompatActivity() {
         // Periodic update check (debug builds only)
         if (BuildConfig.DEBUG) {
             scheduleUpdateCheck()
+        }
+
+        // Start the centralized Firebase connection monitor and show/hide
+        // the offline banner at the top of the screen.
+        if (!isOffline) {
+            FirebaseConnectionMonitor.start()
+            FirebaseConnectionMonitor.connected.observe(this) { online ->
+                binding.offlineBanner?.visibility = if (online) View.GONE else View.VISIBLE
+            }
         }
     }
 
@@ -533,7 +560,7 @@ class MainActivity : AppCompatActivity() {
             override fun onDataChange(teacherSnap: DataSnapshot) {
                 if (isFinishing || isDestroyed) return
                 // Check admin status on every change as well
-                dbRef.child("admins").child(user.uid).get().addOnSuccessListener { adminSnap ->
+                dbRef.child("admins").child(user.uid).getFromCache().addOnSuccessListener { adminSnap ->
                     if (isFinishing || isDestroyed) return@addOnSuccessListener
                     when {
                         adminSnap.exists() ->
@@ -567,6 +594,10 @@ class MainActivity : AppCompatActivity() {
         noInternetDialog?.dismiss()
         // Remove the real-time role listener to prevent leaks
         roleListener?.let { roleListenerRef?.removeEventListener(it) }
+        // Cancel any running theme reveal animation — its onAnimationEnd
+        // will recycle the captured bitmap and remove the overlay view.
+        themeRevealAnimator?.cancel()
+        themeRevealAnimator = null
         // Prevent bitmap leak — but not if the activity is being recreated
         // for a theme change, because the new activity still needs the bitmap.
         if (!themeChangeInProgress) {

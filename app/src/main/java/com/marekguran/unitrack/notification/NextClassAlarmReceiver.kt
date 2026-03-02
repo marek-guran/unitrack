@@ -19,6 +19,7 @@ import com.marekguran.unitrack.MainActivity
 import com.marekguran.unitrack.R
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
 import org.json.JSONObject
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -1057,7 +1058,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         val todayStr = today.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
 
         // Check if user is a teacher
-        db.child("teachers").child(uid).get().addOnSuccessListener { teacherSnap ->
+        db.child("teachers").child(uid).getFromCache().addOnSuccessListener { teacherSnap ->
             val isTeacher = teacherSnap.exists()
 
             if (isTeacher) {
@@ -1076,7 +1077,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
         notifPrefs: android.content.SharedPreferences
     ) {
         db.child("students").child(uid).child("consultation_timetable")
-            .get().addOnSuccessListener { snapshot ->
+            .getFromCache().addOnSuccessListener { snapshot ->
                 for (entrySnap in snapshot.children) {
                     val date = entrySnap.child("specificDate").getValue(String::class.java) ?: ""
                     if (date != todayStr) continue
@@ -1125,7 +1126,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
         val consultingSubjectKey = "_consulting_$uid"
         db.child("school_years").child(schoolYear).child("predmety").child(consultingSubjectKey).child("timetable")
-            .get().addOnSuccessListener { timetableSnap ->
+            .getFromCache().addOnSuccessListener { timetableSnap ->
                 val todayKey = LocalDate.now().dayOfWeek.toKey()
 
                 for (entrySnap in timetableSnap.children) {
@@ -1144,7 +1145,7 @@ class NextClassAlarmReceiver : BroadcastReceiver() {
 
                     // Count booked students for this entry today
                     db.child("consultation_bookings").child(consultingSubjectKey)
-                        .get().addOnSuccessListener { bookingsSnap ->
+                        .getFromCache().addOnSuccessListener { bookingsSnap ->
                             var studentCount = 0
                             for (bookingSnap in bookingsSnap.children) {
                                 val bookingDate = bookingSnap.child("date").getValue(String::class.java) ?: ""

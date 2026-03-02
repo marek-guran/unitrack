@@ -147,6 +147,54 @@ FirebaseAppCheck.getInstance().installAppCheckProviderFactory(factory)
 
 ---
 
+## Ochrana zápisov pri strate spojenia (online režim)
+
+V online režime môže používateľ dočasne stratiť pripojenie k Firebase (napr. nestabilné Wi-Fi, mobilné dáta). Aby sa predišlo tichým chybám pri zápisoch, aplikácia implementuje viacvrstvovú ochranu:
+
+### FirebaseConnectionMonitor
+
+Centralizovaný singleton, ktorý monitoruje stav pripojenia cez špeciálny Firebase uzol `.info/connected`:
+
+```kotlin
+object FirebaseConnectionMonitor {
+    val connected: LiveData<Boolean>   // Reaktívne UI pozorovanie
+    var isConnected: Boolean           // Synchronný prístup (@Volatile)
+
+    fun start()  // Spustí monitoring (volané z MainActivity)
+    fun stop()   // Zastaví monitoring
+}
+```
+
+### requireOnline() guard
+
+Rozšírenia pre `Fragment` a `Activity` (v `ConnectivityGuard.kt`), ktoré zabránia zápisom keď je zariadenie offline:
+
+- Ak `FirebaseConnectionMonitor.isConnected == true` → vráti `true`, operácia pokračuje
+- Ak je zariadenie offline → zobrazí štylizovaný Snackbar a vráti `false`
+- V lokálnom offline režime (`OfflineMode`) vždy vráti `true` (zápisy do lokálnej DB sú bezpečné)
+
+Snackbar je štylizovaný s theme-aware farbami, zaoblenými rohmi a je ukotvený nad navigačnou lištou.
+
+### Offline banner
+
+V `MainActivity` sa pri strate pripojenia zobrazí červený banner na vrchu obrazovky s textom „Režim offline: Zobrazujú sa uložené dáta." Banner je riadený cez LiveData pozorovanie `FirebaseConnectionMonitor.connected`.
+
+### QR kód funkcie pri strate spojenia
+
+QR kód dochádzka vyžaduje aktívne pripojenie k Firebase (atomické transakcie). Keď je zariadenie offline:
+- **Učiteľský FAB** pre QR dochádzku je zašednutý a neaktívny
+- **Študentský FAB** pre QR skener je zašednutý a neaktívny
+- **QrAttendanceActivity** a **QrScannerActivity** zobrazujú celostránkový offline overlay, ak sa spojenie stratí počas relácie
+
+### Čo ochrana zabezpečuje
+
+- Používateľ v online režime môže bezpečne prehliadať dáta z Firebase cache aj bez aktívneho pripojenia
+- Žiadne zápisy sa nevykonajú keď nie je aktívne pripojenie — nedochádza k tichým chybám
+- Používateľ je vždy informovaný o stave pripojenia (banner + Snackbar)
+- QR kód funkcie sú úplne zablokované pri offline stave (vyžadujú real-time Firebase transakcie)
+
+---
+
 ## Ochrana dát
 
 ### Online režim — Firebase Realtime Database

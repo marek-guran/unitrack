@@ -21,6 +21,8 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import com.marekguran.unitrack.data.LocalDatabase
 import com.marekguran.unitrack.data.OfflineMode
+import com.marekguran.unitrack.data.getFromCache
+import com.marekguran.unitrack.data.requireOnline
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.Collator
@@ -278,7 +280,8 @@ class NewSemesterActivity : AppCompatActivity() {
         } else {
             spinner.adapter = ArrayAdapter(this, R.layout.spinner_item, copyOptions)
                 .also { it.setDropDownViewResource(R.layout.spinner_dropdown_item) }
-            db.child("school_years").get().addOnSuccessListener { snap ->
+            db.child("school_years").getFromCache().addOnSuccessListener { snap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 snap.children.sortedByDescending { it.key }.forEach { yearSnap ->
                     val key = yearSnap.key ?: return@forEach
                     val name = yearSnap.child("name").getValue(String::class.java) ?: key.replace("_", "/")
@@ -328,9 +331,11 @@ class NewSemesterActivity : AppCompatActivity() {
             studentsPage.findViewById<TextView>(R.id.noStudentsLabel).visibility =
                 if (allStudentItems.isEmpty()) View.VISIBLE else View.GONE
         } else {
-            db.child("school_years").get().addOnSuccessListener { yearsSnap ->
+            db.child("school_years").getFromCache().addOnSuccessListener { yearsSnap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 val lastYearKey = yearsSnap.children.mapNotNull { it.key }.sortedDescending().firstOrNull() ?: return@addOnSuccessListener
-                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
                     allStudentItems.clear()
                     for (snap in studentsSnap.children) {
                         val uid = snap.key ?: continue
@@ -372,7 +377,8 @@ class NewSemesterActivity : AppCompatActivity() {
             studentsPage.findViewById<TextView>(R.id.noStudentsLabel).visibility =
                 if (allStudentItems.isEmpty()) View.VISIBLE else View.GONE
         } else {
-            db.child("students").get().addOnSuccessListener { studentsSnap ->
+            db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 allStudentItems.clear()
                 for (snap in studentsSnap.children) {
                     val uid = snap.key ?: continue
@@ -458,7 +464,8 @@ class NewSemesterActivity : AppCompatActivity() {
             subjectsPage.findViewById<TextView>(R.id.noSubjectsLabel).visibility =
                 if (allSubjectItems.isEmpty()) View.VISIBLE else View.GONE
         } else {
-            db.child("school_years").child(yearKey).child("predmety").get().addOnSuccessListener { subjectsSnap ->
+            db.child("school_years").child(yearKey).child("predmety").getFromCache().addOnSuccessListener { subjectsSnap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 allSubjectItems.clear()
                 for (snap in subjectsSnap.children) {
                     val key = snap.key ?: continue
@@ -482,6 +489,7 @@ class NewSemesterActivity : AppCompatActivity() {
         yearPreview: TextView,
         copyFromSpinner: Spinner
     ) {
+        if (!requireOnline()) return
         val yearStr = inputYear.text.toString().trim()
         val year = yearStr.toIntOrNull()
         if (year == null || year < 2000) {
@@ -514,7 +522,8 @@ class NewSemesterActivity : AppCompatActivity() {
             setResult(RESULT_OK, intent.putExtra(RESULT_YEAR_KEY, key))
             finish()
         } else {
-            db.child("school_years").child(key).get().addOnSuccessListener { snap ->
+            db.child("school_years").child(key).getFromCache().addOnSuccessListener { snap ->
+                if (isFinishing || isDestroyed) return@addOnSuccessListener
                 if (snap.exists()) {
                     Toast.makeText(this, getString(R.string.new_semester_exists), Toast.LENGTH_SHORT).show()
                     return@addOnSuccessListener
@@ -524,8 +533,9 @@ class NewSemesterActivity : AppCompatActivity() {
                 if (copyIndex > 0) {
                     val sourceYearKey = copyYearKeys[copyIndex]
                     val selectedSubjectKeys = allSubjectItems.filter { it.selected }.map { it.key }.toSet()
-                    db.child("school_years").child(sourceYearKey).child("predmety").get()
+                    db.child("school_years").child(sourceYearKey).child("predmety").getFromCache()
                         .addOnSuccessListener { sourceSnap ->
+                            if (isFinishing || isDestroyed) return@addOnSuccessListener
                             if (sourceSnap.exists()) {
                                 val filtered = mutableMapOf<String, Any>()
                                 for (child in sourceSnap.children) {
@@ -559,6 +569,7 @@ class NewSemesterActivity : AppCompatActivity() {
     }
 
     private fun handleEditConfirm(inputYear: com.google.android.material.textfield.TextInputEditText) {
+        if (!requireOnline()) return
         val yearKey = editYearKey ?: return
         val rawInput = inputYear.text.toString().trim()
         if (rawInput.isEmpty()) {
@@ -594,7 +605,8 @@ class NewSemesterActivity : AppCompatActivity() {
             db.child("school_years").child(yearKey).child("name").setValue(newName).addOnSuccessListener {
                 // Update student school_years enrollment
                 val updates = mutableMapOf<String, Any?>()
-                db.child("students").get().addOnSuccessListener { studentsSnap ->
+                db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+                    if (isFinishing || isDestroyed) return@addOnSuccessListener
                     for (snap in studentsSnap.children) {
                         val uid = snap.key ?: continue
                         val item = allStudentItems.find { it.uid == uid } ?: continue
@@ -631,7 +643,8 @@ class NewSemesterActivity : AppCompatActivity() {
             onDone()
             return
         }
-        db.child("students").get().addOnSuccessListener { studentsSnap ->
+        db.child("students").getFromCache().addOnSuccessListener { studentsSnap ->
+            if (isFinishing || isDestroyed) return@addOnSuccessListener
             val updates = mutableMapOf<String, Any>()
             for (uid in studentUids) {
                 val snap = studentsSnap.child(uid)
