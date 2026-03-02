@@ -4,7 +4,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="4dp"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="2dp"
     app:cardCornerRadius="16dp"
     app:cardElevation="0dp"
     app:strokeWidth="1dp"
@@ -18,7 +21,7 @@
         android:paddingStart="10dp"
         android:paddingEnd="10dp"
         android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="8dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -48,6 +51,28 @@
                 app:chipStrokeColor="?attr/colorOutlineVariant" />
 
         </LinearLayout>
+
+        <!-- Note input for absent students (hidden by default) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/absentNoteLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Dôvod neprítomnosti"
+            android:visibility="gone"
+            android:layout_marginTop="4dp"
+            app:boxCornerRadiusTopStart="8dp"
+            app:boxCornerRadiusTopEnd="8dp"
+            app:boxCornerRadiusBottomStart="8dp"
+            app:boxCornerRadiusBottomEnd="8dp">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/absentNoteInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
+        </com.google.android.material.textfield.TextInputLayout>
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

@@ -1,3 +1,31 @@
+## 🚀 Pripojte sa do našej Uzavretej Bety!
+
+Hľadáme testerov pre našu novú aplikáciu **Unitrack**! Keďže sme momentálne vo fáze uzavretého testovania (Closed Beta) na Google Play, prístup k aplikácii je obmedzený. 
+
+Aby ste si mohli aplikáciu stiahnuť a otestovať, prosím, postupujte presne podľa týchto **dvoch krokov v tomto poradí**:
+
+### Krok 1: Pridajte sa do našej Google Skupiny
+Toto je nevyhnutný krok, aby Google Play vedel, že máte povolenie stiahnuť si aplikáciu. 
+👉 **[Kliknite sem a pripojte sa do skupiny Unitrack](https://groups.google.com/g/unitrack)**
+
+> **🔒 Poznámka k súkromiu:** Vaša e-mailová adresa je v bezpečí. Ostatní členovia skupiny ju neuvidia. Ak si aj tak želáte zostať v úplnej anonymite, pokojne na pripojenie použite svoj sekundárny ("spamový") Google účet, ktorý máte prihlásený vo svojom Android zariadení.
+
+### Krok 2: Prijmite pozvánku a stiahnite si aplikáciu
+**DÔLEŽITÉ:** Na tento odkaz kliknite až **PO TOM**, čo ste sa úspešne pridali do Google Skupiny v Kroku 1. V opačnom prípade vám Google Play ukáže chybovú hlášku, že aplikácia nie je dostupná.
+
+👉 **[Kliknite sem pre prijatie pozvánky do Bety (Opt-in)](https://play.google.com/apps/testing/com.marekguran.unitrack)**
+
+Po prijatí pozvánky vás odkaz presmeruje priamo do obchodu Google Play, kde si budete môcť aplikáciu štandardne stiahnuť. Ak by vás to nepresmerovalo automaticky, môžete použiť [tento priamy odkaz do obchodu](https://play.google.com/store/apps/details?id=com.marekguran.unitrack).
+
+---
+
+### 🐞 Našli ste chybu alebo máte nápad na zlepšenie?
+Budeme veľmi vďační za akúkoľvek spätnú väzbu! Môžete nám ju zanechať priamo tu na GitHube v sekcii **Issues**.
+
+Ďakujeme za vašu pomoc a čas! ❤️
+
+---
+
 # 📚 UniTrack
 
 **UniTrack** je Android aplikácia pre správu akademického života na vysokých školách. Vznikla ako praktická súčasť diplomovej práce — nástroj pre učiteľov, administrátorov a študentov, ktorý zjednodušuje evidenciu známok, dochádzky, rozvrhu a správu predmetov na jednom mieste.
@@ -428,8 +456,8 @@ Pre hlbšie pochopenie toho, ako UniTrack funguje pod kapotou, sú k dispozícii
 
 ## 🏷 Verzia
 
-- **Verzia aplikácie:** 3.2.3
-- **Kód verzie (Google):** 38
+- **Verzia aplikácie:** 3.2.4
+- **Kód verzie (Google):** 39
 - **Min SDK:** 31 (Android 12)
 - **Target SDK:** 36
 

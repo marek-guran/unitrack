@@ -411,6 +411,14 @@ class SubjectDetailFragment : Fragment() {
         }
     }
 
+    private val bulkAttendanceLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == AppCompatActivity.RESULT_OK) {
+            refreshFragmentView()
+        }
+    }
+
     private val qrAttendanceLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -577,49 +585,7 @@ class SubjectDetailFragment : Fragment() {
 
         // Keep old button handlers for backward compatibility
         binding.attendanceButton.setOnClickListener {
-            showMarkAttendanceDialog(
-                students = students,
-                subjectName = openedSubject ?: "Unknown",
-                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String, timeStr: String ->
-                    val today = dateStr
-                    val now = timeStr
-                    val sanitizedSubject = openedSubjectKey ?: ""
-                    if (isOffline) {
-                        for ((studentUid, isPresent) in presentMap) {
-                            val entryJson = JSONObject()
-                            entryJson.put("date", today)
-                            entryJson.put("time", now)
-                            entryJson.put("note", notesMap[studentUid] ?: "")
-                            entryJson.put("absent", !isPresent)
-                            localDb.addAttendanceEntry(selectedSchoolYear, selectedSemester, sanitizedSubject, studentUid, entryJson)
-                        }
-                        refreshFragmentView()
-                    } else {
-                        var completed = 0
-                        val total = presentMap.size
-                        for ((studentUid, isPresent) in presentMap) {
-                            val entry = AttendanceEntry(
-                                date = today,
-                                time = now,
-                                note = notesMap[studentUid] ?: "",
-                                absent = !isPresent
-                            )
-                            val pushRef = db.child("pritomnost")
-                                .child(selectedSchoolYear)
-                                .child(selectedSemester)
-                                .child(sanitizedSubject)
-                                .child(studentUid)
-                                .push()
-                            pushRef.setValue(entry) { _, _ ->
-                                    completed++
-                                    if (completed == total) {
-                                        refreshFragmentView()
-                                    }
-                                }
-                        }
-                    }
-                }
-            )
+            launchBulkAttendance()
         }
 
         binding.studentsButton.setOnClickListener {
@@ -1937,120 +1903,20 @@ class SubjectDetailFragment : Fragment() {
         picker.show(childFragmentManager, "show_time_picker")
     }
 
-    private fun showMarkAttendanceDialog(
-        students: List<StudentDetail>,
-        subjectName: String,
-        onAttendanceSaved: (Map<String, Boolean>, Map<String, String>, String, String) -> Unit
-    ) {
-        closeAllDialogs()
-        val context = requireContext()
-        val dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_mark_attendance, null)
-
-        val titleView = dialogView.findViewById<TextView>(R.id.attendanceDialogTitle)
-        val recyclerView =
-            dialogView.findViewById<RecyclerView>(R.id.attendanceRecyclerView)
-        val markAllChip = dialogView.findViewById<com.google.android.material.chip.Chip>(R.id.checkBoxMarkAll)
-        val saveButton = dialogView.findViewById<MaterialButton>(R.id.attendanceSaveButton)
-        val cancelButton = dialogView.findViewById<MaterialButton>(R.id.attendanceCancelButton)
-
-        // Date picker - default to today
-        val datePicker = dialogView.findViewById<TextView>(R.id.attendanceDatePicker)
-        val datePickerCard = dialogView.findViewById<View>(R.id.datePickerCard)
-        var selectedDate = LocalDate.now()
-        datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-        val openDatePicker = View.OnClickListener {
-            val prefilledMillis = try {
-                selectedDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-            } catch (_: Exception) { MaterialDatePicker.todayInUtcMilliseconds() }
-            val picker = MaterialDatePicker.Builder.datePicker()
-                .setSelection(prefilledMillis)
-                .build()
-            picker.addOnPositiveButtonClickListener { selection ->
-                val utcCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-                utcCal.timeInMillis = selection
-                selectedDate = LocalDate.of(utcCal.get(java.util.Calendar.YEAR), utcCal.get(java.util.Calendar.MONTH) + 1, utcCal.get(java.util.Calendar.DAY_OF_MONTH))
-                datePicker.text = selectedDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-            }
-            picker.show(childFragmentManager, "mark_attendance_date")
+    private fun launchBulkAttendance() {
+        if (students.isEmpty()) {
+            Snackbar.make(requireView(), "Žiadni študenti na prezenčku", Snackbar.LENGTH_SHORT).also { styleSnackbar(it) }.show()
+            return
         }
-        datePicker.setOnClickListener(openDatePicker)
-        datePickerCard.setOnClickListener(openDatePicker)
-
-        // Time picker - default to current time
-        val timePicker = dialogView.findViewById<TextView>(R.id.attendanceTimePicker)
-        val timePickerCard = dialogView.findViewById<View>(R.id.timePickerCard)
-        var selectedTime = LocalTime.now()
-        timePicker.text = selectedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-        val openTimePicker = View.OnClickListener {
-            val picker = MaterialTimePicker.Builder()
-                .setTimeFormat(TimeFormat.CLOCK_24H)
-                .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
-                .setHour(selectedTime.hour)
-                .setMinute(selectedTime.minute)
-                .build()
-            picker.addOnPositiveButtonClickListener {
-                selectedTime = LocalTime.of(picker.hour, picker.minute)
-                timePicker.text = selectedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-            }
-            picker.show(childFragmentManager, "mark_attendance_time")
+        val intent = Intent(requireContext(), BulkAttendanceActivity::class.java).apply {
+            putExtra(BulkAttendanceActivity.EXTRA_STUDENT_UIDS, students.map { it.studentUid }.toTypedArray())
+            putExtra(BulkAttendanceActivity.EXTRA_STUDENT_NAMES, students.map { it.studentName }.toTypedArray())
+            putExtra(BulkAttendanceActivity.EXTRA_SUBJECT_KEY, openedSubjectKey ?: "")
+            putExtra(BulkAttendanceActivity.EXTRA_SUBJECT_NAME, openedSubject ?: "")
+            putExtra(BulkAttendanceActivity.EXTRA_SCHOOL_YEAR, selectedSchoolYear)
+            putExtra(BulkAttendanceActivity.EXTRA_SEMESTER, selectedSemester)
         }
-        timePicker.setOnClickListener(openTimePicker)
-        timePickerCard.setOnClickListener(openTimePicker)
-
-        titleView.text =
-            "Dochádzka: $subjectName"
-        val presentStates = MutableList(students.size) { true }
-
-        lateinit var attendanceAdapter: AttendanceStudentAdapter
-        attendanceAdapter = AttendanceStudentAdapter(students, presentStates) { _, _ ->
-            // Update mark all chip state based on whether all students are marked
-            val allMarked = presentStates.all { it }
-            markAllChip.setOnCheckedChangeListener(null)
-            markAllChip.isChecked = allMarked
-            markAllChip.setOnCheckedChangeListener { _, checked ->
-                for (i in presentStates.indices) presentStates[i] = checked
-                attendanceAdapter.notifyDataSetChanged()
-            }
-        }
-        recyclerView.layoutManager = LinearLayoutManager(context)
-        recyclerView.adapter = attendanceAdapter
-
-        markAllChip.setOnCheckedChangeListener { _, checked ->
-            for (i in presentStates.indices) presentStates[i] = checked
-            attendanceAdapter.notifyDataSetChanged()
-        }
-
-        val dialog = Dialog(context)
-        dialog.setContentView(dialogView)
-        dialog.setCancelable(true)
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setWindowAnimations(R.style.UniTrack_DialogAnimation)
-
-        saveButton.setOnClickListener {
-            val result =
-                students.mapIndexed { i, student -> student.studentUid to presentStates[i] }.toMap()
-            val notesMap =
-                students.associate { student -> student.studentUid to "" }
-            onAttendanceSaved(result, notesMap, selectedDate.toString(), selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")))
-            dialog.dismiss()
-        }
-        cancelButton.setOnClickListener {
-            dialog.dismiss()
-            activeDialogs.remove(dialog)
-        }
-        dialog.setOnDismissListener {
-            activeDialogs.remove(dialog)
-        }
-        dialog.show()
-        activeDialogs.add(dialog)
-        dialog.window?.let { window ->
-            val margin = (10 * context.resources.displayMetrics.density).toInt()
-            window.setLayout(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            window.decorView.setPadding(margin, margin, margin, margin)
-        }
+        bulkAttendanceLauncher.launch(intent)
     }
 
     private fun calculateAverage(marks: List<String>): String {
@@ -2213,49 +2079,7 @@ class SubjectDetailFragment : Fragment() {
 
         // Wire up the "Mark Attendance" button
         binding.markAttendanceButton.setOnClickListener {
-            showMarkAttendanceDialog(
-                students = students,
-                subjectName = openedSubject ?: "Unknown",
-                onAttendanceSaved = { presentMap: Map<String, Boolean>, notesMap: Map<String, String>, dateStr: String, timeStr: String ->
-                    val today = dateStr
-                    val now = timeStr
-                    val sanitizedSubject = openedSubjectKey ?: ""
-                    if (isOffline) {
-                        for ((studentUid, isPresent) in presentMap) {
-                            val entryJson = JSONObject()
-                            entryJson.put("date", today)
-                            entryJson.put("time", now)
-                            entryJson.put("note", notesMap[studentUid] ?: "")
-                            entryJson.put("absent", !isPresent)
-                            localDb.addAttendanceEntry(selectedSchoolYear, selectedSemester, sanitizedSubject, studentUid, entryJson)
-                        }
-                        refreshFragmentView()
-                    } else {
-                        var completed = 0
-                        val total = presentMap.size
-                        for ((studentUid, isPresent) in presentMap) {
-                            val entry = AttendanceEntry(
-                                date = today,
-                                time = now,
-                                note = notesMap[studentUid] ?: "",
-                                absent = !isPresent
-                            )
-                            val pushRef = db.child("pritomnost")
-                                .child(selectedSchoolYear)
-                                .child(selectedSemester)
-                                .child(sanitizedSubject)
-                                .child(studentUid)
-                                .push()
-                            pushRef.setValue(entry) { _, _ ->
-                                    completed++
-                                    if (completed == total) {
-                                        refreshFragmentView()
-                                    }
-                                }
-                        }
-                    }
-                }
-            )
+            launchBulkAttendance()
         }
 
         // Wire up the QR Attendance button (online only)
