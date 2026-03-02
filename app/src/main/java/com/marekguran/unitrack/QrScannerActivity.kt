@@ -174,7 +174,7 @@ class QrScannerActivity : AppCompatActivity() {
                     markAttendance(year, semester, subjectKey, subjectName)
                 } else {
                     runOnUiThread {
-                        showError("QR kód expiroval, počkajte na nový", resetScanLock = true)
+                        showError("QR kód expiroval, naskenujte nový", resetScanLock = true)
                     }
                 }
             }

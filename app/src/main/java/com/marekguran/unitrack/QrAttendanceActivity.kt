@@ -313,6 +313,9 @@ class QrAttendanceActivity : AppCompatActivity() {
     private fun showConfirmationAndRegenerate(studentName: String) {
         updateScannedCount()
 
+        // Generate new code IMMEDIATELY so waiting students can proceed
+        generateNewCode()
+
         // Show confirmation overlay with animations
         confirmStudentName.text = studentName
         confirmationOverlay.visibility = View.VISIBLE
@@ -343,11 +346,10 @@ class QrAttendanceActivity : AppCompatActivity() {
             confirmLabel.animate().alpha(1f).setDuration(200).setStartDelay(100).start()
         }.start()
 
-        // After 1 second, hide overlay and show new QR code
+        // After 1 second, hide overlay
         handler.postDelayed({
             confirmationOverlay.animate().alpha(0f).setDuration(200).withEndAction {
                 confirmationOverlay.visibility = View.GONE
-                generateNewCode()
             }.start()
         }, 1000)
     }
