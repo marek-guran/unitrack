@@ -55,7 +55,6 @@ import android.print.PrintDocumentInfo
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.GenericTypeIndicator
 import com.google.firebase.database.ValueEventListener
 import androidx.viewpager2.widget.ViewPager2
 import com.marekguran.unitrack.ui.SubjectDetailPagerAdapter
@@ -890,7 +889,7 @@ class SubjectDetailFragment : Fragment() {
                     val ref = db.child("students").child(item.uid).child("subjects").child(selectedSchoolYear).child(selectedSemester)
                     ref.getFromCache().addOnSuccessListener innerSuccess@{ snapshot: DataSnapshot ->
                         if (_binding == null) return@innerSuccess
-                        val current = snapshot.getValue(object : GenericTypeIndicator<List<String>>() {}) ?: emptyList()
+                        val current = snapshot.children.mapNotNull { it.getValue(String::class.java) }
                         val newList = current.toMutableList()
                         if (item.enrolled && !newList.contains(subjectKey)) {
                             newList.add(subjectKey)
@@ -1241,6 +1240,11 @@ class SubjectDetailFragment : Fragment() {
         val noteInput = dialogView.findViewById<EditText>(R.id.inputNote)
         val dateInput = dialogView.findViewById<TextView>(R.id.inputDate)
 
+        // Hide "Poznámka pre študenta" in local mode — student cannot see it offline
+        if (isOffline) {
+            (descInput.parent as? View)?.visibility = View.GONE
+        }
+
         // Set default date to today (displayed as dd.MM.yyyy, but stored as millis)
         var pickedDateMillis = System.currentTimeMillis()
         dateInput.text =
@@ -1355,6 +1359,11 @@ class SubjectDetailFragment : Fragment() {
         val dateField = dialogView.findViewById<TextView>(R.id.inputDate)
         val submitButton = dialogView.findViewById<MaterialButton>(R.id.submitButton)
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+
+        // Hide "Poznámka pre študenta" in local mode — student cannot see it offline
+        if (isOffline) {
+            (descInput.parent as? View)?.visibility = View.GONE
+        }
 
         nameInput.setText(markWithKey.mark.name)
         descInput.setText(markWithKey.mark.desc)

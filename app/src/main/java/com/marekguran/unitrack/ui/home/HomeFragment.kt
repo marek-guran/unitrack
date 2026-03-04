@@ -856,6 +856,11 @@ class HomeFragment : Fragment() {
         val submitButton = dialogView.findViewById<MaterialButton>(R.id.submitButton)
         val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
 
+        // Hide "Poznámka pre študenta" in local mode — student cannot see it offline
+        if (isOffline) {
+            (descInput.parent as? View)?.visibility = View.GONE
+        }
+
         nameInput.setText(markWithKey.mark.name)
         descInput.setText(markWithKey.mark.desc)
         noteInput.setText(markWithKey.mark.note)
@@ -1339,6 +1344,11 @@ class HomeFragment : Fragment() {
         val nameInput = dialogView.findViewById<EditText>(R.id.inputName)
         val descInput = dialogView.findViewById<EditText>(R.id.inputDesc)
         val noteInput = dialogView.findViewById<EditText>(R.id.inputNote)
+
+        // Hide "Poznámka pre študenta" in local mode — student cannot see it offline
+        if (isOffline) {
+            (descInput.parent as? View)?.visibility = View.GONE
+        }
 
         val dialog = Dialog(requireContext())
         dialog.setContentView(dialogView)

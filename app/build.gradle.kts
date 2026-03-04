@@ -11,8 +11,8 @@ android {
         applicationId = "com.marekguran.unitrack"
         minSdk = 31
         targetSdk = 36
-        versionCode = 40
-        versionName = "3.2.5"
+        versionCode = 41
+        versionName = "3.2.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
