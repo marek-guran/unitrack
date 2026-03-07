@@ -10,6 +10,22 @@
     android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
+    <!-- Offline banner -->
+    <TextView
+        android:id="@+id/offlineBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/design_default_color_error"
+        android:gravity="center"
+        android:paddingVertical="6dp"
+        android:text="Režim offline: Zobrazujú sa uložené dáta."
+        android:textColor="@android:color/white"
+        android:textSize="13sp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- Fragment fills full screen (behind navbar) -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/nav_host_fragment_activity_main"

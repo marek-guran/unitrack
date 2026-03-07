@@ -17,13 +17,13 @@
         android:letterSpacing="0.1"
         android:paddingStart="48dp"
         android:paddingEnd="48dp"
-        android:paddingTop="48dp"
+        android:paddingTop="100dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 
     <TextView
         android:id="@+id/pageTitle"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/title_students"
         android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
@@ -34,10 +34,7 @@
         android:paddingTop="4dp"
         android:paddingBottom="8dp"
         app:layout_constraintTop_toBottomOf="@id/appNameLabel"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintWidth_max="720dp"
-        app:layout_constraintWidth_default="wrap" />
+        app:layout_constraintStart_toStartOf="parent" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"
@@ -51,7 +48,6 @@
         app:boxCornerRadiusTopEnd="12dp"
         app:boxCornerRadiusBottomStart="12dp"
         app:boxCornerRadiusBottomEnd="12dp"
-        app:startIconDrawable="@android:drawable/ic_menu_search"
         app:layout_constraintTop_toBottomOf="@id/pageTitle"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

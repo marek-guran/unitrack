@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:background="?attr/colorSurface"
+    tools:context=".ui.timetable.TimetableFragment">
+
+    <!-- Playful Gradient Header — extra paddingTop so top navbar doesn't overlap -->
+    <LinearLayout
+        android:id="@+id/headerContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_playful_header"
+        android:paddingTop="100dp"
+        android:paddingBottom="24dp"
+        android:elevation="8dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp">
+
+            <!-- App Name & Greeting -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_alignParentStart="true">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                    android:textColor="#E0EEFF"
+                    android:letterSpacing="0.1"
+                    android:paddingBottom="2dp" />
+
+                <TextView
+                    android:id="@+id/textDateOrWeek"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    tools:text="Týždeň 9 • Nepárny"
+                    android:textColor="#E0EEFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.1"/>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/greetingText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/title_timetable"
+                        android:textColor="#FFFFFF"
+                        android:textSize="28sp"
+                        android:textStyle="bold"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Glassmorphic Today Box -->
+            <LinearLayout
+                android:id="@+id/btnThisWeek"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="@drawable/bg_glassmorphic_box"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:gravity="end">
+
+                <TextView
+                    android:id="@+id/textBoxLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Späť na"
+                    android:textColor="#E0EEFF"
+                    android:textSize="10sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/textBoxValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dnes"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"/>
+            </LinearLayout>
+        </RelativeLayout>
+
+        <!-- Horizontal Days Navigator -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerDaysNav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:clipToPadding="false"
+            android:clipChildren="false"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:overScrollMode="never"
+            android:requiresFadingEdge="horizontal"
+            android:fadingEdgeLength="48dp"
+            android:orientation="horizontal"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            tools:listitem="@layout/item_day_chip" />
+
+    </LinearLayout>
+
+    <!-- Day schedule pages (swipeable via ViewPager2) -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="600dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal" />
+
+    <!-- Teacher action button -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabTeacherActions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="100dp"
+        android:contentDescription="@string/timetable_add_day_off"
+        android:src="@drawable/ic_person_outline"
+        android:visibility="gone"
+        app:fabSize="normal"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.UniTrack.SmallComponent"
+        app:backgroundTint="?attr/colorPrimary"
+        app:tint="?attr/colorOnPrimary"
+        app:elevation="2dp"
+        app:layout_behavior="com.google.android.material.behavior.HideBottomViewOnScrollBehavior" />
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

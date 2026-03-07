@@ -15,6 +15,10 @@
     app:strokeColor="?attr/colorOutlineVariant"
     app:cardBackgroundColor="?attr/colorSurface">
 
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
@@ -77,12 +81,37 @@
             android:id="@+id/spinnerSemester"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_marginBottom="20dp"
+            android:layout_marginBottom="16dp"
             android:background="@drawable/bg_pill_chip"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:popupBackground="@drawable/spinner_dropdown_bg"
             android:spinnerMode="dropdown" />
+
+        <!-- Timetable section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/title_timetable"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:id="@+id/timetableEntriesContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddTimetableEntry"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/timetable_add_entry"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="20dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDelete"
@@ -90,9 +119,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:text="Odstrániť"
+            android:text="Odstrániť predmet"
             android:textColor="?attr/colorError"
             app:strokeColor="?attr/colorError"
+            app:iconTint="?attr/colorError"
+            app:rippleColor="?attr/colorErrorContainer"
             app:cornerRadius="12dp" />
 
         <LinearLayout
@@ -119,6 +150,7 @@
                 app:cornerRadius="12dp" />
         </LinearLayout>
     </LinearLayout>
+    </ScrollView>
 </com.google.android.material.card.MaterialCardView>
 
 </FrameLayout>

@@ -2,12 +2,12 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:layout_gravity="center">
 
 <com.google.android.material.card.MaterialCardView
     android:layout_width="480dp"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:layout_gravity="center_horizontal"
     android:layout_margin="24dp"
     app:cardCornerRadius="20dp"
@@ -18,19 +18,50 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="vertical"
         android:padding="24dp">
 
-        <TextView
-            android:id="@+id/newMark"
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Nová známka pre meno"
-            android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
-            android:textColor="?attr/colorOnSurface"
-            android:textStyle="bold"
-            android:layout_marginBottom="20dp" />
+            android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="20dp">
+
+            <TextView
+                android:id="@+id/newMark"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Nová známka pre meno"
+                android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
+                android:textColor="?attr/colorOnSurface"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/avgMarkDisplay"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                android:textColor="?attr/colorOnSecondaryContainer"
+                android:background="@drawable/bg_pill_chip_outlined"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -76,6 +107,9 @@
             <TextView android:id="@+id/inputDateLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Dátum:" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurfaceVariant" />
             <TextView android:id="@+id/inputDate" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textAppearance="@style/TextAppearance.Material3.BodyMedium" android:textColor="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:paddingStart="12dp" android:paddingEnd="8dp" android:clickable="true" android:focusable="true" />
         </LinearLayout>
+
+        </LinearLayout>
+        </ScrollView>
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="end">
             <com.google.android.material.button.MaterialButton android:id="@+id/cancelButton" style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Zrušiť" android:layout_marginEnd="8dp" />
